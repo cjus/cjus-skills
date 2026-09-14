@@ -40,6 +40,10 @@ CONFIG="$REPO_ROOT/.claude/pr-config.json"
     "continuityRoot": "continuity",
     "assertionsFile": "ASSERTIONS.md"
   },
+  "migrations": {
+    "dir": null,
+    "versionPattern": "^([0-9]+)_"
+  },
   "closeGate": {
     "enabled": true,
     "requiredArtifacts": ["pr-summary", "continuity"]
@@ -62,6 +66,8 @@ CONFIG="$REPO_ROOT/.claude/pr-config.json"
 | `docs.changelogRoot` | `"changelog"` | The directory holding one folder per branch. |
 | `docs.continuityRoot` | `"continuity"` | The directory holding the recent-work log. Set `null` to disable continuity entries entirely. |
 | `docs.assertionsFile` | `"ASSERTIONS.md"` | The invariants file audited at close. Set `null` to disable the audit. |
+| `migrations.dir` | `null` | Directory holding hand-applied migrations. `null` means the repo has none and `/pr:close`'s drift gate reports `n/a`. |
+| `migrations.versionPattern` | `^([0-9]+)_` | Regex whose first capture group is a migration file's version, used to detect two branches claiming the same one. |
 | `closeGate.enabled` | `true` | Whether the `Stop` hook blocks a close that has not landed. |
 | `closeGate.requiredArtifacts` | `["pr-summary", "continuity"]` | Which artifacts must exist and be tracked before the gate releases. Valid entries: `pr-summary`, `continuity`, `commitmsg`. Removing `continuity` here is how a repo opts out of that convention without losing the rest of the gate. |
 | `mainGuard.enabled` | `true` | Whether the `PreToolUse` hook gates commits and pushes on the default branch. |

@@ -62,6 +62,15 @@
         }
       }
     },
+    "migrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Hand-applied migrations, which /pr:close checks for version collisions. Omit or set dir to null when the repo has none.",
+      "properties": {
+        "dir": { "type": ["string", "null"], "default": null },
+        "versionPattern": { "type": "string", "default": "^([0-9]+)_" }
+      }
+    },
     "closeGate": {
       "type": "object",
       "additionalProperties": false,
