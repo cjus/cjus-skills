@@ -350,6 +350,13 @@ else if (onDefault) phase = "default-branch";
 else if (pr?.state === "MERGED") phase = "merged";
 else if (artifacts.commitmsg === true) phase = "closing";
 else if (hasCommits) phase = "in-development";
+// `ahead == null` means the comparison could not be made at all, most often
+// because `origin/<default>` does not exist yet: a repo whose remote was never
+// fetched, an unreachable remote, or --offline on a fresh clone. That is NOT the
+// same as "no commits", and collapsing the two here produced a confident, wrong
+// instruction ("No commits yet. Do the work.") on a branch that had commits.
+// An undetermined input must not drive a verdict; it gets its own phase.
+else if (ahead == null) phase = "unknown";
 else phase = "fresh";
 
 // --------------------------------------------------------------------- steps
@@ -572,6 +579,11 @@ function nextCommand() {
   if (onDefault) return ["/pr:next", null];
   if (phase === "merged") return ["/pr:cleanup", null];
   if (hasGap("no-plan")) return ["/pr:start", null];
+  if (phase === "unknown")
+    return [
+      null,
+      `Could not compare against origin/${defaultBranch}, so this branch's state is undetermined. Fetch the remote, then re-run.`,
+    ];
   if (phase === "fresh") return [null, "No commits yet. Do the work, then /pr:cp."];
   if (pr?.ci === "fail") return [null, "CI is red. Fix the failing check before anything else."];
   if (hasGap("unpushed")) return ["/pr:cp", null];

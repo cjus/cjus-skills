@@ -4,6 +4,15 @@
 # Every case below corresponds to a bypass the hook's comments name. Reading the
 # hook is not evidence that it works; this is. Requires jq and git.
 HOOK="$1"
+
+# Invoke the hook DIRECTLY, never via `bash "$HOOK"`. A PreToolUse hook is run as a
+# command, so a non-executable file is a guard that silently never runs, which is
+# fail-open in the one place that must fail closed. Invoking through bash would
+# mask exactly that, and once did.
+if [[ ! -x "$HOOK" ]]; then
+  echo "FAIL: $HOOK is not executable. The harness runs it as a command, so it would never fire." >&2
+  exit 1
+fi
 PASS=0; FAIL=0
 
 # Two throwaway repos: one on the default branch, one on a feature branch.
@@ -21,7 +30,7 @@ git -C "$FEATREPO" checkout -q -b feature/1-x
 verdict() { # cwd, mode, command -> "ask"|"deny"|"pass"
   local out
   out=$(jq -nc --arg c "$1" --arg m "$2" --arg cmd "$3" \
-    '{cwd:$c,permission_mode:$m,tool_input:{command:$cmd}}' | bash "$HOOK")
+    '{cwd:$c,permission_mode:$m,tool_input:{command:$cmd}}' | "$HOOK")
   if [[ -z "$out" ]]; then echo pass
   else echo "$out" | jq -r '.hookSpecificOutput.permissionDecision'; fi
 }
@@ -92,7 +101,7 @@ t "unborn feature branch passes"          pass "$UNBORNF" default "git commit -m
 
 echo "== malformed payloads fail closed =="
 for bad in '' 'null' '[]' '42' '{"cwd":'; do
-  out=$(printf '%s' "$bad" | bash "$HOOK")
+  out=$(printf '%s' "$bad" | "$HOOK")
   got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
   if [[ "$got" == "deny" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s deny\n' "malformed payload: ${bad:-<empty>}"
   else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "malformed payload: ${bad:-<empty>}" "${got:-<none>}"; fi
