@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/cjus/cjus-skills/main/plugins/pr/reference/pr-config.schema.json",
+  "title": "pr plugin configuration",
+  "description": "Per-repo settings for the pr plugin, read from .claude/pr-config.json at the main checkout's root. Every key is optional; an absent key takes the documented default.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "repo": {
+      "type": ["string", "null"],
+      "pattern": "^[^/\\s]+/[^/\\s]+$",
+      "description": "owner/name for every gh call. Defaults to the origin remote, parsed."
+    },
+    "ticketPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "Leading token of the ticket ID. Empty means the ticket ID is the issue number."
+    },
+    "branchPrefix": {
+      "type": "string",
+      "default": "feature/",
+      "description": "Prepended to every branch name. Empty disables it."
+    },
+    "worktrees": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "root": {
+          "type": "string",
+          "default": "../{repo}-Worktrees",
+          "description": "{repo} expands to the repo directory name. Relative paths resolve against the main checkout."
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shell commands. null means the repo has no such check, and skills skip it silently.",
+      "properties": {
+        "lint": { "type": ["string", "null"], "default": null },
+        "typecheck": { "type": ["string", "null"], "default": null },
+        "test": { "type": ["string", "null"], "default": null },
+        "build": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "changelogRoot": { "type": ["string", "null"], "default": "changelog" },
+        "continuityRoot": {
+          "type": ["string", "null"],
+          "default": "continuity",
+          "description": "null disables continuity entries entirely."
+        },
+        "assertionsFile": {
+          "type": ["string", "null"],
+          "default": "ASSERTIONS.md",
+          "description": "null disables the assertion audit."
+        }
+      }
+    },
+    "closeGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "requiredArtifacts": {
+          "type": "array",
+          "default": ["pr-summary", "continuity"],
+          "items": { "enum": ["pr-summary", "continuity", "commitmsg"] },
+          "uniqueItems": true
+        }
+      }
+    },
+    "mainGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "approvalToken": {
+          "type": "string",
+          "default": "PR_ALLOW_MAIN",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Environment variable recording operator approval for a default-branch write."
+        }
+      }
+    }
+  }
+}
