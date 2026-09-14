@@ -18,7 +18,7 @@ Then install a plugin from it:
 claude plugin install bookcraft@cjus-skills
 ```
 
-Restart Claude Code, and the plugin's skills become available as slash commands.
+Restart Claude Code, and the plugin's skills become available as slash commands. **Plugin skills are namespaced by their plugin**, so they are invoked as `/<plugin>:<skill>`, for example `/bookcraft:makebook`. A bare `/makebook` does not resolve; the prefix is what keeps two plugins from fighting over a common name.
 
 ## Plugins
 
@@ -28,10 +28,10 @@ Writes a book, binds it, revises it, and checks that it told the truth. Four ski
 
 | Skill | What it does |
 |---|---|
-| `/createbook` | Turns a one-line description into a planned chapter outline, then narrates every chapter into its own markdown file, named so a plain filename sort is the reading order. |
-| `/makebook` | Binds a folder of markdown into an ebook-style PDF and a matching EPUB, with a cover, a contents page, hand-authored SVG figures, and a back-of-book index whose page numbers are read back out of the rendered PDF. |
-| `/updatebook` | Revises a book in place. Edits only the chapters an instruction reaches and leaves every other chapter byte-identical, so the paragraph tags other files cite keep pointing where they did. |
-| `/check-claims` | Reads each chapter's sources for real, one agent per chapter, and checks that the paraphrased claims are ones those sources actually support. It catches what no script can: a provenance mark that resolves perfectly and sits beside a sentence its source does not support. |
+| `/bookcraft:createbook` | Turns a one-line description into a planned chapter outline, then narrates every chapter into its own markdown file, named so a plain filename sort is the reading order. |
+| `/bookcraft:makebook` | Binds a folder of markdown into an ebook-style PDF and a matching EPUB, with a cover, a contents page, hand-authored SVG figures, and a back-of-book index whose page numbers are read back out of the rendered PDF. |
+| `/bookcraft:updatebook` | Revises a book in place. Edits only the chapters an instruction reaches and leaves every other chapter byte-identical, so the paragraph tags other files cite keep pointing where they did. |
+| `/bookcraft:check-claims` | Reads each chapter's sources for real, one agent per chapter, and checks that the paraphrased claims are ones those sources actually support. It catches what no script can: a provenance mark that resolves perfectly and sits beside a sentence its source does not support. |
 
 #### One-time setup for `/makebook`
 

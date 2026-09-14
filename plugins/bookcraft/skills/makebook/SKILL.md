@@ -20,7 +20,7 @@ Reach for `/make-pdf` instead when the job is one markdown file rendered faithfu
 ## Invocation
 
 ```
-/makebook "Book Title" path/to/folder
+/bookcraft:makebook "Book Title" path/to/folder
 ```
 
 Two arguments: the title in quotes, and the folder holding the markdown files. Run it as:

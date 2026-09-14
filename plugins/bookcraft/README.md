@@ -30,6 +30,8 @@ claude plugin install bookcraft@cjus-skills
 
 Restart Claude Code. All four slash commands become available.
 
+**Plugin skills are namespaced by their plugin**, so you invoke them as `/bookcraft:createbook`, `/bookcraft:makebook`, `/bookcraft:updatebook` and `/bookcraft:check-claims`. A bare `/createbook` does not resolve unless you happen to have a separate skill of that name. The prefix is what keeps two plugins from fighting over a common name; this page writes it out in every command you would type, and drops it when referring to a skill by name in prose.
+
 ### One-time setup for `/makebook`
 
 Only `/makebook` needs third-party packages. The other three use the Python standard library and bash, and work the moment the plugin is installed.
@@ -63,7 +65,7 @@ Re-running `install.sh` is safe.
 Write a book, check it, bind it:
 
 ```
-/createbook "A practical guide to Docker for first-year CS students" --source Dockerfile --source docs/
+/bookcraft:createbook "A practical guide to Docker for first-year CS students" --source Dockerfile --source docs/
 ```
 
 That plans an outline, asks you to approve it, then narrates each chapter into its own file under `books/<book-slug>/`.
@@ -76,7 +78,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh books/docker
 Then bind it:
 
 ```
-/makebook "A Practical Guide to Docker" books/docker-guide
+/bookcraft:makebook "A Practical Guide to Docker" books/docker-guide
 ```
 
 You get `a-practical-guide-to-docker.pdf` and `.epub` in the same folder.
@@ -84,13 +86,13 @@ You get `a-practical-guide-to-docker.pdf` and `.epub` in the same folder.
 Later, when something changes:
 
 ```
-/updatebook books/docker-guide "chapter 5's Compose version has moved to v2.35"
+/bookcraft:updatebook books/docker-guide "chapter 5's Compose version has moved to v2.35"
 ```
 
 And when you want to know whether the sources actually say what the book says they say:
 
 ```
-/check-claims books/docker-guide --chapters 5
+/bookcraft:check-claims books/docker-guide --chapters 5
 ```
 
 ---
@@ -146,7 +148,7 @@ Pass `--no-tags` to `/createbook` for a book meant only to be read.
 Writes a whole book from a one-line description.
 
 ```
-/createbook <what the book should be> [output-folder]
+/bookcraft:createbook <what the book should be> [output-folder]
 ```
 
 | Argument | Meaning |
@@ -170,7 +172,7 @@ It plans the outline first and stops for your approval before narrating anything
 Binds a folder of markdown into a PDF and a matching EPUB.
 
 ```
-/makebook "Book Title" path/to/folder
+/bookcraft:makebook "Book Title" path/to/folder
 ```
 
 Or directly:
@@ -229,7 +231,7 @@ Raster figures (`.png`, `.jpg`, `.gif`, `.webp`) bind and package, but the build
 Revises a book in place.
 
 ```
-/updatebook <book-folder> <what to change>
+/bookcraft:updatebook <book-folder> <what to change>
 ```
 
 | Argument | Meaning |
@@ -255,7 +257,7 @@ A rebind is not automatic: an in-place edit leaves the bound PDF and EPUB stale,
 Checks paraphrased claims against the sources their marks name, one agent per chapter, each reading the real source.
 
 ```
-/check-claims <book-folder> [--chapters N,M]
+/bookcraft:check-claims <book-folder> [--chapters N,M]
 ```
 
 This catches the failure no script can reach: **a mark that names a real file, points at a real page, quotes nothing, and sits beside a sentence that page never supports.** The three mechanical checks below it verify that the source is declared and on disk, that the locator resolves, and that long quotations appear where they claim to. None of them touches a paraphrase. Only a model reading both settles it.

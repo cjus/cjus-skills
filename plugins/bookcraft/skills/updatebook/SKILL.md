@@ -132,7 +132,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 **None of the five reaches a paraphrase that drifted, which is the failure step 3 warns about in its own words: "a claim edited to match a source you did not re-read".** `/check-claims` is the pass that does, sending one agent per chapter to read the sources the marks name:
 
 ```bash
-/check-claims "$BOOK" --chapters <the chapters your edit reached>
+/bookcraft:check-claims "$BOOK" --chapters <the chapters your edit reached>
 ```
 
 **Pass `--chapters`.** This skill already knows which chapters it touched and proves it with the step 5 diff, so the scoped run is one to three agents rather than eighteen. That scoping is the whole reason the pass is affordable here, and an `/updatebook` run is the moment it earns most: an edited sentence keeps the mark the old sentence had, and nothing above notices. It is advisory and gates nothing, so a finding is triaged, never a reason to hold the edit.
