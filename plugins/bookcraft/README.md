@@ -50,6 +50,7 @@ From an ordinary shell, where `$CLAUDE_PLUGIN_ROOT` is not set:
 | **`pdftotext`** (poppler) | The builder reads the rendered PDF back to resolve page numbers | Required. `brew install poppler` |
 | **Chromium** | Renders the PDF | `install.sh` fetches it through Playwright |
 | **`epubcheck`** | Verifying a built EPUB rather than trusting it | Optional. `brew install epubcheck` |
+| **A Palatino-class serif** | The body font stack the page measurements assume | Not fatal. Chromium falls back and the book still binds, but the type metrics shift. See [Fonts](#fonts) |
 
 The virtualenv lands at `~/.cache/bookcraft/venv`, honoring `XDG_CACHE_HOME`. It is deliberately **outside** the plugin: Claude Code installs each plugin version into its own directory, so a venv kept inside one would be discarded on every update and rebuilt at about 170 MB plus a Chromium download. One venv at a stable path serves every version and every project. `scripts/bookcraft-python` is the wrapper that finds it, which is why the commands below name that rather than an interpreter path.
 
@@ -114,6 +115,16 @@ Two rules the format depends on, both measured against the builder rather than a
 
 - **Chapter numbers are zero-padded.** Chapters are collected with a plain lexicographic sort, so `bk-1-a.md`, `bk-10-c.md`, `bk-2-b.md` is the order an unpadded set actually produces.
 - **The H1 is the file's first line.** The builder reads the chapter title from line 1 and only when it starts with `# `. A blank first line or YAML frontmatter drops the chapter to a prettified filename on the contents page.
+
+### Everything a build needs is in the folder
+
+**The builder reads nothing from the project you happen to be working in.** Every figure, image and cover reference resolves against the book folder you pass it, never against a repository root, a config file, or a path relative to your shell. A book folder is portable on its own: move it anywhere, point the builder at it, and you get the same PDF.
+
+That is why figures belong in the folder rather than beside it. A chapter referencing `diagrams/01-something.svg` gets `<book-folder>/diagrams/01-something.svg`, and the EPUB packages that file into the archive. A reference climbing out with `../` still resolves and still packages correctly, so nothing breaks today; what you lose is the portability, because the folder now depends on a file that does not travel with it.
+
+A reference that resolves to nothing is handled rather than shipped: the build warns with `N image(s) were not found and are not in the package`, naming each one, and the EPUB prints `[missing image: <path>]` where the figure would have been. That is deliberate, since leaving a dangling `src` in the archive would fail the whole book on `epubcheck`'s `RSC-007` instead of showing you one visible gap.
+
+Nothing is fetched at build time either. Figures are hand-authored SVG rendered by the Chromium the builder already runs, so there is no diagram binary to install, no JS bundle, and no network access in a build. What a build touches is the book folder, the plugin, the venv, `pdftotext`, and the fonts on the machine.
 
 ### Paragraph tags
 
@@ -188,6 +199,16 @@ What it produces: a cover, a contents page, one chapter per file in filename ord
 | `17` | 55.2 | Large print |
 
 14pt is the default because it lands nearest the 45-to-75 range's ideal and is the last size whose justification stays where the book already justifies. 17pt costs +96% paper against the floor. `references/type-size.md` carries the full arithmetic, including what each end of the range spends and why the ceiling is where it is.
+
+### Fonts
+
+The body stack is `Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif`, and **the characters-per-line figures above were measured with it resolving to real Palatino.** On a machine where none of the first three faces are installed, the book still binds and nothing warns you, but the measure changes under it.
+
+Measured at 40pt on one string: the stack and Palatino both give 1054.06px, Georgia gives 1063.84px, and the generic serif fallback gives 979.06px. So Georgia sets about 1% wider and a bare serif fallback about 7% narrower, which moves the line length and the page count away from the table.
+
+This is worth knowing in two situations. If your page counts disagree with the table, check which face you actually got. And if a book is bound on more than one machine, bind it on the same one each time, or the pagination will not match between runs.
+
+Headings, captions, the running footer and the contents page use `system-ui`, and code uses `"SF Mono", Menlo, Consolas, "Liberation Mono", monospace`. Both have wide fallbacks and neither carries a measurement that depends on the exact face.
 
 ### Figures
 
@@ -309,6 +330,8 @@ Chapter 1 of the provenance fixture holds only passing marks, so a run reporting
 | makebook stopped working after a plugin update | Should not happen, since the venv is outside the plugin. If it does, the cache path was cleared | Re-run `install.sh` |
 | Figures warn about type below 8pt | The SVG was designed at slide width | Redesign against a viewBox of 640 to 900. Widening the figure buys only 17% |
 | A chapter titles itself from its filename | The H1 is not line 1 | Move it to the first line; no blank line, no frontmatter above it |
+| Page counts disagree with the type-size table, or differ between machines | The body font stack fell back to something other than Palatino | Install a Palatino-class serif, or bind the book on one machine consistently. See [Fonts](#fonts) |
+| `warning: N image(s) were not found and are not in the package` | A figure reference resolves to nothing | Fix the path. The EPUB prints `[missing image: <path>]` in the text rather than shipping a dangling `src`, which would fail the whole book on `epubcheck`'s `RSC-007` |
 | Chapters bind out of order | Unpadded chapter numbers | Zero-pad them, to three digits past 99 chapters |
 
 ---
