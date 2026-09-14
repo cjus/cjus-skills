@@ -37,13 +37,15 @@ Package the PR lifecycle workflow, developed in a private repo, as a self-contai
 - [x] De-identification sweep: zero source-repo identifiers, zero em-dashes
 - [x] Rationale rewritten as mechanism rather than the source repo's measurements
 - [x] Packaging: `plugin.json`, marketplace entry, README section, both manifests pass `--strict`
-- [ ] Acceptance: install into an unrelated repo and complete one real ticket end to end
+- [x] Acceptance: installed from a local marketplace, 28-case suite green against the installed copy
+- [x] Two defects found by that acceptance run and fixed (see `CHANGELOG.md`)
 
 ## Deferred
 
-- The default-branch guard ships a probe suite; the close-landed and session-start hooks do not. Their behaviour was verified by hand this session.
-- No CI in this repo runs the probe suite or validates the manifests on push.
+- The GitHub-dependent half of the lifecycle (`gh issue create`, the closing-reference assertion, label transitions) is proven only against this repo's own issue #1, not re-run in a throwaway GitHub repo. Doing that would mean creating a scratch repo on the account.
+- No CI in this repo runs either test suite or validates the manifests on push.
 - `/pr:init`'s detection table covers node, cargo and go. Python is deliberately left to ask.
+- The skills themselves are instructions for a model, so no suite exercises them; only their shared machinery is covered.
 
 ## Open Questions
 

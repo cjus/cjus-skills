@@ -74,3 +74,9 @@ Nearly every defence in that hook exists because the obvious spelling was measur
 ```
 
 39 cases covering the refspec forms, chained and multi-line commands, commit messages that must not forge or trip the guard, redirection through `-C` and `--git-dir`, undeterminable branches, malformed payloads, and the branch names that must **not** gate. Requires `jq` and `git`, and writes only to throwaway repos under the system temp directory.
+
+**It invokes the hook directly rather than through `bash`, deliberately.** The harness runs a hook as a command, so a file without its executable bit is a guard that silently never fires, which is fail-open in the one place that must fail closed. Invoking through `bash` masks exactly that, and once did: this hook shipped non-executable while every case still passed.
+
+### Testing all three together
+
+`${CLAUDE_PLUGIN_ROOT}/scripts/test-acceptance.sh` drives the whole plugin's mechanical substrate through the lifecycle in throwaway repos, including all three hooks under a non-default configuration. **Point it at an installed copy rather than a source tree**, since that is what catches packaging defects.
