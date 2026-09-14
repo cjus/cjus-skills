@@ -1,0 +1,4 @@
+playwright>=1.40
+markdown-it-py>=3.0
+mdit-py-plugins>=0.4
+EbookLib>=0.19

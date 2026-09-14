@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cjus-skills",
+  "description": "Claude Code plugins by Carlos Justiniano",
+  "owner": {
+    "name": "cjus"
+  },
+  "plugins": [
+    {
+      "name": "bookcraft",
+      "description": "Write a book from a one-line description, bind it into a PDF and EPUB, revise it in place, and check its claims against its sources",
+      "category": "productivity",
+      "source": "./plugins/bookcraft"
+    }
+  ]
+}
