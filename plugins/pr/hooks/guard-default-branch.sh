@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hook: PreToolUse (matcher "Bash") — require operator approval for commit/push on
+# Hook: PreToolUse (matcher "Bash"). Require operator approval for commit/push on
 # the repo's default branch.
 #
 # reference/git-conventions.md: commit and push run without asking on feature
@@ -18,7 +18,7 @@
 #
 # Escape hatch: a command carrying `<TOKEN>=1` passes, where <TOKEN> defaults to
 # PR_ALLOW_MAIN and can be renamed via mainGuard.approvalToken. That is a SPEED
-# BUMP, NOT A SECURITY BOUNDARY — under bypassPermissions the agent could set it
+# BUMP, NOT A SECURITY BOUNDARY: under bypassPermissions the agent could set it
 # itself. Its job is to make approval explicit and auditable in the transcript,
 # and the workflow's rule is that it may only be added AFTER the operator approves
 # in conversation.
@@ -118,7 +118,7 @@ gate() {
   esac
 
   [[ "$decision" == "deny" ]] &&
-    reason="${reason} STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1 — never add that yourself."
+    reason="${reason} STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1. Never add that yourself."
 
   if [[ "$HAVE_JQ" == 1 ]]; then
     jq -nc --arg d "$decision" --arg r "$reason" \
@@ -138,7 +138,7 @@ gate() {
 }
 
 if [[ "$HAVE_JQ" == 1 ]]; then
-  # One jq spawn, not three — this runs on EVERY Bash tool call, including the
+  # One jq spawn, not three, because this runs on EVERY Bash tool call, including the
   # overwhelming majority that are not git at all. The command is emitted last and
   # followed by a sentinel because it is the only field that can legitimately
   # contain newlines; @tsv would escape them and change what the regexes below
@@ -200,8 +200,8 @@ else
   # stays explicit in the transcript, which it does under either name.
   #
   # The pattern is anchored to the `command` key, so it matches ONLY a command that
-  # genuinely begins with the token. The obvious shortcut — reusing the unwrapped
-  # pattern with `"` added to its delimiter class — is wrong in the dangerous
+  # genuinely begins with the token. The obvious shortcut, reusing the unwrapped
+  # pattern with `"` added to its delimiter class, is wrong in the dangerous
   # direction: in the raw payload a quoted argument's opening `"` is escaped as
   # `\"`, which that class matches, so `git commit -m "PR_ALLOW_MAIN=1 git x"`
   # forged approval here while the jq path correctly denied it. That is an
@@ -477,12 +477,12 @@ while :; do
   #
   # The two groups are deliberately NOT symmetric, and making them so breaks it.
   #
-  #   Leading — an ENUMERATION of what may precede a ref: whitespace, `:`, `/`, the
+  #   Leading: an ENUMERATION of what may precede a ref: whitespace, `:`, `/`, the
   #   `+` force marker, a quote. `/` must stay a *delimiter* here so
   #   `refs/heads/main` matches; a "not a ref character" class would treat the `/`
   #   as part of the name and let that form through.
   #
-  #   Trailing — a NEGATION: the name must not be followed by another ref-name
+  #   Trailing: a NEGATION: the name must not be followed by another ref-name
   #   character, i.e. it has to be a complete ref token. The old spelling
   #   enumerated `[[:space:]"']|$` instead, which silently made every OTHER
   #   trailing character a bypass: `(git push origin main)` and the backtick and

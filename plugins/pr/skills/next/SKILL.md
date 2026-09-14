@@ -76,7 +76,7 @@ Then apply step 1's findings:
 Lead with the single recommendation, then the runners-up. **Each description is 100 words or fewer.**
 
 ```
-## Next up: #{N} — {title}
+## Next up: #{N}: {title}
 
 **Why this matters:** {one line tied to the framework}
 **Branch (derived):** {branch}
@@ -88,7 +88,7 @@ Lead with the single recommendation, then the runners-up. **Each description is 
 
 ### Other candidates
 
-- **#{N} — {title}** ({high|medium}) · `{branch}`
+- **#{N}: {title}** ({high|medium}) · `{branch}`
   {<=100 words.}
 ```
 

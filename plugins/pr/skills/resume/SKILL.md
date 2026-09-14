@@ -51,9 +51,9 @@ For every in-scope assertion, flag a discrepancy when any of these hold:
 Report each with one of:
 
 ```
-✅ A-NNN — in scope, still satisfied: <one line, citing the symbol>
-⚠️ A-NNN — in scope, needs re-validation: <which trigger fires, and what to verify>
-❌ A-NNN — in scope, the plan appears to violate it: <how, which symbol, recommended resolution>
+✅ A-NNN: in scope, still satisfied: <one line, citing the symbol>
+⚠️ A-NNN: in scope, needs re-validation: <which trigger fires, and what to verify>
+❌ A-NNN: in scope, the plan appears to violate it: <how, which symbol, recommended resolution>
 ```
 
 None in scope? Say so explicitly.

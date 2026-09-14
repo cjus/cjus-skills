@@ -22,28 +22,29 @@ Package the PR lifecycle workflow, developed in a private repo, as a self-contai
 
 ## Plan
 
-- [ ] `/pr:init` writes `.claude/pr-config.json` and bootstraps the labels (labels already bootstrapped by hand on this repo, see `CHANGELOG.md`)
-- [ ] `/pr:ticket`
-- [ ] `/pr:start`
-- [ ] `/pr:pre-test`
-- [ ] `/pr:close`
-- [ ] `/pr:cleanup`
-- [ ] Work-band skills: `/pr:cp`, `/pr:status`, `/pr:resume`, `/pr:sync`, `/pr:plan-check`, `/pr:precompact`, `/pr:condense`, `/pr:summary`, `/pr:commitmsg`, `/pr:abort`
-- [ ] Queue skills: `/pr:next`, `/pr:reviews`, `/pr:triage`
-- [ ] `/pr:sanity`
-- [ ] Handoff-document skills (additive + destructive)
-- [ ] Code-reviewer agent + review rubric
-- [ ] Lifecycle state script, prefix-configurable
-- [ ] Lifecycle map document
-- [ ] `Stop` hook (close-landed guarantee)
-- [ ] Main-branch guard hook, approval token renamed
-- [ ] De-identification pass across the ported material
-- [ ] Rationale rewrite for the incident-derived gates (mechanism, not the private repo's measurements)
-- [ ] Packaging: `plugin.json`, marketplace entry, README section, `claude plugin validate --strict`
-- [ ] Acceptance: install into an unrelated repo and complete one real ticket end to end; grep the published plugin for source-repo identifiers and get nothing
+- [x] Reference layer: ticketing, git conventions, evidence discipline, scope contract, handoff docs, assertion audit, lifecycle, config
+- [x] `/pr:init` writes `.claude/pr-config.json` and bootstraps the labels
+- [x] `/pr:ticket`, `/pr:start`, `/pr:pre-test`, `/pr:close`, `/pr:cleanup`
+- [x] Work-band skills: `/pr:cp`, `/pr:status`, `/pr:resume`, `/pr:sync`, `/pr:plan-check`, `/pr:precompact`, `/pr:condense`, `/pr:summary`, `/pr:commitmsg`, `/pr:abort`
+- [x] Queue skills: `/pr:next`, `/pr:reviews`, `/pr:triage`
+- [x] `/pr:sanity`
+- [x] Handoff-document skills: `/pr:continuity-add`, `/pr:continuity-prune`
+- [x] Code-reviewer agent with the review rubric folded in
+- [x] Lifecycle state script, config-driven, verified against this repo
+- [x] `Stop` hook (close-landed guarantee), config-driven required artifacts
+- [x] Default-branch guard hook, approval token configurable, 39-case probe suite passing
+- [x] SessionStart hook (third hook, added because two skills referenced it)
+- [x] De-identification sweep: zero source-repo identifiers, zero em-dashes
+- [x] Rationale rewritten as mechanism rather than the source repo's measurements
+- [x] Packaging: `plugin.json`, marketplace entry, README section, both manifests pass `--strict`
+- [ ] Acceptance: install into an unrelated repo and complete one real ticket end to end
 
-Full detail, including the acceptance criteria and the de-identification checklist, lives in the issue body rather than duplicated here.
+## Deferred
+
+- The default-branch guard ships a probe suite; the close-landed and session-start hooks do not. Their behaviour was verified by hand this session.
+- No CI in this repo runs the probe suite or validates the manifests on push.
+- `/pr:init`'s detection table covers node, cargo and go. Python is deliberately left to ask.
 
 ## Open Questions
 
-- None yet — see the issue for the eight decisions already settled with the operator.
+- None. The eight decisions settled with the operator are recorded in the table above.

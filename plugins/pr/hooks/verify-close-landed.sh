@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hook: Stop — refuse to end a /pr:close turn whose artifacts have not landed.
+# Hook: Stop. Refuse to end a /pr:close turn whose artifacts have not landed.
 #
 # /pr:close already says "End only when `git status --porcelain` reports clean".
 # A close still once cleared every gate, reported success, and left four artifacts
@@ -38,7 +38,7 @@
 # leftover sentinel at its start.
 #
 # Sentinel lives in `git rev-parse --git-dir`, which in a worktree is
-# .git/worktrees/<name> — per-worktree, removed with the worktree, and OUTSIDE the
+# .git/worktrees/<name>, which is per-worktree, removed with the worktree, and OUTSIDE the
 # work tree, so the sentinel can never dirty the git status it guards.
 #
 # Decision table:
@@ -82,7 +82,7 @@ esac
 # A Stop hook is always fed a payload on stdin. A bare manual run is not, and
 # would otherwise hang here with no output; --arm/--disarm return before this.
 if [[ -t 0 ]]; then
-  echo "verify-close-landed: Stop hook — expects a JSON payload on stdin." >&2
+  echo "verify-close-landed: Stop hook. Expects a JSON payload on stdin." >&2
   echo "usage: verify-close-landed.sh [--arm | --disarm]" >&2
   exit 1
 fi
@@ -213,7 +213,7 @@ if git -C "$TOP" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
   AHEAD=$(git -C "$TOP" rev-list --count '@{u}..HEAD' 2>/dev/null)
   [[ "$AHEAD" =~ ^[0-9]+$ ]] || AHEAD=0
   if [[ "$AHEAD" -gt 0 ]]; then
-    add "Branch tip is $AHEAD commit(s) ahead of its upstream — not pushed."
+    add "Branch tip is $AHEAD commit(s) ahead of its upstream, so it is not pushed."
   fi
 else
   add "Branch '${BRANCH:-?}' has no upstream, so nothing has been pushed."
@@ -226,7 +226,7 @@ fi
 check_artifact() {
   local label="$1" path="$2"
   if [[ -z "$path" ]]; then
-    add "No ${label} — that step's output never reached the branch."
+    add "No ${label}: that step's output never reached the branch."
   elif ! git -C "$TOP" ls-files --error-unmatch "$path" >/dev/null 2>&1; then
     add "$(basename "$path") exists but is UNTRACKED."
   fi
@@ -273,7 +273,7 @@ If you are deliberately abandoning this close, disarm the sentinel:
 if [[ "$HAVE_JQ" == "1" ]]; then
   jq -nc --arg r "$REASON" '{decision:"block",reason:$r}'
 else
-  # No jq, so no path list and no loop guard — but the ESCAPE must survive. A
+  # No jq, so no path list and no loop guard, but the ESCAPE must survive. A
   # degraded path is graceful only if it degrades the diagnosis while keeping the
   # recovery: without --disarm here, an unsatisfiable state (a rejected push, a
   # lock file) blocks every turn with no printed way out.

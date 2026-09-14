@@ -158,7 +158,7 @@ if git worktree list --porcelain | grep -q "$WORKTREE_PATH"; then
 fi
 
 if git worktree list --porcelain | grep -q "$WORKTREE_PATH"; then
-  echo "ERROR: worktree still registered — investigate before proceeding"
+  echo "ERROR: worktree still registered; investigate before proceeding"
   exit 1
 fi
 
@@ -227,7 +227,7 @@ git -C "$MAIN_CHECKOUT" pull --ff-only
 ```
 Cleanup complete:
   close:       verified (COMMITMSG.md) | unverified (user-confirmed)
-  Workspace:   removed (metadata + disk) | partial — metadata only, directory left on disk
+  Workspace:   removed (metadata + disk) | partial: metadata only, directory left on disk
   Branch:      deleted (local + remote) | kept
   PR status:   <state>
   Issue #<N>:  already closed | closed manually (was OPEN) | not found | title mismatch, not closed | n/a

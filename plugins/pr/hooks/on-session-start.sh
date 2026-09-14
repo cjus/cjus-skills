@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hook: SessionStart — load the current branch's PR context into the session.
+# Hook: SessionStart. Load the current branch's PR context into the session.
 #
 # Stdout goes straight into the model's context. Session sources are startup,
 # resume, clear and compact; after a compaction this rehydrates the branch state

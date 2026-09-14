@@ -65,22 +65,22 @@ Rank by:
 ```
 ## Recently done
 
-- **#{N} — {subject}** (PR #{n}){, invariant touched}
+- **#{N}: {subject}** (PR #{n}){, invariant touched}
 {3-7 bullets, newest first}
 
 ## In flight (excluded)
 
-- **#{N}** — {open PR #{n} | active worktree}
+- **#{N}**: {open PR #{n} | active worktree}
 {omit when nothing is in flight}
 
 ## Work on next
 
-**Top pick: #{N} — {title}** ({high|medium}) · `{branch}` (derived)
+**Top pick: #{N}: {title}** ({high|medium}) · `{branch}` (derived)
 **Start it:** /pr:start {branch}
 {<=80 words: what it is, why now, tied to the framework and where relevant to the recent-work theme.}
 
 ### Runner-up candidates
-- **#{N} — {title}** ({priority}) · `{branch}`
+- **#{N}: {title}** ({priority}) · `{branch}`
   {<=60 words.}
 ```
 
