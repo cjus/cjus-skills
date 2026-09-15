@@ -9,185 +9,97 @@ is left untouched.
 
 ## Changes
 
+The full narrative, with the measurement tables, lives in `pr-summary-2026-09-14.md`. All five
+timestamps below are preserved; each is condensed to the decision and its evidence.
+
 ### 2026-09-14 — Phase 1: hooks declared by the plugin
 
-Added `plugins/pr/hooks/hooks.json` declaring all three hooks at plugin scope: `SessionStart`
-→ `on-session-start.sh`, `PreToolUse`/`Bash` → `guard-default-branch.sh`, `Stop` →
-`verify-close-landed.sh`.
+Added `plugins/pr/hooks/hooks.json` declaring `SessionStart` → `on-session-start.sh`,
+`PreToolUse`/`Bash` → `guard-default-branch.sh`, `Stop` → `verify-close-landed.sh`, each invoked
+**directly** rather than through `bash` so a missing executable bit cannot hide.
 
-**Invoked directly, not through `bash`.** `hooks/README.md` argues that running a hook through
-`bash` masks a missing executable bit, which is fail-open in the one file that must fail
-closed; the declaration keeps that property. All three scripts are `100755` in git.
+Verified by probe against Claude Code 2.1.272, not by reading docs — the docs produced the
+original wrong answer. A probe plugin of identical shape, really installed into an isolated
+`CLAUDE_CONFIG_DIR`, fired on all three events with `CLAUDE_PLUGIN_ROOT` resolved: the exact
+inverse of the ticket's settings.json result.
 
-Verified by probe against Claude Code 2.1.272 rather than by reading the docs, the docs having
-been the source of the original wrong answer. A probe plugin of identical shape, really
-installed into an isolated `CLAUDE_CONFIG_DIR`, fired on all three events with
-`CLAUDE_PLUGIN_ROOT` resolved to its own directory — the exact inverse of the ticket's
-settings.json result.
-
-Two findings worth keeping:
-
-- **A user-scope plugin's hooks reach every repo.** The probe fired in a throwaway repo with no
-  `.claude/` at all and no prior install. This settles the first open question and makes the
-  Phase 2 activation gate necessary rather than merely defensive.
-- **`--settings` is not a probe route for plugin hooks.** A settings file declaring
-  `extraKnownMarketplaces` plus `enabledPlugins` fired nothing; a known marketplace is not an
-  installed plugin. Only a real install exercises hooks.
+Two findings kept: **a user-scope plugin's hooks reach every repo** (the probe fired in a repo
+with no `.claude/` at all), which makes the Phase 2 gate necessary rather than defensive; and
+**`--settings` is not a probe route for plugin hooks**, since a known marketplace is not an
+installed plugin and fired nothing.
 
 ### 2026-09-14 — Phases 2–4: the activation rule
 
-A hook is ambient where a skill is invoked, so the plugin now treats `.claude/pr-config.json`
-at the repo root as the marker that a repo opted into this workflow. Without it the hooks are
-inert.
+`.claude/pr-config.json` became the marker that a repo opted in; the hooks are inert without it.
 
-**`guard-default-branch.sh`** gained `pr_repo_configured()`, called at the top of `gate()`
-rather than at each call site. Every block passes through `gate()`, so the parsed path, the
-degraded no-jq and no-grep paths that run *before* the config read, and the
-undeterminable-branch path all honour the rule for free, as will any path added later. The
-check uses neither `jq` nor `grep` — that is what lets it cover the paths that exist because
-one of those is missing — and resolves through `git rev-parse --git-common-dir` so a linked
-worktree reads its main checkout's config.
+`guard-default-branch.sh` gained `pr_repo_configured()`, called at the top of `gate()` rather
+than at each call site, so every blocking path honours it — including the degraded no-`jq` and
+no-`grep` paths that run before the config read. The check needs neither tool, which is what
+lets it cover them, and resolves via `git rev-parse --git-common-dir` so a linked worktree reads
+its main checkout's config.
 
-**`verify-close-landed.sh`** needed nothing. Probed in an unconfigured repo, on the default
-branch, with a dirty tree: exit 0, no output. It returns before any config read unless
-`/pr:close` armed its sentinel.
+`verify-close-landed.sh` needed nothing: probed in an unconfigured repo, on the default branch,
+with a dirty tree, it exits 0 silently, being sentinel-scoped.
 
-**`on-session-start.sh` needed a gate, and the plan said it would not.** The premise was that
-its changelog-folder test already covered this. It does not: `changelog/` is an ordinary
-directory name, so an unconfigured repo that merely has one, on any branch matching the
-default `feature/` prefix, had the whole PR context injected into every session — 176 bytes
-of it, measured. The config read became an early exit, which also flattened a nested
-conditional.
+**`on-session-start.sh` needed a gate the plan said it would not.** The changelog-folder test is
+not an activation rule: `changelog/` is an ordinary directory name, so an unconfigured repo that
+merely had one, on a branch matching the default prefix, had 176 bytes of PR context injected
+into every session.
 
-Acceptance, measured live against the real plugin installed from a copy of this source tree,
-with no `.claude/settings.json` hook wiring in either repo:
+Acceptance measured live against the real plugin, no settings wiring in either repo: configured
+→ commit on `main` blocked; unconfigured → succeeded, exit 0. The unconfigured repo had a
+`.claude/` directory and stayed inactive, the marker being the file.
 
-| Repo | `pr-config.json` | `git commit -am` on `main` | Commits |
-|---|---|---|---|
-| configured | yes | **blocked**, guard message shown | 1 → 1 |
-| unconfigured | no | succeeded, exit 0 | 1 → 2 |
-
-The unconfigured repo did have a `.claude/` directory, created by the install itself, and
-stayed inactive. The marker is the file, not the directory.
-
-**Test suite: 39 cases → 48, all passing.** The suite's throwaway repos were unconfigured, so
-21 cases correctly stopped gating the moment the rule landed; fixtures now opt in through an
-`optin()` helper. Added the inert case (commit, push, `--mirror`, `bypassPermissions`, an
-unknown mode, detached HEAD, unborn branch — all pass untouched) and two linked-worktree
-cases proving the config is found at the main checkout's root rather than by a cwd-relative
-test.
-
-The check is **inline rather than a shared helper**: `verify-close-landed.sh` needs none, so a
-helper would have had two callers while adding a file each hook must resolve by absolute path
-and an ambiguous verdict when it cannot. Both call sites want different things anyway — a
-boolean at the guard's chokepoint, a config path in the session hook.
+Guard suite 39 → 48 cases; the fixtures had to opt in, since 21 cases correctly stopped gating
+the moment the rule landed. The check is inline rather than a shared helper: only two of the
+three hooks need it, and the two call sites want different things.
 
 ### 2026-09-14 — Phases 5–9: the docs, the suites and the version
 
-**The retired procedure is gone from every file that carried it.** `hooks/README.md` lost both
-settings fragments and gained an `Activation` section, plus a section for `on-session-start.sh`,
-which had shipped undocumented behind a heading that said "Two hooks". The root `README.md`
-carried the same wrong procedure — it promised that `/pr:init` would show a settings fragment
-— and was corrected with it. Each rewrite keeps a short note on *why* the old spelling produced
-hooks that never fired, so nobody reintroduces it by reading around for it.
+The retired procedure is gone from every file that carried it — `hooks/README.md` (both
+fragments, plus an `Activation` section and the previously undocumented third hook), the root
+`README.md`, `/pr:init` step 6 and its step 7 report line, and `reference/config.md`. Each
+rewrite keeps a note on *why* the old spelling failed, so it is not reintroduced by someone
+reading around for it.
 
-**`/pr:init` step 6** is no longer "offer the hooks" but "tell the operator the hooks just went
-live", since writing the config in step 4 is now what activates them. It names the two per-repo
-off switches and instructs against writing a settings fragment. Step 7's report line changed
-accordingly: installed-vs-offered is no longer a distinction that exists.
+`scripts/test-acceptance.sh` 28 → 39 cases: a phase 0 asserting the packaging (every declared
+command names a file that exists *and* is executable) and three inertness cases in phase 1.
+Mutation-tested, since a check that cannot fail is worthless.
 
-**`reference/config.md`** gained a section below the schema table drawing the line the two
-`enabled` flags do not: they turn one hook off in a repo that opted in, while this file's
-presence is what opts the repo in at all.
-
-**`scripts/test-acceptance.sh`: 28 cases → 39.** A new phase 0 asserts the packaging —
-`hooks.json` present, all three events declared, the guard matched to `Bash`, commands resolving
-through `${CLAUDE_PLUGIN_ROOT}`, every declared command naming a file that exists *and is
-executable*, and the README carrying no fragment to drift back into. Phase 1 gained three
-inertness cases, including the `changelog/`-folder shape that was the Phase 4 defect.
-
-**The new checks were mutation-tested**, because a check that cannot fail is worthless. Removing
-the guard's executable bit, deleting `hooks.json`, dropping the `Bash` matcher, undeclaring
-`Stop`, re-adding a README fragment, and removing either activation gate each turn the suite
-red.
-
-**Version `0.1.0` → `0.2.0`.** Minor rather than patch: the installation procedure changes, and
-a repo that previously pasted the fragments should now delete them.
-
-Final state, both suites run against an installed copy rather than the source tree:
-`test-guard-default-branch.sh` 48 passed 0 failed, `test-acceptance.sh` 39 passed 0 failed.
+Version `0.1.0` → `0.2.0`, minor rather than patch: the install procedure changes.
 
 ### 2026-09-14 — Review round: a fail-open the activation gate introduced
 
-The code review found that the activation check re-introduced the defect class this ticket
-exists to remove, on the one path built to prevent it. Fixed, with tests that pin it.
+`pr_repo_configured()` resolved the repo from `${CWD:-$PWD}`, but `$CWD` is read from the
+payload and is unassigned on the path taken when that payload fails to parse. That path — whose
+contract is to deny, nothing in an unparseable payload being trustworthy — resolved activation
+from `$PWD` alone, so a malformed payload arriving while the hook's cwd sat outside the repo let
+a default-branch commit through. The repo had already written the answer down at
+`verify-close-landed.sh:142`; the new function was the only place that had drifted.
 
-**`pr_repo_configured()` resolved the repo from `${CWD:-$PWD}`.** On the unparseable-payload
-path `$CWD` is not yet assigned — it is read from the payload that just failed to parse — so
-that path resolved activation from `$PWD` alone. A malformed payload arriving while the hook's
-cwd sat outside the repo therefore exited 0 silently and let a default-branch commit through.
-That path's entire contract is to deny, because nothing in an unparseable payload is
-trustworthy. **Fail-open in the one file designed to fail closed, which is the sentence this
-ticket opens with.**
-
-The fix is `${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}`, and the repo had already written down why:
-`verify-close-landed.sh:142` uses exactly that fallback, with a comment noting that
-`CLAUDE_PROJECT_DIR` is exported for hook commands and is the session's project dir while
-`$PWD` merely happens to be it sometimes. `on-session-start.sh:17` was already correct. The new
-function was the only place that had drifted.
-
-**`CWD` is now cleared explicitly at the top.** It is read before it is assigned on every
-pre-parse path, so an inherited environment variable of that name could have steered the
-verdict from outside the payload. `MODE` was already cleared for the same reason.
-
-**The malformed-payload cases were asserting the runner's working directory, not the hook.**
-They pass no `cwd`, so they inherited whatever directory the suite was invoked from: green from
-the repo root, and `43 passed, 5 failed` from anywhere else. They now set `CLAUDE_PROJECT_DIR`
-explicitly, and gained a mirror block proving the same payloads stay inert in an unconfigured
-repo, plus the case that pins the property both halves rest on — a cwd outside the repo must
-not disarm the guard.
-
-Also moved the `gate()` docstring back above `gate()`, having been orphaned above the new
-function.
-
-**Guard suite 48 → 52 cases, and now cwd-independent:** 52/52 from the hooks directory, from an
-unconfigured temp directory and from `$HOME`. Both new fixes mutation-tested — reverting the
-fallback to `${CWD:-$PWD}` turns 4 cases red, and dropping the `CWD=""` initialization with
-`CWD` set in the environment turns 6 red. Acceptance suite unchanged at 39/39.
+`CWD` is now cleared explicitly, since it is read before assignment and an inherited environment
+variable could otherwise steer the verdict. The malformed-payload cases were asserting the
+runner's working directory rather than the hook — green from the repo root, `43 passed, 5
+failed` elsewhere — and now set `CLAUDE_PROJECT_DIR` explicitly. Guard suite 48 → 52.
 
 ### 2026-09-14 — Second review round: the same fail-open, one line further along
 
-The close's review gate returned `REQUEST_CHANGES`. The previous round's fix was real but
-incomplete, and the test that was supposed to pin it did not.
+The close's review gate returned `REQUEST_CHANGES`. The previous fix was real but incomplete.
 
-**The fallback had to be spelled in two places, not one.** `pr_repo_configured()` was corrected
-to `${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}`, but `guard-default-branch.sh:280` assigns
-`CWD="$PWD"` *before* the activation check runs, so for any payload that parsed while carrying
-an **empty** `cwd`, that bare `$PWD` shadowed the chain and the function never reached
-`CLAUDE_PROJECT_DIR`. Measured in a configured repo on `main` with the process cwd outside it:
-the guard emitted nothing and allowed the commit. The first round closed the unparseable-payload
-path and left its parseable sibling open.
+**The fallback had to be spelled in two places.** `guard-default-branch.sh:280` assigns
+`CWD="$PWD"` *before* the activation check runs, so a payload that parsed while carrying an
+**empty** `cwd` shadowed the chain and never reached `CLAUDE_PROJECT_DIR`. Measured: the guard
+emitted nothing and allowed the commit. All four resolution sites now agree.
 
-All four resolution sites now agree on `${CLAUDE_PROJECT_DIR:-$PWD}`:
-`guard-default-branch.sh:136` and `:280`, `verify-close-landed.sh:142`, `on-session-start.sh:17`.
+**The suite was green for the wrong reason, twice.** The "cwd outside the repo" case `cd`s
+before invoking `$HOOK`, so a relative hook path vanished — under the documented invocation the
+suite read `51 passed, 1 failed`, with failure text indistinguishable from the real defect;
+earlier runs used absolute paths and masked it. And reverting line 280 left the suite at `52
+passed, 0 failed`: nothing pinned the fix. `$HOOK` is now absolutised once, and two cases pin
+the parseable-empty-`cwd` path in both directions, so reverting yields `52 passed, 2 failed`.
 
-**The suite was green for the wrong reason, twice over.**
+A third case asserted nothing — the close gate was silent because no sentinel was armed, not
+from any config check — and was relabelled to what it measures.
 
-- The "cwd outside the repo does not disarm the guard" case `cd`s before invoking `$HOOK`, so a
-  *relative* hook path vanished. Under the suite's own documented invocation,
-  `./test-guard-default-branch.sh ./guard-default-branch.sh`, it read `51 passed, 1 failed` —
-  and the failure text was indistinguishable from the real defect it tests for. Earlier runs
-  used absolute paths and masked it. `$HOOK` is now resolved to an absolute path once, up front.
-- Reverting line 280 left the suite at **52 passed, 0 failed**. Nothing pinned the fix. Two
-  cases were added for the parseable-empty-`cwd` path, in both directions: it must gate a
-  configured project dir, and must stay inert for an unconfigured one. Reverting now yields
-  `52 passed, 2 failed`.
-
-**A third case asserted nothing.** "The close gate is inert with no config" in the acceptance
-suite passed because no sentinel was armed, not because of any config check —
-`verify-close-landed.sh` is sentinel-scoped and deliberately has no activation gate. Relabelled
-to "silent with no close in flight", which is what it actually measures.
-
-**Guard suite 52 → 54 cases, green under every invocation style tested**: relative, absolute,
-from `$HOME`, and from an unconfigured temp directory. Acceptance unchanged at 39/39.
-
+Guard suite 52 → **54**, green under every invocation style tested. Acceptance 39/39. The
+third round approved, and corrected a stale case count restated across three docs.

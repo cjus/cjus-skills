@@ -122,10 +122,12 @@ hook is not evidence.** Run the probe suite after any edit:
   "${CLAUDE_PLUGIN_ROOT}"/hooks/guard-default-branch.sh
 ```
 
-48 cases covering the refspec forms, chained and multi-line commands, commit messages that must
+54 cases covering the refspec forms, chained and multi-line commands, commit messages that must
 not forge or trip the guard, redirection through `-C` and `--git-dir`, undeterminable branches,
 malformed payloads, the branch names that must **not** gate, the unconfigured repo that must be
-left untouched, and the linked worktree whose config lives at its main checkout's root.
+left untouched, the linked worktree whose config lives at its main checkout's root, and the
+payloads whose `cwd` is absent or empty, which must resolve through `CLAUDE_PROJECT_DIR` rather
+than the hook's own working directory.
 Requires `jq` and `git`, and writes only to throwaway repos under the system temp directory.
 
 **It invokes the hook directly rather than through `bash`, deliberately**, for the reason given

@@ -64,7 +64,7 @@ Everything repo-shaped lives in `.claude/pr-config.json`, and every key is optio
 Three, declared in the plugin's own `hooks/hooks.json`, so they install with the plugin and need no `.claude/settings.json` edit. **They are inert in any repo that has no `.claude/pr-config.json`**, which makes `/pr:init` writing that file the act that turns them on: a plugin enabled at user scope otherwise reaches every repo on the machine, and a hook is ambient where a skill is invoked. See `plugins/pr/hooks/README.md`.
 
 - **Session start** loads the current branch's plan folder into a new or compacted session.
-- **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a 48-case probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
+- **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
 - **Close gate** (`Stop`) refuses to end a turn while a close is in flight and its artifacts are uncommitted.
 
 Turn the guard or the close gate off per repo with `mainGuard.enabled` and `closeGate.enabled`. To turn all three off, disable the plugin.
