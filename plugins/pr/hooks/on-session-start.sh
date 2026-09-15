@@ -26,18 +26,30 @@ DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 [[ "$CURRENT_BRANCH" == "$DEFAULT_BRANCH" || "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]] && exit 0
 
 # Config lives at the MAIN checkout's root, which is not $PROJECT_DIR inside a
-# linked worktree. Defaults apply when it or jq is absent.
+# linked worktree, so it is resolved through `git rev-parse --git-common-dir`
+# rather than a relative test.
+#
+# ITS PRESENCE IS THE ACTIVATION RULE, not merely a source of settings. The plugin
+# declares this hook in hooks/hooks.json, and a plugin enabled at user scope fires
+# in EVERY repo the user opens: measured, not assumed. The changelog-folder test
+# further down is NOT a sufficient stand-in, which a probe caught -- `changelog/` is
+# an ordinary directory name, so any unconfigured repo that happens to have one, on
+# any branch matching the default `feature/` prefix, had this plugin's context
+# injected into every session. A repo that never opted in is now left alone.
+#
+# Defaults still apply for the VALUES when jq is absent but the file exists.
 BRANCH_PREFIX="feature/"
 CHANGELOG_ROOT="changelog"
 
 COMMON=$(git -C "$PROJECT_DIR" rev-parse --git-common-dir 2>/dev/null)
-if [[ -n "$COMMON" ]]; then
-  [[ "$COMMON" == /* ]] || COMMON="${PROJECT_DIR}/${COMMON}"
-  CONFIG="$(dirname "$COMMON")/.claude/pr-config.json"
-  if [[ -f "$CONFIG" ]] && command -v jq >/dev/null 2>&1; then
-    v=$(jq -r '.branchPrefix // "feature/"' "$CONFIG" 2>/dev/null) && BRANCH_PREFIX="$v"
-    v=$(jq -r '.docs.changelogRoot // "changelog"' "$CONFIG" 2>/dev/null) && CHANGELOG_ROOT="$v"
-  fi
+[[ -n "$COMMON" ]] || exit 0
+[[ "$COMMON" == /* ]] || COMMON="${PROJECT_DIR}/${COMMON}"
+CONFIG="$(dirname "$COMMON")/.claude/pr-config.json"
+[[ -f "$CONFIG" ]] || exit 0
+
+if command -v jq >/dev/null 2>&1; then
+  v=$(jq -r '.branchPrefix // "feature/"' "$CONFIG" 2>/dev/null) && BRANCH_PREFIX="$v"
+  v=$(jq -r '.docs.changelogRoot // "changelog"' "$CONFIG" 2>/dev/null) && CHANGELOG_ROOT="$v"
 fi
 
 [[ -n "$CHANGELOG_ROOT" && "$CHANGELOG_ROOT" != "null" ]] || exit 0

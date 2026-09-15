@@ -15,17 +15,26 @@ if [[ ! -x "$HOOK" ]]; then
 fi
 PASS=0; FAIL=0
 
+# Mark a throwaway repo as having opted INTO the workflow. The hook is ambient: it
+# ships with the plugin and a user-scope plugin reaches every repo on the machine, so
+# it is inert unless `.claude/pr-config.json` exists at the repo root. Every fixture
+# below that expects a gate must therefore opt in, and the no-config section at the
+# end is what proves the inert case.
+optin() { mkdir -p "$1/.claude"; printf '{"repo":"t/t"}\n' > "$1/.claude/pr-config.json"; }
+
 # Two throwaway repos: one on the default branch, one on a feature branch.
 MAINREPO=$(mktemp -d); git -C "$MAINREPO" init -q -b main
 git -C "$MAINREPO" config user.email t@t; git -C "$MAINREPO" config user.name t
 echo x > "$MAINREPO/f"; git -C "$MAINREPO" add -A
 git -C "$MAINREPO" -c core.hooksPath=/dev/null commit -qm init
+optin "$MAINREPO"
 
 FEATREPO=$(mktemp -d); git -C "$FEATREPO" init -q -b main
 git -C "$FEATREPO" config user.email t@t; git -C "$FEATREPO" config user.name t
 echo x > "$FEATREPO/f"; git -C "$FEATREPO" add -A
 git -C "$FEATREPO" -c core.hooksPath=/dev/null commit -qm init
 git -C "$FEATREPO" checkout -q -b feature/1-x
+optin "$FEATREPO"
 
 verdict() { # cwd, mode, command -> "ask"|"deny"|"pass"
   local out
@@ -92,12 +101,62 @@ git -C "$DETACHED" config user.email t@t; git -C "$DETACHED" config user.name t
 echo x > "$DETACHED/f"; git -C "$DETACHED" add -A
 git -C "$DETACHED" -c core.hooksPath=/dev/null commit -qm init
 git -C "$DETACHED" checkout -q --detach HEAD
+optin "$DETACHED"
 t "detached HEAD gates"                   ask  "$DETACHED" default "git commit -m x"
 
 UNBORN=$(mktemp -d); git -C "$UNBORN" init -q -b main
+optin "$UNBORN"
 t "unborn default branch gates"           ask  "$UNBORN" default "git commit -m x"
 UNBORNF=$(mktemp -d); git -C "$UNBORNF" init -q -b feature/1-x
+optin "$UNBORNF"
 t "unborn feature branch passes"          pass "$UNBORNF" default "git commit -m x"
+
+# The activation rule. A repo with no `.claude/pr-config.json` never opted in, so the
+# hook must leave it exactly as it was -- including on the paths that otherwise fail
+# TOWARD the operator, since "fail toward the operator" presumes a repo that wanted a
+# guard at all. Without these cases, installing the plugin silently gates commits in
+# every repo on the machine.
+echo "== an unconfigured repo is untouched =="
+NOCFG=$(mktemp -d); git -C "$NOCFG" init -q -b main
+git -C "$NOCFG" config user.email t@t; git -C "$NOCFG" config user.name t
+echo x > "$NOCFG/f"; git -C "$NOCFG" add -A
+git -C "$NOCFG" -c core.hooksPath=/dev/null commit -qm init
+t "commit on default branch passes"       pass "$NOCFG" default "git commit -m x"
+t "bypassPermissions still passes"        pass "$NOCFG" bypassPermissions "git commit -m x"
+t "push origin main passes"               pass "$NOCFG" default "git push origin main"
+t "push --mirror passes"                  pass "$NOCFG" default "git push --mirror origin"
+t "unknown mode passes"                   pass "$NOCFG" someNewMode "git commit -m x"
+
+NOCFGD=$(mktemp -d); git -C "$NOCFGD" init -q -b main
+git -C "$NOCFGD" config user.email t@t; git -C "$NOCFGD" config user.name t
+echo x > "$NOCFGD/f"; git -C "$NOCFGD" add -A
+git -C "$NOCFGD" -c core.hooksPath=/dev/null commit -qm init
+git -C "$NOCFGD" checkout -q --detach HEAD
+t "detached HEAD does not gate"           pass "$NOCFGD" default "git commit -m x"
+
+NOCFGU=$(mktemp -d); git -C "$NOCFGU" init -q -b main
+t "unborn default branch does not gate"   pass "$NOCFGU" default "git commit -m x"
+
+# The config must be found from the MAIN checkout's root, not the worktree's own dir.
+# A linked worktree has no `.claude/` of its own, so a cwd-relative test would read
+# every worktree as unconfigured and silently disarm the guard exactly where this
+# workflow does its work.
+WTBASE=$(mktemp -d); git -C "$WTBASE" init -q -b main
+git -C "$WTBASE" config user.email t@t; git -C "$WTBASE" config user.name t
+echo x > "$WTBASE/f"; git -C "$WTBASE" add -A
+git -C "$WTBASE" -c core.hooksPath=/dev/null commit -qm init
+optin "$WTBASE"
+WT="$(mktemp -d)/wt"
+# On a FEATURE branch, so the gate can only come from the refspec naming the default
+# branch. A detached checkout would gate via the undeterminable-branch path instead and
+# prove nothing about where the config was found.
+git -C "$WTBASE" worktree add -q -b feature/1-wt "$WT" 2>/dev/null
+if [[ -d "$WT" ]]; then
+  t "linked worktree resolves main config"  ask  "$WT" default "git push origin main"
+  t "linked worktree, feature commit passes" pass "$WT" default "git commit -m x"
+else
+  printf '  skip %-56s (worktree add failed)\n' "linked worktree resolves main config"
+fi
 
 echo "== malformed payloads fail closed =="
 for bad in '' 'null' '[]' '42' '{"cwd":'; do

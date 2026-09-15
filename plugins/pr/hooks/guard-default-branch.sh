@@ -105,7 +105,37 @@ command -v grep >/dev/null 2>&1 && HAVE_GREP=1
 # unparseable stdout on the one branch designed to fail toward the operator, which
 # loses the decision entirely. The printf fallback is reached only when jq is
 # missing, and there the reason is a fixed literal with nothing to escape.
+# True only when this repo opted INTO the workflow, which is what `.claude/pr-config.json`
+# marks. The plugin declares its hooks in hooks/hooks.json, and a plugin enabled at user
+# scope applies to EVERY repo the user opens: measured, not assumed, with a probe plugin
+# that fired in a throwaway repo having no `.claude/` directory at all. Without this test
+# a plugin install would gate default-branch commits in every repo on the machine.
+#
+# The asymmetry with the skills is deliberate: a skill is INVOKED and may sensibly run on
+# defaults, while a hook is AMBIENT and may not.
+#
+# The config lives at the MAIN checkout's root, which is NOT $PWD inside a linked worktree,
+# so it is resolved through `git rev-parse --git-common-dir` rather than a relative test.
+# $CWD is the payload's cwd once parsed and unset before that, so the unparseable-payload
+# gate falls back to $PWD and still asks the right repo.
+#
+# Needs NEITHER jq NOR grep, which is what lets it guard the degraded paths that exist
+# precisely because one of those is missing.
+pr_repo_configured() {
+  local dir="${CWD:-$PWD}" common
+  common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
+  [[ -n "$common" ]] || return 1
+  [[ "$common" == /* ]] || common="${dir}/${common}"
+  [[ -f "$(dirname "$common")/.claude/pr-config.json" ]]
+}
+
 gate() {
+  # Activation, checked HERE rather than at each call site so that EVERY gating path
+  # honours it: the parsed path, the no-jq and no-grep paths that run before the config
+  # read, the undeterminable-branch path, and any added later. gate() is the single
+  # chokepoint through which every block must pass.
+  pr_repo_configured || exit 0
+
   local reason="$1" decision
   case "$MODE" in
     default | acceptEdits | plan) decision="ask" ;;
