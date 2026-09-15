@@ -117,3 +117,41 @@ a repo that previously pasted the fragments should now delete them.
 Final state, both suites run against an installed copy rather than the source tree:
 `test-guard-default-branch.sh` 48 passed 0 failed, `test-acceptance.sh` 39 passed 0 failed.
 
+### 2026-09-14 — Review round: a fail-open the activation gate introduced
+
+The code review found that the activation check re-introduced the defect class this ticket
+exists to remove, on the one path built to prevent it. Fixed, with tests that pin it.
+
+**`pr_repo_configured()` resolved the repo from `${CWD:-$PWD}`.** On the unparseable-payload
+path `$CWD` is not yet assigned — it is read from the payload that just failed to parse — so
+that path resolved activation from `$PWD` alone. A malformed payload arriving while the hook's
+cwd sat outside the repo therefore exited 0 silently and let a default-branch commit through.
+That path's entire contract is to deny, because nothing in an unparseable payload is
+trustworthy. **Fail-open in the one file designed to fail closed, which is the sentence this
+ticket opens with.**
+
+The fix is `${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}`, and the repo had already written down why:
+`verify-close-landed.sh:142` uses exactly that fallback, with a comment noting that
+`CLAUDE_PROJECT_DIR` is exported for hook commands and is the session's project dir while
+`$PWD` merely happens to be it sometimes. `on-session-start.sh:17` was already correct. The new
+function was the only place that had drifted.
+
+**`CWD` is now cleared explicitly at the top.** It is read before it is assigned on every
+pre-parse path, so an inherited environment variable of that name could have steered the
+verdict from outside the payload. `MODE` was already cleared for the same reason.
+
+**The malformed-payload cases were asserting the runner's working directory, not the hook.**
+They pass no `cwd`, so they inherited whatever directory the suite was invoked from: green from
+the repo root, and `43 passed, 5 failed` from anywhere else. They now set `CLAUDE_PROJECT_DIR`
+explicitly, and gained a mirror block proving the same payloads stay inert in an unconfigured
+repo, plus the case that pins the property both halves rest on — a cwd outside the repo must
+not disarm the guard.
+
+Also moved the `gate()` docstring back above `gate()`, having been orphaned above the new
+function.
+
+**Guard suite 48 → 52 cases, and now cwd-independent:** 52/52 from the hooks directory, from an
+unconfigured temp directory and from `$HOME`. Both new fixes mutation-tested — reverting the
+fallback to `${CWD:-$PWD}` turns 4 cases red, and dropping the `CWD=""` initialization with
+`CWD` set in the environment turns 6 red. Acceptance suite unchanged at 39/39.
+

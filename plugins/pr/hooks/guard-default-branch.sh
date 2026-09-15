@@ -50,6 +50,12 @@ GIT_VERB='(^|[^[:alnum:]_./-])git[[:space:]]+(-[^[:space:]]+[[:space:]]+([^-[:sp
 # never pays for a config read.
 ALLOW_NAME_DEFAULT="PR_ALLOW_MAIN"
 
+# Cleared explicitly because it is READ before it is assigned, on the paths that run
+# ahead of the payload parse. Without this an inherited environment variable named CWD
+# would steer the activation check from outside the payload entirely. MODE is cleared
+# for the same reason where it is defined below.
+CWD=""
+
 # `permission_mode` recovered from the raw payload, for the no-jq branch, which
 # otherwise leaves MODE empty and so DENIES in every mode, including the ones that
 # would merely prompt on the jq path.
@@ -100,11 +106,6 @@ command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 HAVE_GREP=0
 command -v grep >/dev/null 2>&1 && HAVE_GREP=1
 
-# Emit a decision. The reason is interpolated, so it is built with `jq --arg`
-# rather than printf: a repo path containing a double quote otherwise produces
-# unparseable stdout on the one branch designed to fail toward the operator, which
-# loses the decision entirely. The printf fallback is reached only when jq is
-# missing, and there the reason is a fixed literal with nothing to escape.
 # True only when this repo opted INTO the workflow, which is what `.claude/pr-config.json`
 # marks. The plugin declares its hooks in hooks/hooks.json, and a plugin enabled at user
 # scope applies to EVERY repo the user opens: measured, not assumed, with a probe plugin
@@ -122,13 +123,28 @@ command -v grep >/dev/null 2>&1 && HAVE_GREP=1
 # Needs NEITHER jq NOR grep, which is what lets it guard the degraded paths that exist
 # precisely because one of those is missing.
 pr_repo_configured() {
-  local dir="${CWD:-$PWD}" common
+  # $PWD is NOT a trustworthy stand-in for the session's repo. CLAUDE_PROJECT_DIR is
+  # exported for hook commands and IS the project dir, which `verify-close-landed.sh`
+  # already relies on for the same reason; $PWD merely happens to be it sometimes, and
+  # is kept only so a hand-run from a repo root still does something sensible.
+  #
+  # This matters most on the unparseable-payload path, which runs BEFORE $CWD is
+  # assigned and whose whole contract is to deny. Resolving that path from $PWD alone
+  # let a malformed payload pass silently whenever the hook's cwd sat outside the repo
+  # -- fail-open on the one path built to fail closed, which is the defect class this
+  # very ticket exists to remove.
+  local dir="${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}" common
   common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
   [[ -n "$common" ]] || return 1
   [[ "$common" == /* ]] || common="${dir}/${common}"
   [[ -f "$(dirname "$common")/.claude/pr-config.json" ]]
 }
 
+# Emit a decision. The reason is interpolated, so it is built with `jq --arg`
+# rather than printf: a repo path containing a double quote otherwise produces
+# unparseable stdout on the one branch designed to fail toward the operator, which
+# loses the decision entirely. The printf fallback is reached only when jq is
+# missing, and there the reason is a fixed literal with nothing to escape.
 gate() {
   # Activation, checked HERE rather than at each call site so that EVERY gating path
   # honours it: the parsed path, the no-jq and no-grep paths that run before the config

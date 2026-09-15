@@ -158,13 +158,38 @@ else
   printf '  skip %-56s (worktree add failed)\n' "linked worktree resolves main config"
 fi
 
-echo "== malformed payloads fail closed =="
+# A malformed payload carries no cwd, so the activation check falls back to the
+# session's project dir. These cases therefore have to CONTROL that directory: run
+# from wherever the suite happened to be invoked, they would assert the runner's
+# working directory rather than the hook, and silently flip with it.
+#
+# CLAUDE_PROJECT_DIR is what the harness exports and what the hook prefers, so it is
+# set explicitly here rather than leaned on implicitly.
+echo "== malformed payloads fail closed, in a configured repo =="
 for bad in '' 'null' '[]' '42' '{"cwd":'; do
-  out=$(printf '%s' "$bad" | "$HOOK")
+  out=$(printf '%s' "$bad" | CLAUDE_PROJECT_DIR="$MAINREPO" "$HOOK")
   got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
   if [[ "$got" == "deny" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s deny\n' "malformed payload: ${bad:-<empty>}"
   else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "malformed payload: ${bad:-<empty>}" "${got:-<none>}"; fi
 done
+
+# The mirror. An unparseable payload is the one path whose contract is to deny, so if
+# activation is ever resolved from something other than the session's project dir this
+# is where it fails OPEN -- the defect class this plugin exists to prevent, on the path
+# built to prevent it. Denying here would be equally wrong: the repo never opted in.
+echo "== malformed payloads stay inert in an unconfigured repo =="
+for bad in '' 'null' '{"cwd":'; do
+  out=$(printf '%s' "$bad" | CLAUDE_PROJECT_DIR="$NOCFG" "$HOOK")
+  if [[ -z "$out" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s pass\n' "malformed payload: ${bad:-<empty>}"
+  else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=<no output>\n' "malformed payload: ${bad:-<empty>}" "$out"; fi
+done
+
+# And the property both halves depend on: the verdict must come from the session's
+# project dir, NOT from wherever the hook process happens to be running.
+out=$( (cd "$NOCFG" && printf '' | CLAUDE_PROJECT_DIR="$MAINREPO" "$HOOK") )
+got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
+if [[ "$got" == "deny" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s deny\n' "cwd outside the repo does not disarm the guard"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "cwd outside the repo does not disarm the guard" "${got:-<none>}"; fi
 
 echo
 echo "passed $PASS, failed $FAIL"
