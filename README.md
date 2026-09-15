@@ -33,6 +33,40 @@ Writes a book, binds it, revises it, and checks that it told the truth. Four ski
 | `/bookcraft:updatebook` | Revises a book in place. Edits only the chapters an instruction reaches and leaves every other chapter byte-identical, so the paragraph tags other files cite keep pointing where they did. |
 | `/bookcraft:check-claims` | Reads each chapter's sources for real, one agent per chapter, and checks that the paraphrased claims are ones those sources actually support. It catches what no script can: a provenance mark that resolves perfectly and sits beside a sentence its source does not support. |
 
+### pr
+
+A GitHub-issue-backed PR lifecycle. The issue number is the ticket number, two labels carry state, and the merge closes the ticket. Works in any repo with a GitHub remote.
+
+Run `/pr:init` once per repo. It detects what it can, asks about the rest, writes `.claude/pr-config.json`, and creates the `status:*` and `priority:*` labels the queue runs on.
+
+```
+/pr:init → /pr:ticket → /pr:start → [ work ] → /pr:pre-test → /pr:close → (merge) → /pr:cleanup
+```
+
+| Skill | What it does |
+|---|---|
+| `/pr:init` | One-time setup: config file plus the label scheme. |
+| `/pr:ticket` | Files an issue as `status:todo` + `priority:high` and reports the branch name it yields. |
+| `/pr:start` | Creates the branch (in a worktree when configured), installs dependencies, writes the plan folder, moves the issue to `status:in-progress`. |
+| `/pr:pre-test` | Opens a draft PR so CI starts, runs the configured checks and a code review, and says whether the branch is ready to test by hand. |
+| `/pr:close` | Required before a merge. Conflict, drift and check gates, a review gate, a **verified** closing reference, handoff artifacts, deferred-work triage, then commit and push. |
+| `/pr:cleanup` | After the merge: confirms the issue closed, removes the worktree, deletes the branch, pulls the merge. |
+| `/pr:abort` | Ends a branch that will never merge. Closes the issue as *not planned* and deletes everything. Permanent. |
+
+Alongside the spine: `/pr:cp`, `/pr:status`, `/pr:resume`, `/pr:sync`, `/pr:plan-check`, `/pr:precompact`, `/pr:condense`, `/pr:summary`, `/pr:commitmsg` and `/pr:sanity`. Working on the queue rather than a branch: `/pr:next`, `/pr:reviews` and `/pr:triage`.
+
+#### Configuration
+
+Everything repo-shaped lives in `.claude/pr-config.json`, and every key is optional. Defaults give you `feature/123-slug` branches with the bare issue number as the ticket ID, worktrees on, and no check commands. Set `ticketPrefix` for `ABC-123`-style IDs, turn worktrees off, point `checks.*` at your lint and test commands, or disable the continuity and assertions conventions entirely. The full table is in `plugins/pr/reference/config.md`.
+
+#### Hooks
+
+Three, all optional and none installed automatically, because each changes how the harness behaves for every turn in the repo. `/pr:init` shows you the settings fragment for each and lets you decide. See `plugins/pr/hooks/README.md`.
+
+- **Close gate** (`Stop`) refuses to end a turn while a close is in flight and its artifacts are uncommitted.
+- **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a 39-case probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
+- **Session start** loads the current branch's plan folder into a new or compacted session.
+
 #### One-time setup for `/makebook`
 
 `/makebook` renders its PDF through headless Chromium and needs Python packages the others do not. Run the installer once. Inside a Claude Code session the plugin's directory is in `$CLAUDE_PLUGIN_ROOT`:
@@ -67,7 +101,16 @@ plugins/
     scripts/install.sh            one-time venv setup
     scripts/bookcraft-python      runs a bookcraft script under that venv
     skills/<name>/SKILL.md        one directory per skill
+  pr/
+    .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    reference/*.md                the rules the skills cite, owned by the plugin
+    scripts/pr-lifecycle-state.mjs  computes where a branch sits in the lifecycle
+    hooks/                        three optional hooks plus a probe suite
+    agents/code-reviewer.md       the review agent the close gate spawns
+    skills/<name>/SKILL.md        one directory per skill
 ```
+
+A skill refers to its own files through `${CLAUDE_PLUGIN_ROOT}`. The `pr` plugin's reference documents are how its skills stay repo-agnostic: they carry the ticketing, evidence, scope and lifecycle rules the skills cite, so nothing depends on the host repo having a `CLAUDE.md`.
 
 A skill refers to its own files through `${CLAUDE_PLUGIN_ROOT}`, which Claude Code sets to the installed plugin's directory. Nothing in a skill assumes a path relative to the project you are working in.
 

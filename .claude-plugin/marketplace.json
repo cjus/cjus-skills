@@ -11,6 +11,12 @@
       "description": "Write a book from a one-line description, bind it into a PDF and EPUB, revise it in place, and check its claims against its sources",
       "category": "productivity",
       "source": "./plugins/bookcraft"
+    },
+    {
+      "name": "pr",
+      "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
+      "category": "productivity",
+      "source": "./plugins/pr"
     }
   ]
 }
