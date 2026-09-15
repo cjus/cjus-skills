@@ -5,6 +5,16 @@
 # hook is not evidence that it works; this is. Requires jq and git.
 HOOK="$1"
 
+# Resolve to an absolute path once. Several cases below invoke the hook from a
+# DIFFERENT working directory, and a relative $HOOK simply vanishes there -- producing
+# a failure textually identical to the fail-open those very cases exist to catch. The
+# documented invocation is relative (`./test-guard-default-branch.sh ./guard-...`), so
+# this is the normal case, not an exotic one.
+case "$HOOK" in
+  /*) ;;
+  *)  HOOK="$PWD/$HOOK" ;;
+esac
+
 # Invoke the hook DIRECTLY, never via `bash "$HOOK"`. A PreToolUse hook is run as a
 # command, so a non-executable file is a guard that silently never runs, which is
 # fail-open in the one place that must fail closed. Invoking through bash would
@@ -190,6 +200,21 @@ out=$( (cd "$NOCFG" && printf '' | CLAUDE_PROJECT_DIR="$MAINREPO" "$HOOK") )
 got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
 if [[ "$got" == "deny" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s deny\n' "cwd outside the repo does not disarm the guard"
 else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "cwd outside the repo does not disarm the guard" "${got:-<none>}"; fi
+
+# The PARSEABLE sibling of the case above, and it needs its own case because it takes a
+# different code path. A payload can parse perfectly and still carry an empty cwd; that
+# path ASSIGNS $CWD before the activation check runs, so the CLAUDE_PROJECT_DIR fallback
+# has to be spelled at the assignment as well as inside pr_repo_configured. Spelling it
+# in only one of the two places fails open here while every other case stays green.
+out=$( (cd "$NOCFG" && jq -nc '{cwd:"",permission_mode:"default",tool_input:{command:"git commit -m x"}}' | CLAUDE_PROJECT_DIR="$MAINREPO" "$HOOK") )
+got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
+if [[ "$got" == "ask" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s ask\n' "empty payload cwd resolves to the project dir"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=ask\n' "empty payload cwd resolves to the project dir" "${got:-<none>}"; fi
+
+# ...and it must not gate a repo that never opted in, whichever way the dir was resolved.
+out=$( (cd "$MAINREPO" && jq -nc '{cwd:"",permission_mode:"default",tool_input:{command:"git commit -m x"}}' | CLAUDE_PROJECT_DIR="$NOCFG" "$HOOK") )
+if [[ -z "$out" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s pass\n' "empty payload cwd, unconfigured project dir"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=<no output>\n' "empty payload cwd, unconfigured project dir" "$out"; fi
 
 echo
 echo "passed $PASS, failed $FAIL"

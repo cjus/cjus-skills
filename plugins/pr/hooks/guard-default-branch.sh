@@ -271,7 +271,13 @@ else
   exit 0
 fi
 
-[[ -n "$CWD" ]] || CWD="$PWD"
+# Same fallback chain as pr_repo_configured, and it has to be spelled out HERE too:
+# this assignment runs BEFORE the activation check, so writing a bare "$PWD" would
+# shadow CLAUDE_PROJECT_DIR inside that function and the chain there would never be
+# reached. A payload that parses but carries an empty cwd then resolved activation
+# from the process's working directory, which fails OPEN whenever that sits outside
+# the repo. Measured. Matches verify-close-landed.sh:142.
+[[ -n "$CWD" ]] || CWD="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # No grep: detect with bash's built-in regex and gate if this is a git command.
 # Everything past this point needs grep to EXTRACT rather than merely match, so

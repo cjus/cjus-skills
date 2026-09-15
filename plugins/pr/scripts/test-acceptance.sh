@@ -84,8 +84,11 @@ chk "recommends the queue skill from default"   "next     /pr:next"             
 # gated by a plugin installed for some other repo entirely.
 OUT=$(jq -nc --arg c "$R" '{cwd:$c,permission_mode:"bypassPermissions",tool_input:{command:"git commit -m x"}}' | "$P/hooks/guard-default-branch.sh")
 chk_empty "the branch guard is inert with no config" "$OUT"
+# NOT an activation assertion, and must not be labelled as one: this hook is scoped by
+# its sentinel and deliberately has no config gate, so it is silent here because no
+# close is in flight. Phase 6 is what exercises it with a sentinel armed.
 OUT=$(echo "{\"cwd\":\"$R\",\"stop_hook_active\":false}" | "$P/hooks/verify-close-landed.sh")
-chk_empty "the close gate is inert with no config"   "$OUT"
+chk_empty "the close gate is silent with no close in flight" "$OUT"
 # `changelog/` is an ordinary directory name, so its presence must not be mistaken for
 # an opt-in: this exact shape once injected the plugin's context into every session of
 # an unconfigured repo.

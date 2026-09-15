@@ -155,3 +155,39 @@ unconfigured temp directory and from `$HOME`. Both new fixes mutation-tested —
 fallback to `${CWD:-$PWD}` turns 4 cases red, and dropping the `CWD=""` initialization with
 `CWD` set in the environment turns 6 red. Acceptance suite unchanged at 39/39.
 
+### 2026-09-14 — Second review round: the same fail-open, one line further along
+
+The close's review gate returned `REQUEST_CHANGES`. The previous round's fix was real but
+incomplete, and the test that was supposed to pin it did not.
+
+**The fallback had to be spelled in two places, not one.** `pr_repo_configured()` was corrected
+to `${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}`, but `guard-default-branch.sh:280` assigns
+`CWD="$PWD"` *before* the activation check runs, so for any payload that parsed while carrying
+an **empty** `cwd`, that bare `$PWD` shadowed the chain and the function never reached
+`CLAUDE_PROJECT_DIR`. Measured in a configured repo on `main` with the process cwd outside it:
+the guard emitted nothing and allowed the commit. The first round closed the unparseable-payload
+path and left its parseable sibling open.
+
+All four resolution sites now agree on `${CLAUDE_PROJECT_DIR:-$PWD}`:
+`guard-default-branch.sh:136` and `:280`, `verify-close-landed.sh:142`, `on-session-start.sh:17`.
+
+**The suite was green for the wrong reason, twice over.**
+
+- The "cwd outside the repo does not disarm the guard" case `cd`s before invoking `$HOOK`, so a
+  *relative* hook path vanished. Under the suite's own documented invocation,
+  `./test-guard-default-branch.sh ./guard-default-branch.sh`, it read `51 passed, 1 failed` —
+  and the failure text was indistinguishable from the real defect it tests for. Earlier runs
+  used absolute paths and masked it. `$HOOK` is now resolved to an absolute path once, up front.
+- Reverting line 280 left the suite at **52 passed, 0 failed**. Nothing pinned the fix. Two
+  cases were added for the parseable-empty-`cwd` path, in both directions: it must gate a
+  configured project dir, and must stay inert for an unconfigured one. Reverting now yields
+  `52 passed, 2 failed`.
+
+**A third case asserted nothing.** "The close gate is inert with no config" in the acceptance
+suite passed because no sentinel was armed, not because of any config check —
+`verify-close-landed.sh` is sentinel-scoped and deliberately has no activation gate. Relabelled
+to "silent with no close in flight", which is what it actually measures.
+
+**Guard suite 52 → 54 cases, green under every invocation style tested**: relative, absolute,
+from `$HOME`, and from an unconfigured temp directory. Acceptance unchanged at 39/39.
+
