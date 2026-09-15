@@ -73,6 +73,31 @@ CONFIG="$REPO_ROOT/.claude/pr-config.json"
 | `mainGuard.enabled` | `true` | Whether the `PreToolUse` hook gates commits and pushes on the default branch. |
 | `mainGuard.approvalToken` | `"PR_ALLOW_MAIN"` | The environment variable that records operator approval for a default-branch write. |
 
+## This file's existence is what activates the hooks
+
+The two `enabled` flags above turn individual hooks **off** in a repo that already opted in.
+What turns them **on at all** is this file being present.
+
+The plugin declares its three hooks in `hooks/hooks.json`, so they install with the plugin and
+need no `.claude/settings.json` edit. A plugin enabled at user scope reaches every repo on the
+machine, which for an ambient hook is too wide: without a rule, installing this plugin would
+gate default-branch commits in every repo you open. **So a hook is inert wherever
+`.claude/pr-config.json` does not exist**, and writing it is the act that opts a repo in.
+
+The asymmetry with the skills is deliberate. A skill is **invoked**, so it may sensibly fall
+back to the defaults in this table when the file is absent. A hook is **ambient**, so it may
+not.
+
+Three consequences worth knowing:
+
+- **The marker is the file, not the directory.** A repo with a `.claude/` holding only
+  `settings.json` is still unconfigured as far as the hooks are concerned.
+- **It is resolved at the main checkout's root**, through `git rev-parse --git-common-dir`. A
+  linked worktree has no `.claude/` of its own, so a worktree reads its main checkout's config
+  and the guard stays armed where this workflow actually runs.
+- **Deleting this file disables all three hooks**, which is a blunter instrument than the two
+  `enabled` flags and takes the rest of the workflow's configuration with it.
+
 ## Deriving `repo` from the remote
 
 Both remote forms must parse, and the `.git` suffix is optional in both:

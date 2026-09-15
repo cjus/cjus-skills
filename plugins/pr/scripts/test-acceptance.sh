@@ -37,12 +37,67 @@ echo x > app.txt; git add -A; git -c core.hooksPath=/dev/null commit -qm init
 git update-ref refs/remotes/origin/main "$(git rev-parse main)"
 git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 
+echo "== phase 0: the hooks ship with the plugin, not with a settings fragment =="
+HJ="$P/hooks/hooks.json"
+HOOKLIST=$(mktemp)   # outside the repo under test, so it cannot dirty its status
+if [ -f "$HJ" ]; then PASS=$((PASS+1)); printf '  ok   hooks.json is present\n'
+else FAIL=$((FAIL+1)); printf '  FAIL hooks.json is missing, so the hooks are declared nowhere that CLAUDE_PLUGIN_ROOT resolves\n'; fi
+chk "declares all three events"                 "PreToolUse,SessionStart,Stop"   "$(jq -r '.hooks | keys | join(",")' "$HJ" 2>/dev/null)"
+chk "the guard is matched to Bash tool calls"   "Bash"                           "$(jq -r '.hooks.PreToolUse[0].matcher // ""' "$HJ" 2>/dev/null)"
+chk "commands resolve through the plugin root"  '${CLAUDE_PLUGIN_ROOT}'          "$(jq -r '.hooks[][].hooks[].command' "$HJ" 2>/dev/null | head -1)"
+
+# Every declared command must name a file that EXISTS and is EXECUTABLE. The harness
+# runs a hook as a command, so a lost executable bit is a hook that silently never
+# fires. That is the exact packaging defect this suite exists to catch, and it has
+# shipped before.
+jq -r '.hooks[][].hooks[].command' "$HJ" 2>/dev/null | while IFS= read -r cmd; do
+  [ -n "$cmd" ] || continue
+  f=${cmd//\"/}
+  f=${f//\$\{CLAUDE_PLUGIN_ROOT\}/$P}
+  printf '%s\n' "$f"
+done > "$HOOKLIST"
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  n=${f#"$P"/}
+  if [ -x "$f" ]; then PASS=$((PASS+1)); printf '  ok   %s is present and executable\n' "$n"
+  else FAIL=$((FAIL+1)); printf '  FAIL %s is missing or not executable, so that hook would never fire\n' "$n"; fi
+done < "$HOOKLIST"
+rm -f "$HOOKLIST"
+
+# The README must not have drifted back to telling operators to wire hooks by hand.
+if grep -q '"hooks"' "$P/hooks/README.md" 2>/dev/null; then
+  FAIL=$((FAIL+1)); printf '  FAIL hooks/README.md still carries a settings.json hook fragment, which never fires\n'
+else
+  PASS=$((PASS+1)); printf '  ok   hooks/README.md offers no settings.json fragment\n'
+fi
+
 echo "== phase 1: a repo with no config at all =="
 OUT=$(node "$S" --offline --text)
 chk "derives owner/name from an SSH remote"     "repo     someone/their-project" "$OUT"
 chk "reports the missing config as a gap"       "no-config"                      "$OUT"
 chk "on the default branch, phase is correct"   "phase    default-branch"        "$OUT"
 chk "recommends the queue skill from default"   "next     /pr:next"              "$OUT"
+
+# And the hooks must be INERT here. They arrive with the plugin, and a plugin enabled
+# at user scope reaches every repo on the machine, so without an activation rule this
+# repo -- which never opted into the workflow -- would have its default-branch commits
+# gated by a plugin installed for some other repo entirely.
+OUT=$(jq -nc --arg c "$R" '{cwd:$c,permission_mode:"bypassPermissions",tool_input:{command:"git commit -m x"}}' | "$P/hooks/guard-default-branch.sh")
+chk_empty "the branch guard is inert with no config" "$OUT"
+# NOT an activation assertion, and must not be labelled as one: this hook is scoped by
+# its sentinel and deliberately has no config gate, so it is silent here because no
+# close is in flight. Phase 6 is what exercises it with a sentinel armed.
+OUT=$(echo "{\"cwd\":\"$R\",\"stop_hook_active\":false}" | "$P/hooks/verify-close-landed.sh")
+chk_empty "the close gate is silent with no close in flight" "$OUT"
+# `changelog/` is an ordinary directory name, so its presence must not be mistaken for
+# an opt-in: this exact shape once injected the plugin's context into every session of
+# an unconfigured repo.
+git checkout -q -b feature/1-probe
+mkdir -p changelog/1-probe && printf '# Plan\n' > changelog/1-probe/PLAN.md
+OUT=$(echo '{"source":"startup"}' | CLAUDE_PROJECT_DIR="$R" "$P/hooks/on-session-start.sh")
+chk_empty "session-start is inert with no config, changelog folder notwithstanding" "$OUT"
+rm -rf changelog/1-probe
+git checkout -q main; git branch -q -D feature/1-probe
 
 echo "== phase 2: /pr:init's artifact, custom prefix, worktrees off, renamed doc roots =="
 mkdir -p .claude

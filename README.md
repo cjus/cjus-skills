@@ -61,11 +61,13 @@ Everything repo-shaped lives in `.claude/pr-config.json`, and every key is optio
 
 #### Hooks
 
-Three, all optional and none installed automatically, because each changes how the harness behaves for every turn in the repo. `/pr:init` shows you the settings fragment for each and lets you decide. See `plugins/pr/hooks/README.md`.
+Three, declared in the plugin's own `hooks/hooks.json`, so they install with the plugin and need no `.claude/settings.json` edit. **They are inert in any repo that has no `.claude/pr-config.json`**, which makes `/pr:init` writing that file the act that turns them on: a plugin enabled at user scope otherwise reaches every repo on the machine, and a hook is ambient where a skill is invoked. See `plugins/pr/hooks/README.md`.
 
-- **Close gate** (`Stop`) refuses to end a turn while a close is in flight and its artifacts are uncommitted.
-- **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a 39-case probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
 - **Session start** loads the current branch's plan folder into a new or compacted session.
+- **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
+- **Close gate** (`Stop`) refuses to end a turn while a close is in flight and its artifacts are uncommitted.
+
+Turn the guard or the close gate off per repo with `mainGuard.enabled` and `closeGate.enabled`. To turn all three off, disable the plugin.
 
 #### One-time setup for `/makebook`
 
@@ -105,7 +107,8 @@ plugins/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
     reference/*.md                the rules the skills cite, owned by the plugin
     scripts/pr-lifecycle-state.mjs  computes where a branch sits in the lifecycle
-    hooks/                        three optional hooks plus a probe suite
+    hooks/hooks.json              declares the three hooks, so they ship with the plugin
+    hooks/*.sh                    the three hooks plus a probe suite
     agents/code-reviewer.md       the review agent the close gate spawns
     skills/<name>/SKILL.md        one directory per skill
 ```

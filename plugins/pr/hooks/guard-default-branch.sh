@@ -50,6 +50,12 @@ GIT_VERB='(^|[^[:alnum:]_./-])git[[:space:]]+(-[^[:space:]]+[[:space:]]+([^-[:sp
 # never pays for a config read.
 ALLOW_NAME_DEFAULT="PR_ALLOW_MAIN"
 
+# Cleared explicitly because it is READ before it is assigned, on the paths that run
+# ahead of the payload parse. Without this an inherited environment variable named CWD
+# would steer the activation check from outside the payload entirely. MODE is cleared
+# for the same reason where it is defined below.
+CWD=""
+
 # `permission_mode` recovered from the raw payload, for the no-jq branch, which
 # otherwise leaves MODE empty and so DENIES in every mode, including the ones that
 # would merely prompt on the jq path.
@@ -100,12 +106,52 @@ command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 HAVE_GREP=0
 command -v grep >/dev/null 2>&1 && HAVE_GREP=1
 
+# True only when this repo opted INTO the workflow, which is what `.claude/pr-config.json`
+# marks. The plugin declares its hooks in hooks/hooks.json, and a plugin enabled at user
+# scope applies to EVERY repo the user opens: measured, not assumed, with a probe plugin
+# that fired in a throwaway repo having no `.claude/` directory at all. Without this test
+# a plugin install would gate default-branch commits in every repo on the machine.
+#
+# The asymmetry with the skills is deliberate: a skill is INVOKED and may sensibly run on
+# defaults, while a hook is AMBIENT and may not.
+#
+# The config lives at the MAIN checkout's root, which is NOT $PWD inside a linked worktree,
+# so it is resolved through `git rev-parse --git-common-dir` rather than a relative test.
+# $CWD is the payload's cwd once parsed and unset before that, so the unparseable-payload
+# gate falls back to $PWD and still asks the right repo.
+#
+# Needs NEITHER jq NOR grep, which is what lets it guard the degraded paths that exist
+# precisely because one of those is missing.
+pr_repo_configured() {
+  # $PWD is NOT a trustworthy stand-in for the session's repo. CLAUDE_PROJECT_DIR is
+  # exported for hook commands and IS the project dir, which `verify-close-landed.sh`
+  # already relies on for the same reason; $PWD merely happens to be it sometimes, and
+  # is kept only so a hand-run from a repo root still does something sensible.
+  #
+  # This matters most on the unparseable-payload path, which runs BEFORE $CWD is
+  # assigned and whose whole contract is to deny. Resolving that path from $PWD alone
+  # let a malformed payload pass silently whenever the hook's cwd sat outside the repo
+  # -- fail-open on the one path built to fail closed, which is the defect class this
+  # very ticket exists to remove.
+  local dir="${CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}" common
+  common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null) || return 1
+  [[ -n "$common" ]] || return 1
+  [[ "$common" == /* ]] || common="${dir}/${common}"
+  [[ -f "$(dirname "$common")/.claude/pr-config.json" ]]
+}
+
 # Emit a decision. The reason is interpolated, so it is built with `jq --arg`
 # rather than printf: a repo path containing a double quote otherwise produces
 # unparseable stdout on the one branch designed to fail toward the operator, which
 # loses the decision entirely. The printf fallback is reached only when jq is
 # missing, and there the reason is a fixed literal with nothing to escape.
 gate() {
+  # Activation, checked HERE rather than at each call site so that EVERY gating path
+  # honours it: the parsed path, the no-jq and no-grep paths that run before the config
+  # read, the undeterminable-branch path, and any added later. gate() is the single
+  # chokepoint through which every block must pass.
+  pr_repo_configured || exit 0
+
   local reason="$1" decision
   case "$MODE" in
     default | acceptEdits | plan) decision="ask" ;;
@@ -225,7 +271,13 @@ else
   exit 0
 fi
 
-[[ -n "$CWD" ]] || CWD="$PWD"
+# Same fallback chain as pr_repo_configured, and it has to be spelled out HERE too:
+# this assignment runs BEFORE the activation check, so writing a bare "$PWD" would
+# shadow CLAUDE_PROJECT_DIR inside that function and the chain there would never be
+# reached. A payload that parses but carries an empty cwd then resolved activation
+# from the process's working directory, which fails OPEN whenever that sits outside
+# the repo. Measured. Matches verify-close-landed.sh:142.
+[[ -n "$CWD" ]] || CWD="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # No grep: detect with bash's built-in regex and gate if this is a git command.
 # Everything past this point needs grep to EXTRACT rather than merely match, so

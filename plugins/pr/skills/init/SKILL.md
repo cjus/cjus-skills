@@ -120,16 +120,24 @@ gh label list --repo "$REPO" --limit 60 --json name --jq '.[].name'
 
 **The status and priority labels are the whole ticket lifecycle**, so a missing one silently drops an issue out of the queue rather than erroring. That is why this step verifies instead of trusting.
 
-## Step 6. Offer the hooks, never install them silently
+## Step 6. Tell the operator the hooks just went live
 
-The plugin ships two hooks, and both change how the harness behaves for every turn in this repo, so neither is installed without the operator saying yes.
+**The hooks arrive with the plugin and need no `.claude/settings.json` edit.** They are declared in `${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json`, which is the scope where `${CLAUDE_PLUGIN_ROOT}` resolves. Do not offer a settings fragment, and do not write one: earlier versions of this step did, and the result was hooks that never ran and failed silently.
 
-| Hook | What it does | Cost of enabling |
+**Writing the config in step 4 is what switched them on.** A hook is inert in a repo with no `.claude/pr-config.json`, so this repo had none of this behavior a moment ago and has all of it now. That is a real change to every turn in this repo, so say so plainly rather than letting the operator discover it at the first blocked commit.
+
+| Hook | What it does | Cost |
 |---|---|---|
-| Close gate (`Stop`) | Refuses to end a turn while a close is in flight and its artifacts are uncommitted | One extra turn if a close is abandoned deliberately, until it is disarmed |
+| Session context (`SessionStart`) | Loads the branch's plan folder into each session | Some context on every session start, on a branch that has a folder |
 | Default-branch guard (`PreToolUse`) | Gates a commit or push on the default branch | One prompt per intentional default-branch commit |
+| Close gate (`Stop`) | Refuses to end a turn while a close is in flight and its artifacts are uncommitted | One extra turn if a close is abandoned deliberately, until it is disarmed |
 
-Show the exact `.claude/settings.json` fragment each one needs, and let the operator paste it or approve you writing it. `${CLAUDE_PLUGIN_ROOT}/hooks/README.md` carries both fragments.
+Name the two per-repo off switches, since they are the answer to "I want the rest but not that one":
+
+- `mainGuard.enabled: false` disables the default-branch guard.
+- `closeGate.enabled: false` disables the close gate, clearing any armed sentinel rather than stranding it.
+
+There is no switch for the session-context hook; it is silent unless the branch has a plan folder. To turn all three off, the plugin itself is what gets disabled. `${CLAUDE_PLUGIN_ROOT}/hooks/README.md` has the detail.
 
 ## Step 7. Report
 
@@ -142,7 +150,7 @@ pr plugin ready in <owner/name>
   Worktrees: enabled -> <root> | disabled
   Checks:    lint <cmd> | none, test <cmd> | none, ...
   Labels:    <n> present, <n> created this run
-  Hooks:     close gate <installed | offered>, main guard <installed | offered>
+  Hooks:     active with the plugin - session context, main guard <on | off>, close gate <on | off>
 
 Next: /pr:ticket <description> to file the first ticket.
 ```
