@@ -132,29 +132,29 @@ Name each moved premise with its evidence, the same way a retirement names its f
 
 Consolidation is the least reversible thing here, so the bar is written down rather than judged per run. Three clauses govern it, and **clause 2 is the spine**: every group clears it, and its strength decides how the other two apply. Read the three, then read the strength, and do not treat 1 and 3 as settled before you have.
 
-1. **One occasion.** A single event would cause all of them to be picked up.
+1. **One occasion** *(implied on the strict path below)*. A single event would cause all of them to be picked up.
 2. **One changeset.** Doing any one puts you inside the files the others name, so scheduling them separately means opening the same material twice.
-3. **One priority band.** Every member carries the same `priority:` label. Combining across bands silently promotes the low member or demotes the high one, and neither is a decision this skill gets to make. **An issue carrying no priority label fails this clause and never joins a group**: it is a queue defect, and the fix is for the operator to label it.
+3. **One priority band** *(replaced on the strict path below)*. Every member carries the same `priority:` label. Combining across bands silently promotes the low member or demotes the high one, and neither is a decision this skill gets to make. **An issue carrying no priority label fails this clause and never joins a group**: it is a queue defect, and the fix is for the operator to label it.
 
-**Clause 2 holds at two strengths, and the strength decides how clauses 1 and 3 apply.** Every group clears clause 2 either way; the strengths differ in nothing else. **Decide the strength before you name the members**, and say which one applied, because a group whose strength you cannot state is not a group.
+**Clause 2 holds at two strengths.** Every group clears clause 2 either way; the strength changes only how clauses 1 and 3 apply and how many members are worth grouping. **Name the strength as part of forming the group rather than after it**, and say which one applied, because a group whose strength you cannot state is not a group.
 
 ### Strict clause 2: the members' changes land in the same file or the same migration
 
-Doing one member means editing the same file, or the same migration, that another member needs. **"The same migration" means one migration file**, not two that must be applied together.
+Doing one member means editing the same file, or the same migration, that another member needs. **"The same migration" means one migration file**, not two that must be applied together. **The shared file or migration is common to every member, not merely to some pair of them**: a third issue that overlaps one member but not the rest makes the group loose, not strict.
 
 On this path the work is a single unit, so the only real question is when that unit gets scheduled:
 
-- **Clause 3 is replaced.** The group takes the **highest** member's band, and **the report names each promoted member explicitly**, so the promotion is visible rather than silent. Where every member already carries the same band, this is the same band and no promotion happened; say nothing about promotion in that case.
+- **Clause 3 is replaced.** The group takes the **highest** member's band — high, then medium, then low — and **the report names each promoted member explicitly**, so the promotion is visible rather than silent. Where every member already carries the same band, this is the same band and no promotion happened; say nothing about promotion in that case.
 - **Clause 1 is implied and not separately required.** If doing one member puts you inside the file another names, then the occasion for one is the occasion for the other by construction.
 - **Two members suffice.** A same-file pair saves an entire lifecycle: a branch, a worktree, a plan folder, a review gate, the close artifacts and a continuity entry. That is the largest saving this skill has to offer, so the two-member caution below does not apply here.
 
-**An issue carrying no priority label still never joins a group, including a strict one.** It contributes no band, so there is no highest band to take. It is a queue defect, and the fix is the same: the operator labels it.
+**An issue carrying no priority label still never joins a group, including a strict one.** It was never ranked, so there is nothing to promote it *from*: the group's band would be one member's evidence applied to another member nobody has judged. That is the same laundering `/pr:next` refuses, and it is a queue defect either way. The fix is the same: the operator labels it.
 
 ### Loose clause 2: clause 2 holds, but across more than one file
 
 Doing any one member still puts you inside files the others name, yet no single file or migration is common to them. **Clauses 1 and 3 both apply exactly as written above, unchanged.** Nothing on this path is looser than the bar has always been.
 
-A group of two is worth forming only when the clauses are strong; below three members the consolidation often costs more attention than it saves. Say so rather than suppressing the proposal.
+**On this path,** a group of two is worth forming only when the clauses are strong; below three members the consolidation often costs more attention than it saves. Say so rather than suppressing the proposal.
 
 ### Both strengths
 
@@ -277,7 +277,7 @@ Consolidates #NN, #NN, #NN, which converge on {the shared work}.
 
 **Why these combine:** {strict | loose}. {the one-changeset clause in one sentence, plus the one-occasion clause on loose, where it is not implied}
 
-**Band:** {priority:high} — {the band every member already carried | raised from #NN's {priority:medium}, because its changes land in {the file or migration} that #NN also needs}
+**Band:** {priority:high} — {the band every member already carried | raised, one clause per promoted member: from #NN's {priority:medium}, because its changes land in {the file or migration} that #NN also needs}
 
 <details><summary>#NN: {title} (original body)</summary>
 
@@ -288,7 +288,7 @@ Consolidates #NN, #NN, #NN, which converge on {the shared work}.
 
 **The combined issue takes the band step 5 assigned, and this is a deliberate divergence from `/pr:ticket`.** That skill files high because it is turning a freeform description into a ticket nobody has ranked. Here the members were already ranked, so their own bands are the evidence. On the loose path clause 3 required them to agree, and that agreed band is the answer. On the strict path they may disagree, and the **highest** is the answer, because members whose changes land in one file or one migration are a single unit of work: the lower member cannot be scheduled separately whatever label it carries, so the only honest question is when that unit gets picked up.
 
-**Forcing high on the loose path** would be a re-prioritization performed by a skill that § What this skill never does forbids from touching a priority label, and it would not be cosmetic: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
+**Forcing high on the loose path** would be a re-prioritization this skill chose rather than one the material forced, which is the line § What this skill never does draws. It would not be cosmetic either: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
 
 **The strict path promotes deliberately rather than silently, and that is the whole of the difference.** The promotion is forced by the material rather than chosen by this skill, step 6's Combine block names every promoted member with its prior band, the combined issue's body repeats it, and the band lands on a newly created issue rather than by editing any member's label.
 

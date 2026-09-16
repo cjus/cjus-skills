@@ -68,3 +68,26 @@ skill never does, § Common mistakes) and `plugins/pr/reference/ticketing.md:37`
 | #23, #24, #34 | a two-file directory | medium, medium, low | loose | **still refused** on clause 3, as intended |
 
 Two of three now form, which is the designed reach. Row 3 fails on bands and is meant to.
+
+### Review hardening (2026-09-16)
+
+Review verdict APPROVE, no criticals. Eight findings folded in; see `pr-review-2026-09-16.md`.
+Two were real defects in the new prose rather than polish:
+
+**The no-priority-label rule's strict rationale was false.** "It contributes no band, so there
+is no highest band to take" does not hold for a `high` + unlabelled pair — there plainly is a
+highest band. An agent reasoning from the rationale rather than the rule would find the stated
+obstacle absent and sweep an unranked issue into a group at another member's band. Re-grounded
+on the laundering `/pr:next` refuses: the issue was never ranked, so there is nothing to
+promote it *from*.
+
+**Phase 5's own edit undercut a prohibition elsewhere in 7c.** Establishing that a band on a
+newly created issue is not a relabelling removed the ground `:291` stood on when it forbade
+forcing high on the loose path. Re-based that prohibition on the distinction the next paragraph
+already draws — a re-prioritization the skill *chose* versus one the material *forced* — so the
+loose path's behaviour stays pinned where the objective promised.
+
+Also: inline conditional tags on clauses 1 and 3 so a partial reader cannot take clause 3 as a
+categorical refusal; the band ordering stated (high, then medium, then low), which nothing in
+the plugin had written down; and strict's shared file pinned to every member rather than some
+pair.
