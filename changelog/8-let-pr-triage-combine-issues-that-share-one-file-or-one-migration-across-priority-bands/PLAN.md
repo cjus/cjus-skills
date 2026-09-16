@@ -98,6 +98,16 @@ The next time `/pr:triage` refuses a group whose members share one file, which i
 
 ## Phase 1 findings
 
+**RESOLVED (operator).** The ticket describes the loose path as members that "share a feature
+area but sit in different files", and Phase 3 calls for restating today's rule "verbatim". Those
+are two different edits: today's clause 2 already reads "Doing any one puts you inside the files
+the others name", so it is already file-shaped and grants no different-files permission to
+restate. **Loose is today's clause 2, genuinely verbatim.** The two strengths share the file
+requirement and differ in band and member count only, which keeps the overview's promise to
+split the bar rather than loosen any clause. The checked ticket box above retains the issue's
+original wording; what shipped is the narrower reading.
+
+
 Three dependents of the bar sit outside the phase list as written. Recorded here as status, not
 as new scope; each is a consequence of the fixed objective rather than an addition to it.
 
