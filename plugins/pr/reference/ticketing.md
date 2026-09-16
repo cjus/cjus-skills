@@ -34,7 +34,7 @@ See `config.md` for how `repo`, `ticketPrefix` and `branchPrefix` resolve, and f
 
 It is turning a freeform description into a ticket nobody has ranked yet, so the band it picks carries no information either way. Filing high keeps new work visible in the queue until somebody ranks it deliberately. Do not add a note in the body suggesting a different priority; if the operator asks for one explicitly, honor that.
 
-**`/pr:triage` diverges here deliberately.** A consolidated issue inherits the shared band of its members, because those were already ranked and the combining bar required them to agree. Forcing high there would silently promote the group past every other issue in its band.
+**`/pr:triage` diverges here deliberately.** A consolidated issue takes the band its members' own ranking implies rather than filing high, because those members were already ranked. Where the combining bar required them to agree, that agreed band is the answer. Where their changes land in one file or one migration the bar lets them disagree, and the group takes the **highest** member's band, with `/pr:triage` naming each promoted member in its report. Filing every consolidation high would instead promote the group past every other issue in its band on no evidence at all.
 
 ## Resolving a cited number
 
