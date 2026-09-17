@@ -13,6 +13,12 @@
       "source": "./plugins/bookcraft"
     },
     {
+      "name": "explain",
+      "description": "Explain a topic for a mid-level engineer — in 250 words of prose, or as a self-contained HTML page with diagrams that opens in the browser",
+      "category": "productivity",
+      "source": "./plugins/explain"
+    },
+    {
       "name": "pr",
       "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
       "category": "productivity",
