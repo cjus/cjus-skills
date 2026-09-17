@@ -33,41 +33,28 @@ Phase 3 destroys the evidence the check depends on.
 **`model:` in skill frontmatter is honored, including for plugin skills — `qve`'s
 `model: opus` stays.** The #12 review's hypothesis was that `--strict` passing meant
 unknown keys were tolerated rather than honored. Static analysis of the compiled Claude
-Code `2.1.274` binary disproves it on four independent points:
+Code `2.1.274` binary disproves it. Confirmed empirically the next day (see below), so
+the detail is compressed here to the load-bearing points:
 
-- The plugin command/skill loader reads `w.model`, trims it, treats `"inherit"` as a
-  sentinel and resolves anything else through the model-name resolver — the same loader
-  that validates `effort` and warns `Plugin command <n> has invalid effort`.
-- The frontmatter-to-command mapper emits `model` onto the command object alongside
-  `disableModelInvocation`, `userInvocable` and `effort`.
-- There is a model-specific runtime guard whose warning text reads `Skill/command model
-  "<x>" is not in the availableModels allowlist; keeping the session model`. A fallback
-  that names skills and commands only exists because the value is otherwise applied.
-  Precision note, from review: the allowlist is not the *only* gate — a sibling check
-  rejects a skill model unsupported in auto mode, with its own warning. `claude-opus-5` on
-  first-party passes both, so the conclusion is unchanged, but "only when the value is
-  outside the allowlist" would be stronger than the binary supports.
-- `model` sits in both recognized-key lists — the skill/command list and the plugin list
-  — so `--strict` was never treating it as an unknown key.
+- The plugin skill loader parses `model` — trimming it, treating `"inherit"` as a sentinel,
+  resolving the rest through the model-name resolver — in the same function that validates
+  `effort`. The plugin-*skill* path specifically reaches that loader via an `isSkillMode`
+  flag, which is what proves the key is not merely parsed for commands.
+- `model` sits in both recognized-key lists, so `--strict` never treated it as unknown.
+- A model-specific runtime guard falls back to the session model and says so:
+  `Skill/command model "<x>" is not in the availableModels allowlist; keeping the session
+  model`. A sibling gate rejects a model unsupported in auto mode. `claude-opus-5` passes
+  both, so "only when outside the allowlist" would overstate it.
+- The Skill tool's output schema documents the field in prose: "Resolved model the skill
+  turn runs on when a frontmatter model override took effect; omitted otherwise."
 
-`opus` resolves as a first-class family alias (`latest_per_family.opus =
-"claude-opus-5"`), so the bare form is correct as written.
+`opus` resolves as a family alias (`latest_per_family.opus = "claude-opus-5"`), so the bare
+form is correct as written.
 
-Review surfaced two stronger pieces of evidence than the four above, both worth recording.
-The Skill tool's own output schema documents the field in prose — "Resolved model the skill
-turn runs on when a frontmatter model override took effect; omitted otherwise" — which is
-the runtime describing the behavior directly rather than by inference. And the full chain
-for plugin *skills* specifically was traced: the plugin skill walker invokes the loader
-with an `isSkillMode` flag, the loader returns `model` on the command object, and the Skill
-tool applies it. That closes the one gap the four bullets left open, since the first four
-establish the loader parses `model` without proving plugin skills reach that loader.
-
-Two corrections to the review's framing. Its scan covered only plugin skills; four
+One correction to the review's framing: its scan covered only plugin skills, and four
 **user-level** skills in this same setup already declare `model:` (`pr-sanity: opus`,
-`diagram-dot`, `diagram-mermaid`, `pr-cp: sonnet`), so the key was never as unattested as
-a plugins-only scan suggested. And the finding is static analysis of the shipped binary,
-not an observation of `qve` running on Opus — the empirical confirmation rides along with
-the post-restart Phase 1 verification.
+`diagram-dot`, `diagram-mermaid`, `pr-cp: sonnet`), so the key was never as unattested as a
+plugins-only scan suggested.
 
 **Phases 3 and 4 are clean deletes.** Diffing both originals against the plugin copies on
 `main`: every difference is an intended de-hosting change — `/qe` to `/explain:qe`,
@@ -112,7 +99,7 @@ observing behavior — is discharged.
 a copy was taken first; the content is independently recoverable from `origin/main`'s
 plugin copy, which differs by exactly four namespacing hunks.
 
-**Phase 4 is half done, and the half that remains is in another repo.**
+**Phase 4 is half done, and the half that remains is in another repo.** *(Superseded later the same day — it landed as `f7bc581`; see the entry below.)*
 `cjus-dev/.claude/skills/qve/` is deleted, but `cjus-dev` sits on `main`, where that
 repo's own conventions forbid a direct commit. The deletion therefore sits in its working
 tree, unlanded, and finishing it needs a branch and a PR *there* — recorded under
