@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "council",
+  "description": "Fan one question out to N independent members and reconcile their answers without manufacturing consensus",
+  "version": "0.1.0",
+  "author": {
+    "name": "cjus"
+  },
+  "homepage": "https://github.com/cjus/cjus-skills",
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": [
+    "council",
+    "subagents",
+    "openrouter",
+    "ollama",
+    "consensus",
+    "review"
+  ]
+}
