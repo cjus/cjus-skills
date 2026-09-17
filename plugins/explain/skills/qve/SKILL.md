@@ -32,12 +32,12 @@ Inherit `/explain:qe`'s rules (`${CLAUDE_PLUGIN_ROOT}/skills/qe/SKILL.md` — bo
 
 **The topic's complexity sets the length.** There is no word cap — but there is no license to pad either. Every paragraph, diagram, and card must carry something the reader would otherwise not know. Never lengthen a page to look thorough; never truncate a genuine insight to look brisk. A simple topic that lands in 200 words and one diagram is a *successful* `/explain:qve`, not a lazy one.
 
-Practical shape: 2-5 numbered sections, 1-4 visuals. Beyond that, ask whether the topic actually wants `/debrief` instead.
+Practical shape: 2-5 numbered sections, 1-4 visuals. Beyond that, ask whether the topic actually wants a full project debrief instead — a `debrief` skill, where one is installed, is the better medium for that.
 
 ## Grounding
 
 - **Repo topics** (a file, subsystem, ticket, or "our X"): read the actual code first and cite `file:symbol` in the page. Never diagram aspirational architecture — diagram only what the code evidences. `ASSERTIONS.md`, `continuity/`, and `changelog/<branch-slug>/` folders are fair game for history and invariants, but the code is source of truth.
-- **General topics** (a pattern, protocol, algorithm): no repo reading needed. If a claim is load-bearing and you're unsure, verify or hedge — root `CLAUDE.md` § Evidence Discipline applies to a rendered page exactly as it does to a chat reply. Do not invent numbers for a chart; label illustrative figures as schematic.
+- **General topics** (a pattern, protocol, algorithm): no repo reading needed. If a claim is load-bearing and you're unsure, verify or hedge — the evidence bar for a rendered page is the same as for a chat reply — state what you verified, mark what you inferred, and never let a diagram assert something the source does not. Where the host repo documents its own evidence rules, those apply here too. Do not invent numbers for a chart; label illustrative figures as schematic.
 
 ## Procedure
 

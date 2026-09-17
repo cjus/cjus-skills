@@ -33,6 +33,15 @@ Writes a book, binds it, revises it, and checks that it told the truth. Four ski
 | `/bookcraft:updatebook` | Revises a book in place. Edits only the chapters an instruction reaches and leaves every other chapter byte-identical, so the paragraph tags other files cite keep pointing where they did. |
 | `/bookcraft:check-claims` | Reads each chapter's sources for real, one agent per chapter, and checks that the paraphrased claims are ones those sources actually support. It catches what no script can: a provenance mark that resolves perfectly and sits beside a sentence its source does not support. |
 
+### explain
+
+Explains a topic for a mid-level engineer, in prose or as a page you can look at. Same audience and same honesty bar; the medium is the only difference.
+
+| Skill | What it does |
+|---|---|
+| `/explain:qe` | Explains a concept in at most 250 words: the core idea, then the mechanism, then why it exists. Simplifies freely, but says so where precision was traded away rather than leaving a clean lie. |
+| `/explain:qve` | Builds one self-contained HTML page with diagrams and opens it, for when the answer's *shape* is the point. Refuses rather than decorates: if a topic has nothing worth drawing, it says so and points back at `/explain:qe`. |
+
 ### pr
 
 A GitHub-issue-backed PR lifecycle. The issue number is the ticket number, two labels carry state, and the merge closes the ticket. Works in any repo with a GitHub remote.
@@ -103,6 +112,10 @@ plugins/
     scripts/install.sh            one-time venv setup
     scripts/bookcraft-python      runs a bookcraft script under that venv
     skills/<name>/SKILL.md        one directory per skill
+  explain/
+    .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    skills/<name>/SKILL.md        one directory per skill
+    skills/qve/references/        the page template qve fills in
   pr/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
     reference/*.md                the rules the skills cite, owned by the plugin
