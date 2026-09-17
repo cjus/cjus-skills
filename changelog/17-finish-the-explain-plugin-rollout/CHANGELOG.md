@@ -75,3 +75,55 @@ hardcoded paths to `${CLAUDE_PLUGIN_ROOT}`, host-`CLAUDE.md` references generali
 a Playwright setup block the plugin `qve` gained. Nothing exists only in the originals, so
 neither removal loses content.
 
+### 2026-09-17 — Phases 1, 3 and 4: verified, then the originals removed
+
+**Phase 1 is verified.** Two restarts were needed, and the first one went to the wrong
+place, which is worth recording because the wrong place produced a convincing false alarm.
+
+Observed from `cjus-dev`, a repo other than `cjus-skills`: `explain:qe` and `explain:qve`
+both resolve, and `qve` and `explain:qve` appear as **distinct entries**, confirming the
+namespaced form does not displace a project-level skill of the same bare name. Separately,
+in this worktree, both skills were executed end to end. Stated precisely because the two
+halves happened in different sessions: resolution was observed in `cjus-dev`, execution
+here. The plugin is user-scoped so the code path is the same, but the record should not
+imply one session did both.
+
+The shadowing check for `qe` resolved positively rather than by absence. The loaded
+`explain:qe` carries the **plugin** copy's description — `"/explain:qe what is a
+transactional outbox"` — where the user-level copy read `"/qe what is…"`. Different text,
+so the namespaced form demonstrably reached the plugin.
+
+**A false alarm worth not repeating.** Mid-verification it looked as though `explain:qve`
+had displaced `qve` while `qe` and `explain:qe` coexisted, which suggested a precedence
+rule where a plugin skill hides a *project* skill but not a *user-level* one. It was an
+artifact of reading the skill list from this worktree, where `cjus-dev`'s project-level
+`qve` correctly does not load at all. No precedence rule exists. The investigation it
+prompted did establish one real fact: Claude Code's duplicate-skill guard keys on the
+resolved file, not the skill name — it skips only the *same file* reached twice — so two
+same-named skills from different sources were never going to collide.
+
+**Phase 2 is now empirical, not just static.** Running `/explain:qve` from a session on
+`claude-opus-5[1m]` produced a skill turn reporting `claude-opus-5`. The `model: opus`
+frontmatter resolved through the family alias and actually switched the model. The caveat
+recorded on 2026-09-16 — that the finding rested on reading the binary rather than
+observing behavior — is discharged.
+
+**Phase 3 is done.** `~/.claude/skills/qe/` removed. It was not under version control, so
+a copy was taken first; the content is independently recoverable from `origin/main`'s
+plugin copy, which differs by exactly four namespacing hunks.
+
+**Phase 4 is half done, and the half that remains is in another repo.**
+`cjus-dev/.claude/skills/qve/` is deleted, but `cjus-dev` sits on `main`, where that
+repo's own conventions forbid a direct commit. The deletion therefore sits in its working
+tree, unlanded, and finishing it needs a branch and a PR *there* — recorded under
+`## Deferred` along with the stale `/qve` and `/qe` references at its `CLAUDE.md:416`,
+since the two are one piece of work. The enable half of the step is a verified no-op:
+`explain@cjus-skills` is enabled at user scope, `cjus-dev` declares no project-level
+`enabledPlugins`, and `explain:qve` was observed loading there.
+
+**Two incidentals.** The Playwright venv the `qve` skill documents was created at
+`~/.cache/explain/venv`; the cached Chromium builds were 1217-1228 and this Playwright
+wanted 1243, so one was downloaded. And the shipped `page-template.html` footer still says
+"regenerate with `/qve …`" — a bare name the port missed, cosmetic but live in
+`explain@0.1.0`.
+
