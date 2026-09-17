@@ -35,18 +35,49 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       plugin works there, and relocate the A-060 warning into cjus-dev's `CLAUDE.md`
       and `ASSERTIONS.md`.
 
+## Status
+
+Updated 2026-09-16. Status only; the objective and the nine phases above are unchanged.
+
+Landed in `715e9c2` — the mechanical layer, ahead of any skill that calls it:
+
+- **Phase 1, partial.** `plugins/council/` exists with its manifest at 0.1.0 and passes
+  `claude plugin validate --strict`. Still missing: the three skill directories,
+  `reference/`, and the marketplace entry. The marketplace entry is being held back
+  deliberately until a skill exists, so the listing never advertises an unusable plugin.
+- **Phase 2, one of three blockers closed.** `scripts/env.mjs` replaces the host-repo
+  `dotenv.mjs` import. The repo-private material and the `council-setup` relative path
+  are untouched.
+- **Phase 3, the chain is implemented; the reporting half is not.** Precedence lives in
+  `env.mjs` and `council-lib.sh`. `detect.sh` has not been ported, so nothing reports
+  which source won yet.
+- **Phase 4, the script exists; the two callers do not.** `council-state.sh` performs the
+  seating join. `skills/ask` does not call it and `/council:status` does not exist.
+- **Phase 8, two of four suites.** 46 cases for the key chain, 66 for the join and the
+  two JSON backends. `openrouter.mjs` exit codes and `detect.sh` probes are not written.
+
+**Phase 9 needs re-sequencing before it runs.** Its verification step says to confirm the
+key "still resolves via step 2" of the precedence chain. Verified false on this machine:
+`COUNCIL_OPENROUTER_API_KEY` is absent from cjus-dev's `.env`, from the environment, and
+from `~/.config/council/.env`, while the roster has `openrouter.enabled: true`. The
+members are consented but unseatable, so the step must create the user-level file at step
+3 first. This corrects how an existing phase runs; it adds no scope.
+
 ## Open Questions
 
-- **Is `council-state.mjs` the right runtime?** `detect.sh` is deliberately POSIX `sh`
-  with no Node dependency, and Node is currently required only for OpenRouter members.
-  Writing the seating join in Node makes `/council:status` require Node even for a
-  Claude-only council. Decide between `.mjs` and `.sh` before Phase 4.
-- **Starting version for `plugin.json`.** `bookcraft` is at 1.0.2 and `pr` at 0.2.0.
+- ~~**Is `council-state.mjs` the right runtime?**~~ **Resolved: `sh` plus jq.** A
+  Claude-only council needs no Node and must not acquire the dependency to read its own
+  status. The roster is parsed by jq *or* Node, whichever is present, because nothing is
+  installed when a plugin is installed — verified against `claude plugin validate
+  --strict`, where `requires` and `postInstall` are ignored at load time.
+- ~~**Starting version for `plugin.json`.**~~ **Resolved: 0.1.0**, the conventional start
+  for a new plugin. `bookcraft` at 1.0.2 and `pr` at 0.2.0 imply nothing for a third.
 - **Model alias availability.** The per-member pins (`opus`/`sonnet`/`haiku`/`fable`)
   are assumed to resolve; nothing verifies this, and the `COLLAPSED` class exists
-  precisely because they may not. No way to test other plans from here.
+  precisely because they may not. No way to test other plans from here. Still open.
 - Phase 9 touches a second repo (`cjus-dev`). It is in scope as the retirement half of
-  this port, but confirm whether it should land as its own change there.
+  this port, but confirm whether it should land as its own change there. Still open, and
+  now carries the re-sequencing noted above.
 
 ## About Ticket
 
