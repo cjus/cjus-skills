@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "explain",
+  "description": "Explain a topic for a mid-level engineer — in 250 words of prose, or as a self-contained HTML page with diagrams that opens in the browser",
+  "version": "0.1.0",
+  "author": {
+    "name": "cjus"
+  },
+  "homepage": "https://github.com/cjus/cjus-skills",
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": [
+    "explain",
+    "documentation",
+    "diagrams",
+    "mermaid",
+    "html",
+    "teaching"
+  ]
+}

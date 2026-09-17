@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TOPIC}} — Visual Explainer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:        #0f1117;
+    --surface:   #171a21;
+    --surface-2: #1b1f27;
+    --border:    #272c38;
+    --text:      #e6e9ef;
+    --muted:     #a2aab8;
+    --accent:    #7aa2f7;
+    --accent-2:  #9ece6a;
+    --warn:      #e0af68;
+    --danger:    #f7768e;
+    --code:      #c0caf5;
+    --prose: 74ch;
+    --wide: 1120px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 17px/1.7 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--wide); margin: 0 auto; padding: 3.5rem 1.5rem 6rem; }
+
+  /* Prose column stays narrow for readability; wide blocks opt out. */
+  .wrap > p, .wrap > ul, .wrap > ol, .wrap > h2, .wrap > h3, .wrap > h4,
+  .wrap > blockquote, section > p, section > ul, section > ol,
+  section > h2, section > h3, section > h4, section > blockquote {
+    max-width: var(--prose);
+  }
+
+  header.masthead { border-bottom: 1px solid var(--border); padding-bottom: 1.75rem; margin-bottom: 2.5rem; }
+  header.masthead h1 { font-size: clamp(1.9rem, 1.2rem + 2.4vw, 2.9rem); line-height: 1.15; margin: 0 0 .6rem; letter-spacing: -.02em; }
+  header.masthead .thesis { font-size: 1.15rem; max-width: var(--prose); margin: 0 0 1.1rem; color: var(--text); }
+
+  .facts { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 0; max-width: none; }
+  .facts li {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    padding: .28rem .8rem; font-size: .82rem; color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .facts li b { color: var(--text); font-weight: 600; }
+
+  h2 {
+    font-size: clamp(1.35rem, 1.05rem + 1vw, 1.75rem); line-height: 1.25; letter-spacing: -.01em;
+    margin: 3.5rem 0 1rem; padding-top: .4rem;
+  }
+  h2 .num { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72em; margin-right: .55rem; }
+  h3 { font-size: 1.12rem; margin: 2rem 0 .6rem; color: var(--text); }
+
+  p { margin: 0 0 1.15rem; }
+  ul, ol { margin: 0 0 1.15rem; padding-left: 1.35rem; }
+  li { margin: 0 0 .5rem; }
+  strong { color: #fff; font-weight: 650; }
+  a { color: var(--accent); text-underline-offset: .18em; }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .88em; background: var(--surface-2); color: var(--code);
+    border: 1px solid var(--border); border-radius: 5px; padding: .1em .38em;
+    overflow-wrap: break-word;
+  }
+  pre {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1rem 1.15rem; overflow-x: auto; margin: 0 0 1.4rem; font-size: .88rem; line-height: 1.6;
+  }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+  blockquote {
+    margin: 0 0 1.4rem; padding: .9rem 1.15rem; background: var(--surface);
+    border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; color: var(--muted);
+  }
+  blockquote p:last-child { margin-bottom: 0; }
+
+  /* Callouts — used sparingly for genuine gotchas. */
+  .note { border-left-color: var(--accent-2); }
+  .warn { border-left-color: var(--warn); }
+  .risk { border-left-color: var(--danger); }
+
+  .table-scroll { overflow-x: auto; margin: 0 0 1.5rem; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; min-width: 34rem; }
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+
+  figure { margin: 1.8rem 0 2rem; }
+  figure figcaption { color: var(--muted); font-size: .87rem; margin-top: .7rem; max-width: var(--prose); }
+  .mermaid {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.25rem; overflow-x: auto; text-align: center; font-size: 15px;
+  }
+  .mermaid svg { max-width: 100%; height: auto; }
+
+  /* Inline SVG figures get the same frame as Mermaid. */
+  .fig-svg {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.25rem; overflow-x: auto; text-align: center;
+  }
+  .fig-svg svg { max-width: 100%; height: auto; }
+
+  /* --- Explainer components (dependency-free) --- */
+
+  /* Key-idea cards: the 2-4 things the reader must hold in their head. */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .9rem; margin: 0 0 1.6rem; max-width: none; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; padding: .95rem 1.1rem; }
+  .card h4 { margin: 0 0 .4rem; font-size: .96rem; color: #fff; }
+  .card p  { margin: 0; font-size: .93rem; color: var(--muted); line-height: 1.6; }
+
+  /* Numbered step flow for sequential mechanisms. */
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0 0 1.6rem; max-width: var(--prose); }
+  ol.steps li { counter-increment: step; position: relative; padding-left: 2.6rem; margin: 0 0 .95rem; }
+  ol.steps li::before {
+    content: counter(step); position: absolute; left: 0; top: .05rem;
+    width: 1.8rem; height: 1.8rem; border-radius: 50%;
+    background: var(--surface-2); border: 1px solid var(--accent); color: var(--accent);
+    font: 600 .82rem/1.75rem ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center;
+  }
+
+  /* CSS bar chart — no library. Set --v as a percentage of the largest value. */
+  .bars { margin: 0 0 1.6rem; max-width: var(--prose); }
+  .bar { display: flex; align-items: center; gap: .75rem; margin: 0 0 .55rem; font-size: .92rem; }
+  .bar .label { flex: 0 0 auto; min-width: 8.5rem; color: var(--muted); }
+  .bar .track { flex: 1 1 auto; background: var(--surface-2); border-radius: 5px; height: 1.35rem; overflow: hidden; }
+  /* display:block is load-bearing — .fill is a span in a non-flex .track, so it
+     would stay inline and silently ignore width/height. */
+  .bar .fill  { display: block; height: 100%; width: var(--v, 0%); background: var(--accent); border-radius: 5px; }
+  .bar .fill.alt  { background: var(--accent-2); }
+  .bar .fill.warn { background: var(--warn); }
+  .bar .value { flex: 0 0 auto; min-width: 4.5rem; text-align: right; color: var(--text);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .87rem; }
+
+  /* Side-by-side comparison (naive vs. correct, before vs. after). */
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 0 0 1.6rem; max-width: none; }
+  .compare > div { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.15rem; }
+  .compare > div h4 { margin: 0 0 .55rem; font-size: .95rem; }
+  .compare > div pre { margin: 0; background: var(--bg); }
+  .compare .bad  h4 { color: var(--danger); }
+  .compare .good h4 { color: var(--accent-2); }
+
+  footer { margin-top: 4.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: .87rem; }
+  footer code { font-size: .85em; }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .wrap { padding: 2.25rem 1.05rem 4rem; }
+    h2 { margin-top: 2.75rem; }
+    .bar .label { min-width: 6rem; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>{{TOPIC}}</h1>
+    <p class="thesis">{{ONE_SENTENCE_THESIS}}</p>
+    <ul class="facts">
+      <li>{{TAG}}</li>
+    </ul>
+  </header>
+
+  <!--
+    Sections below. Number the <h2>s; keep ids short and stable.
+    Wide content (tables, diagrams) must sit in .table-scroll / .mermaid / .fig-svg
+    so the page body never scrolls horizontally.
+
+    Component reference — delete what you don't use:
+
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  a["quote labels with () : / []"] --> b["short node text"]
+      </pre>
+      <figcaption>What the reader should notice here.</figcaption>
+    </figure>
+
+    <div class="cards">
+      <div class="card"><h4>Idea</h4><p>One or two sentences.</p></div>
+    </div>
+
+    <ol class="steps">
+      <li><strong>Step name.</strong> What happens.</li>
+    </ol>
+
+    <div class="bars">
+      <div class="bar"><span class="label">Search</span>
+        <span class="track"><span class="fill" style="--v:75%"></span></span>
+        <span class="value">4.1x</span></div>
+    </div>
+
+    <div class="compare">
+      <div class="bad"><h4>✗ Naive</h4><pre><code>…</code></pre></div>
+      <div class="good"><h4>✓ Correct</h4><pre><code>…</code></pre></div>
+    </div>
+
+    <blockquote class="warn"><p>A genuine gotcha — not a restatement.</p></blockquote>
+  -->
+
+  <section>
+    <h2 id="s1"><span class="num">01</span>{{SECTION_TITLE}}</h2>
+    {{CONTENT}}
+  </section>
+
+  <footer>
+    <p>Visual explainer of <strong>{{TOPIC}}</strong> — generated {{DATE}}.{{SOURCE_NOTE}}
+       Disposable: regenerate with <code>/qve {{TOPIC}}</code>.</p>
+  </footer>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    securityLevel: 'strict',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    themeVariables: {
+      darkMode: true,
+      background: '#171a21',
+      primaryColor: '#1b1f27',
+      primaryTextColor: '#e6e9ef',
+      primaryBorderColor: '#3b4252',
+      lineColor: '#7aa2f7',
+      secondaryColor: '#1f2430',
+      tertiaryColor: '#1f2430',
+      fontSize: '15px'
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true, actorMargin: 40 }
+  });
+</script>
+</body>
+</html>
