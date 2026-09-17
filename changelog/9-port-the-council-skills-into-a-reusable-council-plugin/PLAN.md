@@ -39,7 +39,10 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 Updated 2026-09-16. Status only; the objective and the nine phases above are unchanged.
 
-Landed in `715e9c2` — the mechanical layer, ahead of any skill that calls it:
+Landed in `715e9c2` and `0b7451b` — the mechanical layer, ahead of any skill that calls it.
+Close-gate review returned **APPROVE** with three non-blocking findings, now under
+`## Deferred`. 127 test cases pass; `claude plugin validate --strict` passes; no CI exists in
+this repo.
 
 - **Phase 1, partial.** `plugins/council/` exists with its manifest at 0.1.0 and passes
   `claude plugin validate --strict`. Still missing: the three skill directories,
@@ -212,8 +215,24 @@ note: OPENROUTER_API_KEY is also set. Council does not read it —
 
 ## Deferred
 
-Raised by the `/pr:pre-test` review on 2026-09-16. Triaged at `/pr:close`; most of these
-are expected to DROP. Recorded here so the decision is made once, not rediscovered.
+Raised by the `/pr:pre-test` review and the `/pr:close` review gate on 2026-09-16. Triaged at
+`/pr:close`; most of these are expected to DROP. Recorded here so the decision is made once,
+not rediscovered.
+
+### From the close-gate review (VERDICT: APPROVE, none blocking)
+
+- **An empty middle TSV field collapses and shifts the whole seating row.** Tab is IFS
+  *whitespace*, so consecutive tabs are treated as one delimiter: a roster with
+  `"stance": ""` yields `{"stance":"opus","kind":"claude","model":"","vendor":"anthropic"}`.
+  Confirmed on `/bin/sh` and `dash`. The backends default only a *missing* field to `-`, not
+  an empty string.
+- **Three `--json` fields are interpolated without escaping** while their siblings are
+  escaped: `vendors`, `roster.path` and `key.source`. A model id containing a quote makes the
+  tool's own `--json` unparseable.
+- **The two roster backends disagree at the refusal boundary.** jq refuses an ill-typed
+  `external`/`members`/`models`; Node coerces and reports confident seating. An object-keyed
+  `members` gives jq `2 seated HOMOGENEOUS` and Node `0 seated NONE`. This extends the
+  existing backend-parity entry below into a class that entry did not name.
 
 - **Roster-shape backend parity.** jq's `//` and JS's `??` diverge on a `false`-valued
   field (`{"maxConcurrentExternal": false}` → `2` under jq, `false` under Node); a
