@@ -75,7 +75,15 @@ council_display_path() {
 # original detect.sh grep did not -- verified divergence: on `export K=sk-test`
 # detect.sh said "absent, do NOT seat" while the Node side returned the key.
 _council_env_file_has_key() { # path -> 0 present, 1 absent
-  [ -r "$1" ] || return 1
+  # ENOENT is the ordinary case: that level is simply not in use. A level that
+  # EXISTS but cannot be read is configured and FAILING, which is not the same
+  # thing and must not look like it. env.mjs says so and warns; this side was
+  # silent, and this side is what prints the human-facing "key: ... absent" line.
+  [ -e "$1" ] || return 1
+  if [ -d "$1" ] || [ ! -r "$1" ]; then
+    COUNCIL_KEY_WARN="cannot read $(council_display_path "$1") -- skipping this level"
+    return 1
+  fi
   _hit=$(awk -v KEY="$COUNCIL_KEY_NAME" '
     function unq(s,   q, i, end, c) {
       sub(/^[ \t]*/, "", s)
@@ -122,10 +130,23 @@ _council_env_file_has_key() { # path -> 0 present, 1 absent
 #   3. $XDG_CONFIG_HOME/council/.env, else
 #      ~/.config/council/.env                            (per-user default)
 council_resolve_key() {
+  COUNCIL_KEY_WARN=''
   COUNCIL_KEY_SOURCE=''
   COUNCIL_KEY_LEVEL=none
+
+  # `sh -x council-state.sh` is exactly what someone runs when this tool
+  # misreports, and the trace is exactly what they paste into an issue. Reading
+  # the key into a variable and testing it echoes the value into that trace --
+  # three times, in the earlier form. POSIX has no function-local `set`, so the
+  # option is saved, cleared for the read, and restored.
+  _xt=0; case "$-" in *x*) _xt=1; set +x ;; esac
   eval "_v=\${$COUNCIL_KEY_NAME:-}"
-  if [ -n "$(printf '%s' "$_v" | tr -d ' \t')" ]; then
+  _present=0
+  case "$_v" in *[![:space:]]*) _present=1 ;; esac
+  _v=''                                  # do not leave it set for the rest of the run
+  [ "$_xt" = 1 ] && set -x
+
+  if [ "$_present" = 1 ]; then
     COUNCIL_KEY_LEVEL=env; COUNCIL_KEY_SOURCE='the environment'; return 0
   fi
   if _council_env_file_has_key "./.env"; then
@@ -197,11 +218,24 @@ council_normalize_endpoint() { # raw -> normalized URL
 # jq program producing the contract above. Kept beside the Node file that must
 # match it, so neither can be edited without the other being in view.
 COUNCIL_ROSTER_JQ='
-# A top-level `null` must be refused, not absorbed. Every `// default` below
-# would happily accept it -- `null | .foo` is null in jq -- and the result is a
-# confident Claude-only seating table built from a file that contains nothing.
-# An array or a string already errors on the first index; only null slips past,
-# and only this guard catches it. The Node backend refuses all three by type.
+# Read under `jq -s`, so the whole file arrives as an ARRAY of the JSON values
+# it contained. That is what makes the two guards below reachable.
+#
+# Without the slurp, a file containing no JSON value at all -- zero bytes, only
+# whitespace -- gives jq nothing to run the filter on, so it produces no output
+# and exits 0. The caller then reports a confident, authoritative "0 seated"
+# table for a roster that failed to parse, which is the precise outcome this
+# design forbids: "failed to parse" and "no external members" must never print
+# the same answer. A file holding TWO concatenated documents was worse still --
+# jq ran the filter once per document and the members of both were merged into
+# one council. jq is tried first, so this was the default path.
+#
+# `length != 1` covers empty, whitespace-only and multi-document. The type guard
+# then covers a single value that is not an object: an array or a string already
+# errors on the first index, but `null` would slip through every `// default`
+# below, since `null | .foo` is null in jq. The Node backend refuses all of these
+# by construction; these two lines are what make the backends agree.
+if length != 1 then error("roster must contain exactly one JSON value") else .[0] end |
 if type != "object" then error("roster is not a JSON object") else . end |
 [ "meta\tmaxConcurrentExternal\t\(.maxConcurrentExternal // 2)",
   "meta\topenrouter.enabled\t\(.external.openrouter.enabled == true)",
@@ -239,7 +273,7 @@ council_roster_rows() { # roster-path -> TSV on stdout
   case "$_be" in
     jq)
       _jq=$(council_find_bin jq)
-      "$_jq" -r "$COUNCIL_ROSTER_JQ" "$_rp" 2>/dev/null || {
+      "$_jq" -s -r "$COUNCIL_ROSTER_JQ" "$_rp" 2>/dev/null || {
         echo "not valid JSON, or not a JSON object" >&2; return 2; } ;;
     node)
       _node=$(council_find_bin node)

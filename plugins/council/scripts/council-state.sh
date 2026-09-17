@@ -129,9 +129,19 @@ if [ "$ROSTER_STATE" = present ]; then
     if [ "$PROBE" = 1 ]; then
       CURL=$(council_find_bin curl) || CURL=''
       if [ -n "$CURL" ]; then
-        if "$CURL" -fsS -m 3 "$ENDPOINT/api/tags" >/dev/null 2>&1; then REACH=up; else REACH=down; fi
+        # The endpoint may carry basic-auth userinfo, and an argument is visible
+        # in the process table to every other user on the box for the life of the
+        # probe. `-K -` takes the URL on stdin instead, so it never reaches argv.
+        if printf 'url = "%s"\n' "$ENDPOINT/api/tags" | "$CURL" -fsS -m 3 -K - >/dev/null 2>&1
+        then REACH=up; else REACH=down; fi
       fi
     fi
+    # `unknown` is a third state and has to survive into the report. Collapsing
+    # it into the confident branch at render time is what turns a skipped probe
+    # into a CROSS-VENDOR claim, which is an over-claim in the exact direction
+    # the honesty contract exists to prevent. The member is still seated -- not
+    # having a prober is no reason to unseat it -- but the uncertainty is stated.
+    [ "$REACH" = unknown ] && PROBE_SKIPPED=1
     members ollama \
       | while IFS="$(printf '\t')" read -r stance id; do
           [ -n "${stance:-}" ] || continue
@@ -179,11 +189,29 @@ if [ "$FORMAT" = json ]; then
   # The fourth column means different things in the two files -- a vendor for a
   # seated member, a reason for an unseated one -- so it is NAMED differently.
   # Calling both "note" would hand a consumer `.seated[].note == "anthropic"`.
+  # Every string here comes from the roster, which is user-authored, so it is
+  # outside this program and must be escaped. A stance reading `the "paranoid"
+  # one` otherwise closes the JSON string early and the consumer's parse fails --
+  # and a parse failure at that layer is likely handled as "no seating
+  # information", landing straight back on a confidently-wrong seating table.
   rows() { # file, name-of-fourth-field -> JSON array
     if [ -s "$1" ]; then
-      awk -F'\t' -v q='"' -v f4="$2" 'BEGIN{printf "["} {printf "%s{%sstance%s:%s%s%s,%skind%s:%s%s%s,%smodel%s:%s%s%s,%s%s%s:%s%s%s}", (NR>1?",":""), q,q,q,$1,q, q,q,q,$2,q, q,q,q,$3,q, q,f4,q,q,$4,q} END{printf "]"}' "$1"
+      awk -F'\t' -v f4="$2" '
+        function esc(s) {
+          gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+          gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+          return s
+        }
+        BEGIN { printf "[" }
+        { printf "%s{\"stance\":\"%s\",\"kind\":\"%s\",\"model\":\"%s\",\"%s\":\"%s\"}",
+                 (NR>1 ? "," : ""), esc($1), esc($2), esc($3), f4, esc($4) }
+        END { printf "]" }' "$1"
     else printf '[]'; fi
   }
+  # maxConcurrentExternal is emitted unquoted as a JSON number, so a roster that
+  # types it as a string or a bool would produce `:two` or `:false`. Anything
+  # that is not a plain integer falls back to the documented default.
+  case "$MAXCONC" in ''|*[!0-9]*) MAXCONC=2 ;; esac
   printf '{"key":{"present":%s,"source":%s},"roster":{"path":"%s","state":"%s"},' \
     "$([ "$KEY_PRESENT" = 1 ] && echo true || echo false)" \
     "$([ "$KEY_PRESENT" = 1 ] && printf '"%s"' "$COUNCIL_KEY_SOURCE" || echo null)" \
@@ -191,8 +219,8 @@ if [ "$FORMAT" = json ]; then
   printf '"seating":{"claude":%s,"openrouter":%s,"ollama":%s,"codex":%s,"total":%s},' \
     "$N_CLAUDE" "$N_OR" "$N_OLL" "$N_CODEX" "$N_SEATED"
   printf '"seated":%s,"notSeated":%s,' "$(rows "$SEATED" vendor)" "$(rows "$UNSEATED" reason)"
-  printf '"projectedCorrelation":"%s","vendors":"%s","maxConcurrentExternal":%s}\n' \
-    "$CLASS" "$VENDORS" "$MAXCONC"
+  printf '"projectedCorrelation":"%s","vendors":"%s","ollamaProbed":%s,"maxConcurrentExternal":%s}\n' \
+    "$CLASS" "$VENDORS" "$([ "${PROBE_SKIPPED:-0}" = 1 ] && echo false || echo true)" "$MAXCONC"
   exit 0
 fi
 
@@ -202,6 +230,7 @@ if [ "$KEY_PRESENT" = 1 ]; then
 else
   printf 'key:      %s absent -- OpenRouter members cannot be seated\n' "$COUNCIL_KEY_NAME"
 fi
+[ -n "${COUNCIL_KEY_WARN:-}" ] && printf '          warning: %s\n' "$COUNCIL_KEY_WARN"
 
 if [ "$ROSTER_STATE" = absent ]; then
   printf 'roster:   NONE at %s -- Claude-only council\n' "$ROSTER_DISPLAY"
@@ -224,10 +253,12 @@ if [ -s "$UNSEATED" ]; then
   done < "$UNSEATED"
 fi
 
+UNCONFIRMED=''
+[ "${PROBE_SKIPPED:-0}" = 1 ] && UNCONFIRMED=' -- ollama was not probed, so this diversity is unconfirmed'
 case "$CLASS" in
-  NONE)         printf 'projected correlation: NONE -- no members would be seated\n' ;;
+  NONE)         printf 'projected correlation: NONE -- the roster declares no members\n' ;;
   HOMOGENEOUS)  printf 'projected correlation: HOMOGENEOUS (%s) -- one vendor; agreement is weak evidence\n' "$VENDORS" ;;
-  CROSS-VENDOR) printf 'projected correlation: CROSS-VENDOR (%s)\n' "$VENDORS" ;;
+  CROSS-VENDOR) printf 'projected correlation: CROSS-VENDOR (%s)%s\n' "$VENDORS" "$UNCONFIRMED" ;;
 esac
 printf 'concurrency: maxConcurrentExternal %s\n' "$MAXCONC"
 printf 'note: projected. COLLAPSED -- every override failing onto one model -- is\n'

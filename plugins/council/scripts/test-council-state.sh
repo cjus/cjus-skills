@@ -278,6 +278,46 @@ if [[ $have_jq -eq 1 && $have_node -eq 1 ]]; then
     i=$((i+1))
   done
 
+  # Exact bytes, so a zero-length file is genuinely zero-length: `roster` appends
+  # a newline and would make the empty case a whitespace case instead.
+  roster_raw() { local f; f=$(mktemp "$TMP/raw.XXXXXX"); printf '%s' "$1" > "$f"; echo "$f"; }
+
+  # jq given a file with NO JSON value in it runs the filter zero times, emits
+  # nothing and exits 0 -- a no-op success a diff-based parity test cannot see,
+  # because both sides must be ASKED the question before they can disagree.
+  # These four rows are the coverage that was missing, not a new rule.
+  EMPTYF=$(roster_raw '')
+  WSF=$(roster_raw '   ')
+  TWODOC=$(roster_raw '{"members":[{"model":"opus","stance":"a"}]}
+{"members":[{"model":"sonnet","stance":"b"}]}')
+  for pair in "empty:$EMPTYF" "whitespace-only:$WSF" "two-documents:$TWODOC"; do
+    label=${pair%%:*}; path=${pair#*:}
+    for be in jq node; do
+      out=$(backend_state "$be" "$path" 0)
+      if grep -q '"seating"' <<<"$out"; then
+        bad "$be refuses $label roster" "reported seating"
+      else ok "$be refuses $label roster" "refused"; fi
+    done
+  done
+
+  # A roster string carrying a quote must not break the emitted JSON.
+  HOSTILE=$(roster '{"members":[{"model":"opus","stance":"the \"paranoid\" one"}]}')
+  for be in jq node; do
+    out=$(backend_state "$be" "$HOSTILE" 0)
+    if jq -e '.seated[0].stance' <<<"$out" >/dev/null 2>&1; then
+      ok "$be emits valid JSON for a quoted stance" "parses"
+    else bad "$be emits valid JSON for a quoted stance" "invalid JSON"; fi
+  done
+
+  # maxConcurrentExternal is emitted as a bare JSON number.
+  ODDCONC=$(roster '{"members":[],"maxConcurrentExternal":"two"}')
+  for be in jq node; do
+    out=$(backend_state "$be" "$ODDCONC" 0)
+    if jq -e '.maxConcurrentExternal|type=="number"' <<<"$out" >/dev/null 2>&1; then
+      ok "$be keeps maxConcurrentExternal numeric" "number"
+    else bad "$be keeps maxConcurrentExternal numeric" "not a number"; fi
+  done
+
   BADJ=$(roster '{"members": [ {"id": "opus" ')
   for be in jq node; do
     out=$(backend_state "$be" "$BADJ" 0)
@@ -298,6 +338,41 @@ if [[ $have_jq -eq 1 && $have_node -eq 1 ]]; then
 else
   printf '  skip %-50s (jq=%s node=%s)\n' "backend parity" "$have_jq" "$have_node"
 fi
+
+echo "== an unprobed ollama member must not claim confirmed diversity =="
+R_OLL_P=$(roster "{$CLAUDE4,\"external\":{\"ollama\":{\"enabled\":true,
+  \"endpoint\":\"http://127.0.0.1:1\",\"models\":[{\"id\":\"g\",\"stance\":\"long-horizon\"}]}}}")
+OUT=$(state "$R_OLL_P" 0)                       # --no-probe, so REACH is unknown
+t "unprobed run records ollamaProbed=false" false "$(j "$OUT" '.ollamaProbed')"
+t "unprobed ollama is still seated"          1     "$(j "$OUT" '.seating.ollama')"
+dir=$(mktemp -d "$TMP/pr.XXXXXX"); mkdir -p "$dir/home"
+TXT=$( cd "$dir" && env -u XDG_CONFIG_HOME -u "$K" HOME="$dir/home" \
+         COUNCIL_ROSTER="$R_OLL_P" sh "$STATE" --text --no-probe 2>&1 )
+if grep -q 'diversity is unconfirmed' <<<"$TXT"; then
+  ok "text output states the diversity is unconfirmed" "stated"
+else bad "text output states the diversity is unconfirmed" "silent"; fi
+
+echo "== the key must not appear in an xtrace =="
+dir=$(mktemp -d "$TMP/xt.XXXXXX"); mkdir -p "$dir/home"
+XT=$( cd "$dir" && env -u XDG_CONFIG_HOME "$K=sk-XTRACE-SECRET" HOME="$dir/home" \
+        COUNCIL_ROSTER="$R_CLAUDE" sh -x "$STATE" --json --no-probe 2>&1 )
+if grep -q 'sk-XTRACE-SECRET' <<<"$XT"; then
+  bad "sh -x trace does not contain the key" "LEAKED"
+else ok "sh -x trace does not contain the key" "clean"; fi
+
+echo "== a failing .env level is reported, not silently absent =="
+dir=$(mktemp -d "$TMP/pe.XXXXXX"); mkdir -p "$dir/home/.config/council" "$dir/project"
+printf '%s=sk-u\n' "$K" > "$dir/home/.config/council/.env"
+chmod 000 "$dir/home/.config/council/.env"
+if [[ $(id -u) -eq 0 ]]; then
+  printf '  skip %-50s (running as root)\n' "unreadable .env level warns"
+else
+  ERR=$( cd "$dir/project" && env -u XDG_CONFIG_HOME -u "$K" HOME="$dir/home" \
+           COUNCIL_ROSTER="$MISSING" sh "$STATE" --text --no-probe 2>&1 )
+  if grep -q 'cannot read' <<<"$ERR"; then ok "unreadable .env level warns" "warned"
+  else bad "unreadable .env level warns" "silent"; fi
+fi
+chmod 600 "$dir/home/.config/council/.env"
 
 echo "== neither backend available =="
 # council_find_bin is a shell function, so it can be redefined after sourcing --

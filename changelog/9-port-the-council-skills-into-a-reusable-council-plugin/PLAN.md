@@ -209,3 +209,49 @@ note: OPENROUTER_API_KEY is also set. Council does not read it —
 - [ ] `openrouter.mjs`: exit codes `3`/`4`/`5` against a stub endpoint. This is what proves the blocker fix rather than asserting it.
 - [ ] `council-state.mjs`: the roster → members → correlation join, which is the logic most likely to break in packaging and is currently prose a model executes.
 - [ ] `claude plugin validate --strict .` and `claude plugin validate --strict plugins/council` both pass.
+
+## Deferred
+
+Raised by the `/pr:pre-test` review on 2026-09-16. Triaged at `/pr:close`; most of these
+are expected to DROP. Recorded here so the decision is made once, not rediscovered.
+
+- **Roster-shape backend parity.** jq's `//` and JS's `??` diverge on a `false`-valued
+  field (`{"maxConcurrentExternal": false}` → `2` under jq, `false` under Node); a
+  non-scalar value diverges too (`"model": ["opus","sonnet"]` → jq keeps the array text,
+  Node joins with a comma). Symptom: the two backends print different seating for one
+  file. Occasion: next time the roster schema gains a field.
+- **TSV-contract injection.** A tab or newline inside a roster string can inject a
+  synthetic `member` row. Both backends behave identically, and the roster is
+  self-authored, so this is self-inflicted only.
+- **Endpoint normalization edge cases.** `myserver/ollama` becomes
+  `http://myserver/ollama:11434`, and IPv6 `::1` is not bracketed. Occasion: when
+  `detect.sh` lands, since it shares `council_normalize_endpoint`.
+- **Whitespace-class drift between the two key chains.** JS `trim()` covers all Unicode
+  whitespace; the sh side handles space and tab. A value that is a lone vertical tab or
+  NBSP resolves to different levels. Low realism, but it is live drift on an input the
+  oracle table does not cover.
+- **`displayPath` prefix asymmetry.** `env.mjs` uses a bare `startsWith(home)` while the
+  sh side requires a `/` boundary, so `HOME=/tmp/hm` with a project at `/tmp/hmore`
+  renders differently.
+- **A vendor slug containing a space** makes the `wc -w` count over-report and yields
+  CROSS-VENDOR for a single vendor.
+- **`COUNCIL_ROSTER` is undocumented** in the library header although it is a production
+  override, not a test-only knob.
+- **Backend-dependent refusal text.** The Node backend's message on an unreadable or
+  invalid roster is terser than the jq branch's, so the user-facing wording depends on
+  which backend ran.
+
+### Needs an operator decision, not triage
+
+- **What does an absent roster project?** The script reports `0 seated` and
+  `correlation: NONE`, but `/council:ask` with no roster still seats four Claude members
+  by default. Either the four defaults belong in this join, or they stay in
+  `skills/ask/SKILL.md` and this script's wording must say it is reporting only what the
+  roster declares. The current text is a confident claim about the next council that the
+  script has not established, which is the one thing it exists to prevent.
+- **Will `/council:status` pass `--no-probe`?** Decision 3 notes that `detect.sh`'s
+  `curl -m 3` is a visible stall on a cold LAN host, which argues for it. If yes, the
+  unconfirmed-diversity annotation becomes the normal path rather than a defensive one.
+- **Precedence between `COUNCIL_ROSTER` and `XDG_CONFIG_HOME`.** `council_roster_path`
+  prefers `COUNCIL_ROSTER` unconditionally; `env.mjs:rosterPath` does not know about it.
+  Harmless today because nothing calls `rosterPath`, worth settling before something does.

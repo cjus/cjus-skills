@@ -170,3 +170,63 @@ non-zero code, because POSIX defines `!` as *replacing* the status with its logi
 "neither backend available" branch was unreachable until the status was captured directly.
 
 Suites: 46 for the key chain, 66 for the state join and backends. Both green.
+
+### 2026-09-16 — Review pass: one blocker fixed, four invariant breaks closed
+
+`/pr:pre-test` opened draft PR #13 and ran a review over the diff. **The repo has no CI**
+— no `.github/workflows/`, no runs ever — so the two suites are the only automated evidence
+this branch has, and opening the PR could not produce a signal.
+
+**Blocker: the jq backend reported confident seating for a roster that failed to parse.**
+Given a file with no JSON value in it, jq runs the filter zero times, emits nothing and
+**exits 0**, so the `if type != "object"` guard inside the filter never fired. Verified: a
+zero-byte roster produced `0 seated / correlation: NONE / rc=0` under jq while Node refused,
+and a file holding two concatenated documents was worse — jq ran the filter once per document
+and merged the members of both into one council, reporting `2 claude, HOMOGENEOUS`. jq is
+tried first, so this was the default path.
+
+This is the exact outcome the design forbids in its own words: *"failed to parse" and "no
+external members" must never print the same answer*. The realistic trigger is an interrupted
+`/council:setup` write or a stray `>` redirect, and the user gets an authoritative-looking
+report that their consented external roster is empty.
+
+Fixed by reading under `jq -s`, so the file arrives as an array and `length != 1` catches
+empty, whitespace-only and multi-document in one guard, with the existing type guard still
+covering a lone `null`.
+
+**The parity suite could not have caught it, and that is the lesson.** Twenty cases asserted
+the backends were byte-identical, but none of the five fixtures was an unparseable file — and
+jq's "no input means no work and exit 0" is a no-op success that a diff-based test cannot see,
+because both sides have to be *asked* the question before they can disagree. When two
+implementations are bound by a fixture table, the table's coverage **is** the invariant.
+
+**Four further defects, each one contradicting an invariant the code itself states:**
+
+- **The key leaked into an xtrace.** `council-lib.sh`'s header promises the value "stays
+  inside the Node process that uses it" and names `set -x` as the leak it guards against;
+  reading it into a variable and testing it echoed it three times under `sh -x` — which is
+  exactly what someone runs when the tool misreports, and exactly what they paste into an
+  issue. The option is now saved and cleared around the read, and the variable is cleared
+  after. Pinned by a test asserting a planted key appears nowhere in a full trace.
+- **`--json` could emit invalid JSON.** Roster strings went between quote characters
+  unescaped, so a stance reading `the "paranoid" one` closed the string early. Since Decision
+  3 has `skills/ask` consuming this as the source of truth, and a parse failure there would
+  likely be handled as "no seating information", the bug landed straight back on
+  confidently-wrong seating. Escaped in the emitter; `maxConcurrentExternal` now falls back
+  to the default unless it is a plain integer, since it is emitted as a bare JSON number.
+- **A skipped Ollama probe was reported as confirmed diversity.** With no `curl`, or under
+  `--no-probe`, `REACH=unknown` collapsed into the seated branch and the member counted
+  toward `CROSS-VENDOR` — an over-claim in the one direction the honesty contract exists to
+  prevent. The member is still seated, since lacking a prober is no reason to unseat it, but
+  the uncertainty now survives into both formats (`ollamaProbed: false`, and a text suffix).
+- **Ollama basic-auth credentials reached `curl`'s argv**, readable from `ps` by any other
+  user for the probe window, although `council_redact` exists precisely because endpoints
+  carry userinfo. The URL now goes in on stdin via `-K -`.
+
+Also closed: the sh side folded "unreadable `.env`" into "absent", while `env.mjs` warns and
+has a whole test section pinning the distinction. The sh side is the one that prints the
+human-facing `key: ... absent` line, so it was giving the less useful of the two answers.
+
+Suites now 46 and 81, both green, and `council-state.sh` produces identical output under
+`sh`, `dash`, `ksh` and `bash`. Eight lower-severity findings and three operator decisions
+are recorded under `PLAN.md § Deferred`.
