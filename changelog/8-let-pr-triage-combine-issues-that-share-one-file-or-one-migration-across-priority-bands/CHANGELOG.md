@@ -88,6 +88,23 @@ already draws — a re-prioritization the skill *chose* versus one the material 
 loose path's behaviour stays pinned where the objective promised.
 
 Also: inline conditional tags on clauses 1 and 3 so a partial reader cannot take clause 3 as a
-categorical refusal; the band ordering stated (high, then medium, then low), which nothing in
-the plugin had written down; and strict's shared file pinned to every member rather than some
-pair.
+categorical refusal; the band ordering stated end to end (high, then medium, then low), where
+`next/SKILL.md:61` had high outranking medium but low's place was unwritten; and strict's shared
+file pinned to every member rather than some pair.
+
+### Close gate (2026-09-16)
+
+Review verdict APPROVE, no blocking or important findings; see `pr-review-2026-09-16-close.md`.
+Five wording-level suggestions applied, three of which were factual errors in this branch's own
+artifacts rather than in the skill:
+
+- **The PR summary overstated the per-file diff** as +60/−15. The real figure is +46/−14;
+  60 was the stat bar's total changed lines read as insertions.
+- **Two artifacts claimed the band ordering was unwritten anywhere in the plugin.**
+  `next/SKILL.md:61` already had high outranking medium — only low's place was missing.
+- **7c cited § What this skill never does for a line that section does not draw.** That section
+  draws existing-issue versus newly-created; chosen-versus-forced is drawn in the paragraph
+  after. The citation is dropped and the prohibition now stands on its own words.
+
+Also: strict's tie-breaker said a pairwise-only overlap "makes the group loose", which skipped
+loose's own clause 2. It now says **not strict**, and leaves loose to test itself.

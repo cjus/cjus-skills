@@ -140,7 +140,7 @@ Consolidation is the least reversible thing here, so the bar is written down rat
 
 ### Strict clause 2: the members' changes land in the same file or the same migration
 
-Doing one member means editing the same file, or the same migration, that another member needs. **"The same migration" means one migration file**, not two that must be applied together. **The shared file or migration is common to every member, not merely to some pair of them**: a third issue that overlaps one member but not the rest makes the group loose, not strict.
+Doing one member means editing the same file, or the same migration, that another member needs. **"The same migration" means one migration file**, not two that must be applied together. **The shared file or migration is common to every member, not merely to some pair of them**: a third issue that overlaps one member but not the rest makes the group **not strict**, and whether it is a loose group is then loose clause 2's question to answer.
 
 On this path the work is a single unit, so the only real question is when that unit gets scheduled:
 
@@ -288,7 +288,7 @@ Consolidates #NN, #NN, #NN, which converge on {the shared work}.
 
 **The combined issue takes the band step 5 assigned, and this is a deliberate divergence from `/pr:ticket`.** That skill files high because it is turning a freeform description into a ticket nobody has ranked. Here the members were already ranked, so their own bands are the evidence. On the loose path clause 3 required them to agree, and that agreed band is the answer. On the strict path they may disagree, and the **highest** is the answer, because members whose changes land in one file or one migration are a single unit of work: the lower member cannot be scheduled separately whatever label it carries, so the only honest question is when that unit gets picked up.
 
-**Forcing high on the loose path** would be a re-prioritization this skill chose rather than one the material forced, which is the line § What this skill never does draws. It would not be cosmetic either: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
+**Forcing high on the loose path** would be a re-prioritization this skill chose rather than one the material forced, and that is the line it must not cross. It would not be cosmetic either: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
 
 **The strict path promotes deliberately rather than silently, and that is the whole of the difference.** The promotion is forced by the material rather than chosen by this skill, step 6's Combine block names every promoted member with its prior band, the combined issue's body repeats it, and the band lands on a newly created issue rather than by editing any member's label.
 
