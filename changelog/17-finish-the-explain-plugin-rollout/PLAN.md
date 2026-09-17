@@ -33,10 +33,14 @@ Context: PR #16, and `changelog/12-port-qe-and-qve-into-a-standalone-explain-plu
 
 ## Plan
 
-- [~] Phase 1 (install done, live verification pending restart): Install the plugin as a user does — `claude plugin marketplace update cjus-skills`, then `claude plugin install explain@cjus-skills`, then restart — and verify `/explain:qe` and `/explain:qve` both resolve and run from a repo other than `cjus-skills`. Also confirm `/explain:qe` reaches the plugin rather than the user-level `~/.claude/skills/qe/`, recording both as distinct entries — #12's review asked for this check and it is what licenses Phase 3, which destroys the evidence for it. (#12 Phase 7)
+- [~] Phase 1 (install done, live verification pending restart): Install the plugin as a user does — `claude plugin marketplace update cjus-skills`, then `claude plugin install explain@cjus-skills`, then restart — and verify `/explain:qe` and `/explain:qve` both resolve and run from a repo other than `cjus-skills`. Also confirm `/explain:qe` reaches the plugin rather than the user-level `~/.claude/skills/qe/`, **and `/explain:qve` rather than `cjus-dev`'s project-level `.claude/skills/qve/`**, recording each pair as distinct entries — #12's review asked for the `qe` half, and the `qve` half is the same situation, since Phase 4 removes that copy exactly as Phase 3 removes the other. Both destroy the evidence, and the restart session is the one cheap chance to collect it. (#12 Phase 7)
 - [x] Phase 2: Confirm whether `model: opus` in `qve`'s frontmatter is honored in a plugin context. **Answered: it is honored.** The plugin skill loader parses `model`, the key is in both recognized-key lists, and a skill-specific runtime guard falls back to the session model only when the value is outside the `availableModels` allowlist. `opus` resolves as a family alias. `qve` keeps the line unchanged; no follow-up work. See CHANGELOG.
 - [ ] Phase 3: Remove `~/.claude/skills/qe/`, retiring the user-level copy that would shadow the plugin's. (#12 Phase 8)
-- [ ] Phase 4: Remove `cjus-dev`'s `.claude/skills/qve/` and enable the `explain` plugin in that repo, so `/qve` keeps working there. (#12 Phase 9)
+- [ ] Phase 4: Remove `cjus-dev`'s `.claude/skills/qve/` and enable the `explain` plugin in that repo. (#12 Phase 9) **Two corrections to this step's premise, found in review.** The enable half is already satisfied: `explain@cjus-skills` is enabled at *user* scope and `cjus-dev` declares no project-level `enabledPlugins`, so there is likely nothing to do there — verify rather than assume. And the step's stated goal, "so `/qve` keeps working there", is not achievable as worded: a plugin skill resolves as `/explain:qve`, so the bare `/qve` goes away by design. The real goal is that the capability keeps working under its namespaced name.
+
+## Deferred
+
+- **`cjus-dev`'s `CLAUDE.md` names `/qve` as a project skill and `/qe` as user-level** (the "Docs and continuity" bullet). Both lines go stale the moment Phases 3-4 land, since the invocations become `/explain:qe` and `/explain:qve`. Found in this branch's review. Recorded here rather than folded into Phase 4 because it edits another repo's documentation, which this plan's objective does not cover — the operator's call whether it rides along with Phase 4 or becomes its own ticket.
 
 ## Open Questions
 

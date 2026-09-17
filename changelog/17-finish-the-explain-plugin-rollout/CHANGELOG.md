@@ -14,9 +14,12 @@ two originals so each skill has exactly one live copy.
 
 **The `explain` plugin is installed from the marketplace.** `claude plugin marketplace
 update cjus-skills` moved the local marketplace clone from `b0f5320` ("release pr 0.2.1",
-which predates #16) to `c724566`, the #16 merge — before the update the cached manifest
-listed only `cjus`, `bookcraft` and `pr`, so the update step was load-bearing rather than
-ceremonial. `claude plugin install explain@cjus-skills` then installed `explain` at
+which predates #16) to `c724566`, the #16 merge — before the update the cached manifest's
+`plugins` array held only `bookcraft` and `pr`, so the update step was load-bearing rather
+than ceremonial. The durable evidence for that move is `installed_plugins.json`, which
+pins `pr@cjus-skills` at `b0f5320c5d15` and `explain@cjus-skills` at `c72456607f46`; the
+marketplace clone itself is shallow and was re-cloned by the update, so its own history no
+longer shows the prior commit. `claude plugin install explain@cjus-skills` then installed `explain` at
 version `0.1.0`, user scope, with all five files present, and added
 `"explain@cjus-skills": true` to `enabledPlugins`. Both skills resolve only after a
 restart, so the live half of Phase 1 lands in the next session.
@@ -40,11 +43,24 @@ Code `2.1.274` binary disproves it on four independent points:
 - There is a model-specific runtime guard whose warning text reads `Skill/command model
   "<x>" is not in the availableModels allowlist; keeping the session model`. A fallback
   that names skills and commands only exists because the value is otherwise applied.
+  Precision note, from review: the allowlist is not the *only* gate — a sibling check
+  rejects a skill model unsupported in auto mode, with its own warning. `claude-opus-5` on
+  first-party passes both, so the conclusion is unchanged, but "only when the value is
+  outside the allowlist" would be stronger than the binary supports.
 - `model` sits in both recognized-key lists — the skill/command list and the plugin list
   — so `--strict` was never treating it as an unknown key.
 
 `opus` resolves as a first-class family alias (`latest_per_family.opus =
 "claude-opus-5"`), so the bare form is correct as written.
+
+Review surfaced two stronger pieces of evidence than the four above, both worth recording.
+The Skill tool's own output schema documents the field in prose — "Resolved model the skill
+turn runs on when a frontmatter model override took effect; omitted otherwise" — which is
+the runtime describing the behavior directly rather than by inference. And the full chain
+for plugin *skills* specifically was traced: the plugin skill walker invokes the loader
+with an `isSkillMode` flag, the loader returns `model` on the command object, and the Skill
+tool applies it. That closes the one gap the four bullets left open, since the first four
+establish the loader parses `model` without proving plugin skills reach that loader.
 
 Two corrections to the review's framing. Its scan covered only plugin skills; four
 **user-level** skills in this same setup already declare `model:` (`pr-sanity: opus`,
