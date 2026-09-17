@@ -127,3 +127,21 @@ wanted 1243, so one was downloaded. And the shipped `page-template.html` footer 
 "regenerate with `/qve …`" — a bare name the port missed, cosmetic but live in
 `explain@0.1.0`.
 
+### 2026-09-17 — Phase 4 landed in `cjus-dev`
+
+`f7bc581` on that repo's `main` removes `.claude/skills/qve/` and updates its skills
+documentation: the `/qve` and `/qe` entries are replaced with the plugin forms, and the
+section's opening paragraph — which described only project and user-level skills — now
+names plugin skills as a third source and explains that the `plugin:skill` namespace is
+why they never collide with a bare name.
+
+Landed by the quick-commit path that repo's conventions sanction for a change this size,
+rather than a branch and PR, with the operator approving the `main` gate. Its own
+`/pr-close` was not run, because that path is for branches and this was a direct commit.
+
+**A discrepancy worth fixing in `cjus-dev`, found here.** Its CLAUDE.md documents
+`CJUS_ALLOW_MAIN=1` as the approval token for the `main` gate. The commit hook accepts
+that, but the *push* hook rejects it and asks for `PR_ALLOW_MAIN=1` instead. So a
+documented, operator-approved push fails on the token its own documentation gave. Not this
+repo's bug to fix, but it is a live trap in that one.
+
