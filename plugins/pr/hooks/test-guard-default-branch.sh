@@ -85,6 +85,41 @@ t "push origin main-2"                    pass "$FEATREPO" default "git push ori
 t "push origin domain"                    pass "$FEATREPO" default "git push origin domain"
 t "push feature branch"                   pass "$FEATREPO" default "git push origin feature/1-x"
 
+# A delete push removes a named ref on the remote and writes no commit anywhere, so
+# the branch it is run FROM is irrelevant to what it does. It is also unavoidably run
+# from the default branch: a worktree cannot remove itself, so /pr:cleanup deletes the
+# merged branch from the main checkout every time. The positional gate is dropped for
+# it; every refspec check still applies, which is what the second block proves.
+echo "== ref-deleting pushes from the default branch =="
+t "delete a feature branch"               pass "$MAINREPO" default "git push origin --delete feature/1-x"
+t "delete, -d short form"                 pass "$MAINREPO" default "git push -d origin feature/1-x"
+t "delete under bypassPermissions"        pass "$MAINREPO" bypassPermissions "git push origin --delete feature/1-x"
+t "delete from a feature branch too"      pass "$FEATREPO" default "git push origin --delete feature/1-x"
+
+echo "== ...but the exemption must not become a bypass =="
+t "delete the default branch"             ask  "$MAINREPO" default "git push origin --delete main"
+t "delete the default branch, -d"         ask  "$MAINREPO" default "git push -d origin main"
+t "delete refs/heads/<default>"           ask  "$MAINREPO" default "git push origin --delete refs/heads/main"
+t "delete HEAD (resolves to default)"     ask  "$MAINREPO" default "git push origin --delete HEAD"
+t "delete @ (resolves to default)"        ask  "$MAINREPO" default "git push origin --delete @"
+t "delete a wildcard refspec"             ask  "$MAINREPO" default "git push origin --delete 'refs/heads/*'"
+t "delete alongside the default branch"   ask  "$MAINREPO" default "git push origin --delete feature/1-x main"
+t "--delete does not exempt a commit"     ask  "$MAINREPO" default "git commit -m \"note: --delete\""
+# The commit-message form, and it is the case that makes the push-only test in
+# is_ref_delete_push load-bearing rather than decorative: a message is an argument,
+# so a bare `--delete` token inside one lands in the argument region looking exactly
+# like the flag. Mutation-tested -- drop the push check and this ONE case is what
+# turns red, while every other delete case stays green.
+t "a commit message naming --delete"      ask  "$MAINREPO" default "git commit -m \"drop the --delete flag\""
+t "...and -d in a message"                ask  "$MAINREPO" default "git commit -m \"use -d to remove it\""
+t "--delete in a message does not exempt" ask  "$MAINREPO" default "git commit -m x && git push origin main --delete-is-not-here"
+t "a plain push is still gated"           ask  "$MAINREPO" default "git push origin"
+t "--delete does not exempt --mirror"     ask  "$MAINREPO" default "git push --mirror --delete origin"
+# A ref whose name merely CONTAINS the delimiter-free default name must still pass,
+# the same property the refspec class is built to hold.
+t "delete a branch named domain"          pass "$MAINREPO" default "git push origin --delete domain"
+t "delete a branch named HEADER"          pass "$MAINREPO" default "git push origin --delete HEADER"
+
 echo "== chained commands (the four DENY->PASS regression) =="
 t "commit && push origin main"            ask  "$FEATREPO" default "git commit -m x && git push origin main"
 t "commit;push origin main (no spaces)"   ask  "$FEATREPO" default "git commit -m x;git push origin main"

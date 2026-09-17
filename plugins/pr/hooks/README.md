@@ -54,6 +54,15 @@ Requires operator approval for a commit or push on the repo's default branch, in
 whose refspec targets it from any branch, and the whole-repo forms that name no ref while
 writing every branch.
 
+**One exception: a ref-deleting push (`git push --delete <branch>`, or `-d`) is not gated by
+the branch it runs from.** It writes no commit anywhere, so the checked-out branch says
+nothing about its blast radius, and it is unavoidably run from the default branch — a worktree
+cannot remove itself, so `/pr:cleanup` deletes the merged branch from the main checkout every
+time. Only the positional check is dropped. Every refspec check still applies, so
+`--delete main`, `--delete refs/heads/main`, a delete alongside the default branch, a wildcard
+refspec, and `--mirror`/`--all` all still gate. `--delete HEAD` and `--delete @` gate as well,
+because those resolve locally and so name the default branch when run from it.
+
 **The verdict depends on the session's permission mode, because `"ask"` does not work in all
 of them.** In prompting modes the hook returns `ask`, which overrides an allow rule and
 prompts. Under `bypassPermissions`, and any other non-prompting mode, an `ask` is silently a

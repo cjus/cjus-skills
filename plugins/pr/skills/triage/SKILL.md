@@ -130,15 +130,35 @@ Name each moved premise with its evidence, the same way a retirement names its f
 
 ## Step 5. Decide what combines
 
-Consolidation is the least reversible thing here, so the bar is written down rather than judged per run. Two or more issues combine only when **all three** clauses hold:
+Consolidation is the least reversible thing here, so the bar is written down rather than judged per run. Three clauses govern it, and **clause 2 is the spine**: every group clears it, and its strength decides how the other two apply. Read the three, then read the strength, and do not treat 1 and 3 as settled before you have.
 
-1. **One occasion.** A single event would cause all of them to be picked up.
+1. **One occasion** *(implied on the strict path below)*. A single event would cause all of them to be picked up.
 2. **One changeset.** Doing any one puts you inside the files the others name, so scheduling them separately means opening the same material twice.
-3. **One priority band.** Every member carries the same `priority:` label. Combining across bands silently promotes the low member or demotes the high one, and neither is a decision this skill gets to make. **An issue carrying no priority label fails this clause and never joins a group**: it is a queue defect, and the fix is for the operator to label it.
+3. **One priority band** *(replaced on the strict path below)*. Every member carries the same `priority:` label. Combining across bands silently promotes the low member or demotes the high one, and neither is a decision this skill gets to make. **An issue carrying no priority label fails this clause and never joins a group**: it is a queue defect, and the fix is for the operator to label it.
 
-**Do-not-combine is the default, and the burden of proof sits on combining.** Two issues that merely share a subject area do not combine. **If you cannot write the three clauses out for a proposed group, it is not a group.**
+**Clause 2 holds at two strengths.** Every group clears clause 2 either way; the strength changes only how clauses 1 and 3 apply and how many members are worth grouping. **Name the strength as part of forming the group rather than after it**, and say which one applied, because a group whose strength you cannot state is not a group.
 
-A group of two is worth forming only when the clauses are strong; below three members the consolidation often costs more attention than it saves. Say so rather than suppressing the proposal.
+### Strict clause 2: the members' changes land in the same file or the same migration
+
+Doing one member means editing the same file, or the same migration, that another member needs. **"The same migration" means one migration file**, not two that must be applied together. **The shared file or migration is common to every member, not merely to some pair of them**: a third issue that overlaps one member but not the rest makes the group **not strict**, and whether it is a loose group is then loose clause 2's question to answer.
+
+On this path the work is a single unit, so the only real question is when that unit gets scheduled:
+
+- **Clause 3 is replaced.** The group takes the **highest** member's band — high, then medium, then low — and **the report names each promoted member explicitly**, so the promotion is visible rather than silent. Where every member already carries the same band, this is the same band and no promotion happened; say nothing about promotion in that case.
+- **Clause 1 is implied and not separately required.** If doing one member puts you inside the file another names, then the occasion for one is the occasion for the other by construction.
+- **Two members suffice.** A same-file pair saves an entire lifecycle: a branch, a worktree, a plan folder, a review gate, the close artifacts and a continuity entry. That is the largest saving this skill has to offer, so the two-member caution below does not apply here.
+
+**An issue carrying no priority label still never joins a group, including a strict one.** It was never ranked, so there is nothing to promote it *from*: the group's band would be one member's evidence applied to another member nobody has judged. That is the same laundering `/pr:next` refuses, and it is a queue defect either way. The fix is the same: the operator labels it.
+
+### Loose clause 2: clause 2 holds, but across more than one file
+
+Doing any one member still puts you inside files the others name, yet no single file or migration is common to them. **Clauses 1 and 3 both apply exactly as written above, unchanged.** Nothing on this path is looser than the bar has always been.
+
+**On this path,** a group of two is worth forming only when the clauses are strong; below three members the consolidation often costs more attention than it saves. Say so rather than suppressing the proposal.
+
+### Both strengths
+
+**Do-not-combine is the default, and the burden of proof sits on combining.** Two issues that merely share a subject area do not combine, at either strength. **If you cannot write the strength and its clauses out for a proposed group, it is not a group.**
 
 **An issue in flight never joins a group**, for the same reason it is never closed.
 
@@ -158,10 +178,11 @@ Order by issue number ascending, one fixed-shape block per issue, so two runs di
 
 ### Combine (N groups)
 
-- **Group: {one-line name for the shared work}** ({priority band})
+- **Group: {one-line name for the shared work}** ({priority band}) · {strict | loose}
   Members: #NN, #NN, #NN
+  **One changeset:** {the material all of them sit in; on strict, the file or the migration by name}
   **One occasion:** {the event that picks all of them up}
-  **One changeset:** {the material all of them sit in}
+  **Promotes:** #NN {priority:medium} → {priority:high}
   New issue title: {the title the combined issue would carry}
 
 ### Still valid (N)
@@ -177,6 +198,8 @@ Order by issue number ascending, one fixed-shape block per issue, so two runs di
 
 - **#NN: {title}** · {url} · protected by {open PR #NNN | worktree at <path> | branch <name>}, {active work | uncommitted work | started, no commits yet}; stamped, never closed
 ```
+
+**The Combine block names the strength that applied**, so a reader can tell why a group formed rather than reconstructing it from the members. Two of its lines are conditional. **One occasion** is omitted on strict, where clause 1 is implied. **Promotes** appears only on strict, one line per member whose band the group raised, giving the member's own prior band and the band it now carries; omit the line entirely when every member already agreed, since nothing was promoted.
 
 Omit any empty section. **A still-valid issue whose verdict did not change is one line**, with no repeated evidence: the whole point of the stamp is that the reasoning was recorded last time. The exception is `body stale`, which repeats its moved premises every run until the body is corrected, because the reader it protects is the one who picks the issue up without reading any report at all.
 
@@ -238,7 +261,9 @@ Use `--reason completed` for **done**, and `--reason "not planned"` for **gone**
 
 **Ask once with `AskUserQuestion` before any write.** This closes N issues to open one, and the grouping is the part most likely to be a judgment the operator would make differently. A declined group leaves its members untouched and is reported as declined.
 
-Approved groups then: create the combined issue with `--label status:todo`, `@me`, **the members' own shared priority label**, and their shared type label where they all carry one; comment on each member naming the new issue; close each member with `--reason "not planned"`.
+**Where a strict group promotes a member, the confirmation says so, naming the member and both bands.** That is a second decision riding inside the same approval: the operator is agreeing both that the group is real and that the lower member should now be scheduled at the higher band. Burying it in the group's description asks them to approve one thing and get two.
+
+Approved groups then: create the combined issue with `--label status:todo`, `@me`, **the band step 5 assigned the group** (the members' shared band on the loose path, the highest member's band on the strict one), and their shared type label where they all carry one; comment on each member naming the new issue; close each member with `--reason "not planned"`.
 
 **Report a created combined issue by its derived branch name and nothing else**, since that is the standing rule for a newly created ticket. The members being closed are existing tickets, so they keep their URLs.
 
@@ -250,7 +275,9 @@ Consolidates #NN, #NN, #NN, which converge on {the shared work}.
 - [ ] {member 1 title}
 - [ ] {member 2 title}
 
-**Why these combine:** {the one-occasion and one-changeset clauses, one sentence each}
+**Why these combine:** {strict | loose}. {the one-changeset clause in one sentence, plus the one-occasion clause on loose, where it is not implied}
+
+**Band:** {priority:high} — {the band every member already carried | raised, one clause per promoted member: from #NN's {priority:medium}, because its changes land in {the file or migration} that #NN also needs}
 
 <details><summary>#NN: {title} (original body)</summary>
 
@@ -259,17 +286,21 @@ Consolidates #NN, #NN, #NN, which converge on {the shared work}.
 </details>
 ```
 
-**The combined issue inherits the members' band, and this is a deliberate divergence from `/pr:ticket`.** That skill files high because it is turning a freeform description into a ticket nobody has ranked. Here the members were already ranked, clause 3 required them to agree, and that agreed band is the answer.
+**The combined issue takes the band step 5 assigned, and this is a deliberate divergence from `/pr:ticket`.** That skill files high because it is turning a freeform description into a ticket nobody has ranked. Here the members were already ranked, so their own bands are the evidence. On the loose path clause 3 required them to agree, and that agreed band is the answer. On the strict path they may disagree, and the **highest** is the answer, because members whose changes land in one file or one migration are a single unit of work: the lower member cannot be scheduled separately whatever label it carries, so the only honest question is when that unit gets picked up.
 
-Forcing high would be a re-prioritization performed by a skill that § What this skill never does forbids from touching a priority label, and it would not be cosmetic: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
+**Forcing high on the loose path** would be a re-prioritization this skill chose rather than one the material forced, and that is the line it must not cross. It would not be cosmetic either: `/pr:next` filters on the label and ranks band above everything else, so a consolidation would silently promote its members past every other issue in their band. A note in the body does not reach `/pr:next`, which reads labels.
 
-**A `priority:low` group enters at `priority:low`, and that means it stays outside `/pr:next`'s queue**, exactly as its members already were. That is the correct outcome rather than a hole: **consolidation changes how work is grouped, never whether it is scheduled.** Say in the report that the group will sit outside the queue, so raising the band stays an explicit decision somebody makes rather than a side effect of tidying.
+**The strict path promotes deliberately rather than silently, and that is the whole of the difference.** The promotion is forced by the material rather than chosen by this skill, step 6's Combine block names every promoted member with its prior band, the combined issue's body repeats it, and the band lands on a newly created issue rather than by editing any member's label.
+
+**A group whose members are all `priority:low` enters at `priority:low`, and that means it stays outside `/pr:next`'s queue**, exactly as its members already were. That is the correct outcome rather than a hole. Say in the report that the group will sit outside the queue, so raising the band stays an explicit decision somebody makes rather than a side effect of tidying.
+
+**On the loose path, consolidation changes how work is grouped, never whether it is scheduled.** The strict path is the deliberate exception. Where a `priority:low` member's changes land in the same file or the same migration as a `priority:high` member's, the group enters at high and the low member is scheduled alongside it. Nothing else would be true to the material, since the two cannot be delivered separately. **This is the one case where consolidation does change whether work is scheduled**, it is confined to members sharing one file or one migration, and the report names the promoted member so it is never discovered after the fact.
 
 ## What this skill never does
 
 - **Never closes or consolidates an issue that has an open PR, a worktree, or a branch.** Existence of the checkout is enough; an empty diff does not release the protection.
 - **Never closes on age**, or on any rule other than the three findings.
-- **Never changes a `priority:` label.**
+- **Never changes a `priority:` label.** This still holds under strict consolidation, and not on a technicality. The group's band lands on a **newly created** issue; every member keeps the label it was filed with, right up to being closed as consolidated. What the strict path changed is that a group's band may now exceed some member's own, which is a scheduling decision the report states per promoted member rather than a relabelling this skill performs on an existing issue. **If you find yourself wanting to edit an existing issue's label, the answer is still no.**
 - **Never edits an issue's title or body.** The stamp is a comment; the issue as filed stays as filed.
 - **Never deletes a branch or a worktree.** That is `/pr:abort`'s and `/pr:cleanup`'s job, under explicit invocation.
 - **Never widens `--apply` past the report.**
@@ -280,7 +311,8 @@ Forcing high would be a re-prioritization performed by a skill that § What this
 - **Treating a grep miss as proof an issue is retired.** An absence claim bounds only the places you looked, and this has cost a production incident elsewhere: a correct review finding was dismissed because two checks came back clean, and a colliding migration reached production. Name what you did not check before an absence becomes load-bearing.
 - **Reading an applied migration out of the tree.** A file says it was written, not that it ran.
 - **Citing an issue by bare number on first mention.**
-- **Combining because two issues sound related.** Three clauses, written out, or it is not a group.
+- **Combining because two issues sound related.** The strength and its clauses, written out, or it is not a group.
+- **Reading a shared directory as the same file.** Strict clause 2 is one file or one migration. Members scattered across a small directory are a loose group and still owe clause 3, however tightly the directory reads as a unit.
 
 ## Lifecycle position
 
