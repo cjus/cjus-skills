@@ -28,6 +28,8 @@
 #   command carries the approval token   -> exit 0, no output
 #   branch is not the default branch     -> exit 0, no output
 #   branch IS the default branch         -> ask (prompting mode) / deny (otherwise)
+#   ...but a ref-deleting push there     -> positional gate only is skipped; the
+#                                           refspec checks below still apply
 #   push whose refspec names it          -> same, whatever branch is checked out
 #   branch undeterminable / no jq        -> same (fail toward the operator)
 #   payload unparseable / not an object  -> deny (nothing in it is trustworthy,
@@ -337,6 +339,41 @@ ere_escape() {
   printf '%s' "$1" | sed -E 's/[][\.*^$+?(){}|\/]/\\&/g'
 }
 
+# True when this invocation is a REF-DELETING push (`git push --delete <branch>` or
+# its `-d` short form), which is the one push whose blast radius has nothing to do
+# with the branch that happens to be checked out.
+#
+# Why this exists: the checked-out-branch gate reads "on the default branch, commit
+# and push need approval", and for every OTHER push that is right, because the
+# working branch is what a bare `git push` writes. A delete push writes no commits
+# anywhere; it removes a named ref on the remote. Running one from the default
+# branch is not merely safe, it is the NORMAL case -- a worktree cannot remove
+# itself, so `/pr:cleanup` always deletes the merged branch from the main checkout
+# and so always tripped this gate. A guard that fires on every correct run of a
+# workflow the same plugin ships is training the operator to wave it through, which
+# is the failure the `ask`-vs-`deny` split above exists to avoid.
+#
+# THIS NARROWS ONE GATE ONLY. The caller falls straight through to the refspec
+# checks, so `git push origin --delete main` still gates on the default-branch ref
+# class, `--mirror`/`--all` still gate, and a wildcard refspec still gates. What is
+# dropped is the POSITIONAL check, not the check on what is being written.
+#
+# HEAD and `@` are excluded rather than left to the refspec class, and that
+# exclusion is the reason this is a function and not a one-line test. `git push
+# origin --delete HEAD` resolves HEAD locally, so run from the default branch it
+# deletes the default branch on the remote -- while the literal text `HEAD` never
+# matches the default-branch pattern below. Exempting it would open a bypass
+# spelled more simply than the form it replaced. Anything whose target is not an
+# explicitly named ref keeps the positional gate.
+is_ref_delete_push() { # invocation slice, argument region
+  case "$1" in *push*) ;; *) return 1 ;; esac
+  printf '%s' "$2" | grep -Eq '(^|[[:space:]])(-d|--delete)([[:space:]]|$)' || return 1
+  # A ref token, delimited the same way the default-branch pattern delimits one, so
+  # `HEADER` and `user@host` are not mistaken for the symbolic forms.
+  printf '%s' "$2" | grep -Eq "(^|[[:space:]:/+\"'])(HEAD|@)([^[:alnum:]._/-]|\$)" && return 1
+  return 0
+}
+
 # Resolve the branch of the repo the invocation acts on. `$@` is the repo selector
 # (`-C <dir>` or `--git-dir=<dir>`), passed through verbatim.
 #
@@ -513,7 +550,11 @@ while :; do
     gate "Could not determine the branch in ${LOCATION}, so the default-branch guard cannot clear this commit/push."
   fi
 
-  if [[ "$BRANCH" == "$DEFAULT_BRANCH" ]]; then
+  # The POSITIONAL gate: what the checked-out branch alone implies. A ref-deleting
+  # push is the documented exception, because the checked-out branch says nothing
+  # about which ref it removes; see is_ref_delete_push. It still faces every
+  # refspec check below.
+  if [[ "$BRANCH" == "$DEFAULT_BRANCH" ]] && ! is_ref_delete_push "$INV" "$SEG"; then
     gate "On ${DEFAULT_BRANCH}: commit and push need operator approval."
   fi
 
