@@ -13,6 +13,12 @@
       "source": "./plugins/bookcraft"
     },
     {
+      "name": "council",
+      "description": "Fan one question out to N independent members and reconcile their answers without manufacturing consensus",
+      "category": "productivity",
+      "source": "./plugins/council"
+    },
+    {
       "name": "explain",
       "description": "Explain a topic for a mid-level engineer — in 250 words of prose, or as a self-contained HTML page with diagrams that opens in the browser",
       "category": "productivity",
