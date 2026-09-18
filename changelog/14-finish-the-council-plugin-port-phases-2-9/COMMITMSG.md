@@ -1,28 +1,32 @@
-close phases 1 and 2: apply the close-gate review and land the artifacts
+record the follow-up tickets and fix the PR's closing reference
 
-Three fixes from the close-gate review, all in prose this branch authored.
+The first close left its deferred triage unresolved, so three artifacts claimed
+work was untracked when it now is. This pass files that away and corrects two
+things the second close-gate review caught.
 
-`ask`'s detection block echoed "detection unavailable - assume Claude-only" while
-the bullet three lines below had just been rewritten to say the opposite, so the
-skill contradicted itself on the one path that is live for the whole of phases
-1-2. It now matches `setup`'s plain "detection unavailable".
+The summary and PLAN now cite the tickets: #22 carries phases 3-9 plus the live
+COLLAPSED question and the M=/P= interface decision, #15 gained the two
+output-contract items this branch found, and cjus/cjus-dev#89 holds the phase 9
+retirement. PLAN's Deferred section gained a triage table showing all six items
+and why three dropped.
 
-`Bash(git:*)` is restored, reverting the narrowing to `Bash(git diff:*)` made
-earlier today on the pre-test review's advice. The skill instructs
-`git -c core.fsmonitor= -c core.hooksPath=/dev/null diff ...`, whose text begins
-`git -c` rather than `git diff`, so a prefix rule past the subcommand cannot match
-it. The two reviews disagreed; the command text settles it. The `-c` flags are a
-hardening measure, so the grant widens rather than the command changing.
+**The PR's closing reference was resting on a sentence.** The summary read "this
+PR closes #14" as ordinary prose, and GitHub was resolving that as the closing
+keyword -- so the link that retires the ticket depended on nobody rewording a
+line of narrative. Both occurrences are reworded, and the reference is now an
+explicit trailer on the PR body, which is the only thing that should carry that
+meaning. Verified: with the prose reworded and before the trailer landed,
+closingIssuesReferences went empty, which is what proves the prose was load
+bearing rather than incidental.
 
-`status` no longer tells the model to name which key level is missing. The script
-reports only that the key is absent, never which of the three levels it looked in,
-so naming one would be a claim its output does not support.
+The impact figures were also inverted. The split is five plan-folder documents
+against six shipped files, not the reverse; the summary now gives the shipped
+figures on their own, since those do not drift when this commit lands and the
+combined total does.
 
-Closing artifacts: the PR summary, the close-gate review, and this message. The
-CHANGELOG gained the close-gate entry, had two lines corrected that the fixes made
-stale, and was reordered so its verification block describes the final state. PLAN
-records that the branch closes with phases 3-9 outstanding and that a successor
-ticket is the follow-up this close must not drop.
+Two smaller corrections: PLAN's status still said both skills proceed Claude-only
+when detection is unavailable, which stopped being true when `ask` was changed to
+keep seating OpenRouter, and it still described the cjus-dev ticket as unfiled.
 
 No continuity entry and no assertion audit: both are null in this repo's
 pr-config.json.

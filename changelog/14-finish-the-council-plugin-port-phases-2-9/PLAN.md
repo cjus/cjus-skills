@@ -67,7 +67,10 @@ plugin reaches into a host repo any more.
 
 The one interim gap is deliberate: `scripts/detect.sh` is phase 3, so the detection block in
 `skills/ask` and `skills/setup` falls through to its `detection unavailable` branch. Verified
-to degrade cleanly, and both skills already handle that line by proceeding Claude-only.
+to degrade cleanly. Both skills handle that line explicitly: `setup` reports detection as
+unavailable, and `ask` proceeds without `codex` or `ollama` while still seating OpenRouter from
+the roster, since OpenRouter is gated on the roster flag and the key chain rather than on
+detection.
 
 Next is phase 3 (`detect.sh`), which is also what makes two of the open items live — the
 `council_normalize_endpoint` defect on #15, and the probe path the status decision assumes.
@@ -76,9 +79,12 @@ Next is phase 3 (`detect.sh`), which is also what makes two of the open items li
 `/pr:pre-test` on `410de58`, one at the close gate on the full branch — both returning
 APPROVE, and both sets of findings were applied rather than deferred. The branch merges as a
 partial delivery of this ticket, exactly as #9 did before it: that branch shipped the
-mechanical layer alone and closed, with this ticket filed as its successor. Phases 3-9 need
-the same treatment, so a successor ticket is the one piece of follow-up this close must not
-drop.
+mechanical layer alone and closed, with this ticket filed as its successor. Phases 3-9 got the
+same treatment: **[#22](https://github.com/cjus/cjus-skills/issues/22)**, filed at this close
+and carrying the remaining phases, the live `COLLAPSED` question and the `M=`/`P=` decision.
+
+A third review pass ran at the second close, also APPROVE, and its findings were applied
+too.
 
 ## Open Questions
 
@@ -301,7 +307,8 @@ Two further reasons the split is forced rather than preferred:
 
 This narrows the branch, which the ticket authorizes: it asks to *"confirm whether it should
 land as its own change there."* Settling it is the answer, not scope drift. **The cjus-dev
-ticket is not yet filed** — it needs the operator, since it lands in another repo.
+ticket is [cjus/cjus-dev#89](https://github.com/cjus/cjus-dev/issues/89)**, filed
+2026-09-18 and blocked on this PR.
 
 ## Correction carried forward
 
@@ -331,6 +338,22 @@ turns #15 from latent into live. If a phase here surfaces one of them concretely
 under `## Deferred` and leave the fix on #15 rather than widening this branch.
 
 ## Deferred
+
+**Triage outcome, 2026-09-18.** All four items below were triaged at close, plus two raised by
+the first review pass. Three were ticketed and three dropped:
+
+| Item | Outcome |
+|---|---|
+| Unconfirmed-diversity annotation attached to the class | TICKET → [#15](https://github.com/cjus/cjus-skills/issues/15) |
+| Pre-existing XDG wording in `council-lib.sh` / `env.mjs` | TICKET → [#15](https://github.com/cjus/cjus-skills/issues/15) |
+| `M=`/`P=` prefixes defeat the permission rule | TICKET → [#22](https://github.com/cjus/cjus-skills/issues/22), needing an operator decision |
+| `Bash(jq:*)` declared but uninstructed in `skills/setup` | DROP — no symptom, no occasion |
+| `Read` declared but uninstructed in `skills/status` | DROP — same |
+| `Bash(echo:*)` possibly needed by the `!`-blocks | DROP — the reviewer marked it arguable, and arguable is a drop |
+
+Phases 3-9 themselves continue on [#22](https://github.com/cjus/cjus-skills/issues/22), since
+merging this PR closes #14.
+
 
 ### The unconfirmed-diversity annotation is attached to the class, not to the cause
 

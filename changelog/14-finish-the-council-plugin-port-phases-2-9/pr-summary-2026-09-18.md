@@ -12,7 +12,9 @@ marketplace entry, and has no remaining tie to the repo it was ported from. All 
 ticket's open design questions were settled before either phase started, each recorded in
 `PLAN.md` with its reasoning and what it touches.
 
-Phases 3–9 are deliberately out of scope here and remain on #14.
+Phases 3-9 are deliberately out of scope here. They continue on
+[#22](https://github.com/cjus/cjus-skills/issues/22), filed at this close, because #14 is
+retired on merge.
 
 ## Key changes
 
@@ -95,8 +97,9 @@ one grant covers them.
   private-material strip and the path move, but #9's third blocker is this file, and the skill
   references it — leaving it absent would have shipped a dangling path.
 - **Phase 9 split at the repo boundary** before it ran. Its cjus-dev half cannot live in a
-  branch of this repo, so it becomes its own ticket there, blocked on this PR. **That ticket
-  is not yet filed** — it needs the operator, since it lands in another repository.
+  branch of this repo, so it became its own ticket there:
+  **[cjus/cjus-dev#89](https://github.com/cjus/cjus-dev/issues/89)**, filed 2026-09-18 and
+  blocked on this PR.
 
 **Five design questions settled before any phase started**, each with a `## Decision` section
 in `PLAN.md`: an absent roster projects the four Claude defaults; `/council:status` probes by
@@ -141,8 +144,10 @@ cheapest check — it writes nothing. Note that with `XDG_CONFIG_HOME` set, the 
 
 ## Impact assessment
 
-- **8 files changed, 1200 insertions, 0 deletions.** Every file is new except
-  `.claude-plugin/marketplace.json`, which gains a six-line entry.
+- **6 shipped files, 680 insertions, 0 deletions.** Every one is new except
+  `.claude-plugin/marketplace.json`, which gains a six-line entry. The other five files in the
+  diff are this branch's own plan-folder documents — PLAN, CHANGELOG, COMMITMSG, this summary
+  and the review — which add roughly a thousand further lines but ship nothing.
 - **No dependencies affected.** The plugin has no install step; `openrouter.mjs` uses only
   Node builtins and the sibling `env.mjs`.
 - **No breaking change** to anything shipped. The four pre-existing scripts are untouched.
@@ -153,26 +158,38 @@ cheapest check — it writes nothing. Note that with `XDG_CONFIG_HOME` set, the 
 
 ## Deferred work
 
-Parked under `## Deferred` in `PLAN.md`, all found during this branch and none fixed here:
+Parked under `## Deferred` in `PLAN.md`, all found during this branch and none fixed here.
+**All four were triaged at close**: three ticketed, one dropped.
 
 - **The unconfirmed-diversity annotation is attached to the class, not the cause.**
   `council-state.sh` appends the "unconfirmed" suffix only to `CROSS-VENDOR`, so an
   Ollama-only roster classed `HOMOGENEOUS (local)` carries no annotation when the probe was
-  skipped, though it is equally unconfirmed. Same output contract as #15's five defects, and
-  likely belongs there. `skills/status` documents the gap rather than asserting past it.
+  skipped, though it is equally unconfirmed. `skills/status` documents the gap rather than
+  asserting past it. **Ticketed onto
+  [#15](https://github.com/cjus/cjus-skills/issues/15)**, whose existing five defects are the
+  same output contract.
 - **`M=`/`P=` env prefixes defeat an `allowed-tools` prefix rule.** `skills/ask` instructs
   `M=… P=… node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"`. Claude Code strips a leading
   assignment only for known-safe variables, so `Bash(node:*)` does not match and every
   OpenRouter member prompts. A narrower rule cannot help, because `${CLAUDE_PLUGIN_ROOT}` does
   not expand in a permission pattern. **Needs an operator decision:** giving the script a
   `--model`/`--prompt-file` interface would fix it at no cost to secrecy, but it changes a
-  shipped interface that phase 8 is meant to test.
+  shipped interface that phase 8 is meant to test. **Carried on
+  [#22](https://github.com/cjus/cjus-skills/issues/22)** as an item needing an operator
+  decision.
 - **Two pre-existing scripts document the key chain without `$XDG_CONFIG_HOME`.**
   `council-lib.sh:131` and `env.mjs:38`. The same wording was corrected in this branch's own
   files; these two are outside the diff and were left alone rather than widening it.
+  **Ticketed onto [#15](https://github.com/cjus/cjus-skills/issues/15).**
 - **`Bash(jq:*)` is declared but never instructed in `skills/setup`.** Plausibly intended for
   parsing the OpenRouter catalogue the skill fetches with `curl`. Either instruct it or drop
-  the grant.
+  the grant. **Dropped at triage** — no user-visible symptom and no occasion that would cause
+  it to be picked up, which is the bar a ticket has to clear.
+
+**Phases 3-9 continue on [#22](https://github.com/cjus/cjus-skills/issues/22)**, filed
+2026-09-18. This PR completes #14 having delivered two of its nine phases — the same shape as its
+predecessor, where #9 shipped the mechanical layer alone, closed on PR #13, and #14 was filed
+as its successor.
 
 **Assertion audit:** `docs.assertionsFile` is `null` in this repo's `pr-config.json`, so the
 audit is disabled rather than skipped. No invariants file exists to update.
