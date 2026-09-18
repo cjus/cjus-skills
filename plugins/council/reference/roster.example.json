@@ -1,0 +1,39 @@
+{
+  "_comment": "Council roster. Lives at ~/.config/council/roster.json ($XDG_CONFIG_HOME/council/roster.json when that is set; override both with $COUNCIL_ROSTER). Absence of this file means Claude-only. A member listed here is EXPLICIT CONSENT to spend that provider's quota. Never put an API key or basic-auth credentials in this file — detect.sh injects its first 40 lines into the model's context on every invocation (userinfo in a URL is redacted, but a bare key would not be).",
+
+  "members": [
+    { "id": "opus",   "kind": "claude", "model": "opus",   "stance": "risk-first" },
+    { "id": "sonnet", "kind": "claude", "model": "sonnet", "stance": "simplicity-first" },
+    { "id": "haiku",  "kind": "claude", "model": "haiku",  "stance": "long-horizon" },
+    { "id": "fable",  "kind": "claude", "model": "fable",  "stance": "contrarian" }
+  ],
+
+  "external": {
+    "openrouter": {
+      "enabled": false,
+      "_note": "One key, many vendors — the single best fix for a correlated roster. The key is COUNCIL_OPENROUTER_API_KEY, resolved by scripts/env.mjs most-specific-first: the environment, then ./.env in the current project, then ~/.config/council/.env. Never from this file. Council reads only the COUNCIL_ name and never OPENROUTER_API_KEY, so council spend stays separable from whatever else on this machine uses OpenRouter. Model IDs are <author>/<slug>; re-check them against https://openrouter.ai/api/v1/models (no auth needed), because slugs are added and retired continuously. A ':free' suffix is a genuinely free model, rate-limited to ~20 req/min.",
+      "_retention_note": "VET EVERY MODEL BEFORE SEATING IT if prompt retention matters to you. Council prompts can carry repo content. Under an enforcing zero-data-retention guardrail, a model whose every endpoint retains prompts returns 404 rather than degrading. To check: join GET /api/v1/models/<id>/endpoints against GET /api/frontend/v1/all-providers on dataPolicy.retainsPrompts (both unauthenticated) and count endpoints where it is false. Prefer several, not one — a model with a single safe endpoint 404s whenever that provider is down. Any such measurement goes stale as providers change policy, so measure at seating time rather than trusting a list. Note that guardrails bind per key: a newly minted council key inherits none.",
+      "models": [
+        { "id": "openai/gpt-5.5",           "stance": "risk-first" },
+        { "id": "z-ai/glm-5.3",             "stance": "simplicity-first" },
+        { "id": "deepseek/deepseek-v4-pro", "stance": "contrarian" }
+      ]
+    },
+
+    "ollama": {
+      "enabled": false,
+      "_note": "Local or LAN, free, no key. endpoint may be any host — ALWAYS write the port explicitly: bare 'host' defaults to :11434, but 'http://host' defaults to :80. Ollama has NO authentication of any kind; only point this at a host on a network you trust, or at a reverse proxy you control. Models must already be pulled — check with `ollama list`.",
+      "endpoint": "http://localhost:11434",
+      "models": [
+        { "id": "gemma4:26b-mlx", "stance": "long-horizon" }
+      ]
+    },
+
+    "codex": {
+      "enabled": false,
+      "_note": "ChatGPT via the Codex CLI, on your existing plan. Requires `codex login`. No API key. Spends your ChatGPT quota."
+    }
+  },
+
+  "maxConcurrentExternal": 2
+}
