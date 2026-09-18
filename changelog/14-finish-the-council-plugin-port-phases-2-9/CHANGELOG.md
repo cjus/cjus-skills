@@ -5,8 +5,12 @@ Start date: 2026-09-18 09:03:01 MDT
 Successor to #9. That branch landed the mechanical layer only — `env.mjs`, `council-lib.sh`,
 `roster-rows.mjs`, `council-state.sh` and two test suites — and closed on merge of PR #13.
 The plugin ships no skills and is held out of `.claude-plugin/marketplace.json`, so it is
-inert. This branch lands the skills, the reference docs and the README, taking the plugin
-from inert to installable.
+inert.
+
+**What actually landed here is phases 1 and 2**: the three skills, `reference/roster.example.json`,
+the marketplace entry, the private-material strip, and `openrouter.mjs` ported off the host
+repo. That is enough to take the plugin from inert to installable. The reference `.md` files
+(phase 6) and the READMEs (phase 7) are named in the plan but are **not** in this branch.
 
 The retirement of the cjus-dev copy is **not** part of this branch. Phase 9 splits at the
 repo boundary — only its `detect.sh` half lands here, and the deletions in cjus-dev become
@@ -38,7 +42,7 @@ All five open questions settled before any phase started, each recorded in `PLAN
 
 - **`skills/ask/SKILL.md`** — ported from cjus-dev's `council/SKILL.md`. Renamed to
   `/council:ask`, every `${CLAUDE_SKILL_DIR}` path moved onto `${CLAUDE_PLUGIN_ROOT}`, and
-  `allowed-tools` narrowed from bare `Bash` to `Agent, Read, Grep, Glob` plus eight scoped
+  `allowed-tools` narrowed from bare `Bash` to `Agent, Read, Grep, Glob, Write` plus scoped
   `Bash(...)` entries. Roster resolution now names the `XDG_CONFIG_HOME` level the shipped
   `council_roster_path` already honors.
 - **`skills/setup/SKILL.md`** — ported from `council-setup/SKILL.md`. This carries phase 2's
@@ -70,6 +74,21 @@ All five open questions settled before any phase started, each recorded in `PLAN
   not expand inside `settings.json`, so the rule must carry a resolved absolute path — a
   silent no-match otherwise.
 
+### 2026-09-18 — close-gate review fixes
+
+- **`ask`'s detection fallback no longer says "assume Claude-only".** The `!`-block echoed
+  that string while the bullet three lines below had just been rewritten to say the opposite,
+  so the skill contradicted itself. It now matches `setup`'s plain `detection unavailable`.
+- **`Bash(git:*)` restored**, reverting the narrowing to `Bash(git diff:*), Bash(git config:*)`
+  made earlier the same day. The skill instructs
+  `git -c core.fsmonitor= -c core.hooksPath=/dev/null diff ...`, whose text begins `git -c`,
+  not `git diff` — so a prefix rule past the subcommand cannot match it. The two reviews
+  disagreed on this; the command text settles it. **Do not re-narrow** without also changing
+  the instructed command, and those `-c` flags are a hardening measure worth keeping.
+- **`status` no longer asks the model to name which key level is missing.** The script reports
+  only that the key is absent, never which of the three levels it looked in, so naming one
+  would be a claim the output does not support.
+
 ### Verification
 
 - `claude plugin validate --strict plugins/council` — passes.
@@ -84,5 +103,8 @@ All five open questions settled before any phase started, each recorded in `PLAN
 
 `scripts/detect.sh` is **phase 3** and does not exist yet, so the `!`-prefixed detection block
 in `skills/ask` and `skills/setup` falls through to its `|| echo "detection unavailable"`
-branch. Verified to degrade cleanly rather than error. Both skills already instruct the model
-to proceed Claude-only and say so when that line appears.
+branch. Verified to degrade cleanly rather than error, with `CLAUDE_PLUGIN_ROOT` set and
+unset. Both skills handle that line explicitly: `setup` reports detection as unavailable, and
+`ask` proceeds without `codex` or `ollama` members while still seating OpenRouter from the
+roster, since OpenRouter is gated on the roster flag and the key chain rather than on
+detection.

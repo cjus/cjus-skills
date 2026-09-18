@@ -43,8 +43,9 @@ Lead with whichever of these applies:
   column is the whole answer; quote it. A member here is a fixable configuration
   problem, not a failure.
 - **Key absent while OpenRouter members are consented** — the most common surprise. The
-  roster says yes and the key chain says no, so those members silently never run. State
-  which of the three levels is missing.
+  roster says yes and the key chain says no, so those members silently never run. The
+  script reports only that the key is absent, not which level it looked in, so do not name
+  one — say the chain found nothing and point at `/council:setup`.
 
 ## The probe
 

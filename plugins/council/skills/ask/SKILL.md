@@ -2,7 +2,7 @@
 name: ask
 description: Convene a council of independent perspectives on one question and reconcile their answers — side by side, sorted into agreement/complementary/conflict, or Delphi-pooled so a correct minority survives. Use for high-stakes technical decisions, design trade-offs, and cross-checking a single model's judgement, or when the user asks to "ask the council", wants several independent takes, wants disagreement made explicit, or asks to reduce single-model bias.
 argument-hint: "[individual|categorized|pooled] <question>"
-allowed-tools: Agent, Read, Grep, Glob, Write, Bash(sh:*), Bash(node:*), Bash(curl:*), Bash(jq:*), Bash(codex exec:*), Bash(seq:*), Bash(sort:*), Bash(mktemp:*), Bash(git diff:*), Bash(git config:*)
+allowed-tools: Agent, Read, Grep, Glob, Write, Bash(sh:*), Bash(node:*), Bash(curl:*), Bash(jq:*), Bash(codex exec:*), Bash(seq:*), Bash(sort:*), Bash(mktemp:*), Bash(git:*)
 ---
 
 # /council:ask
@@ -13,7 +13,7 @@ skill that matters most.
 
 ## What is available right now
 
-!`sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect.sh" 2>/dev/null || echo "detection unavailable — assume Claude-only"`
+!`sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect.sh" 2>/dev/null || echo "detection unavailable"`
 
 Read that block before seating anyone. It reports **availability, not consent.**
 

@@ -72,6 +72,14 @@ to degrade cleanly, and both skills already handle that line by proceeding Claud
 Next is phase 3 (`detect.sh`), which is also what makes two of the open items live — the
 `council_normalize_endpoint` defect on #15, and the probe path the status decision assumes.
 
+**Closing on 2026-09-18 with phases 3-9 outstanding.** Two review passes ran — one at
+`/pr:pre-test` on `410de58`, one at the close gate on the full branch — both returning
+APPROVE, and both sets of findings were applied rather than deferred. The branch merges as a
+partial delivery of this ticket, exactly as #9 did before it: that branch shipped the
+mechanical layer alone and closed, with this ticket filed as its successor. Phases 3-9 need
+the same treatment, so a successor ticket is the one piece of follow-up this close must not
+drop.
+
 ## Open Questions
 
 The three design questions the ticket says must be settled before the phases that depend on
