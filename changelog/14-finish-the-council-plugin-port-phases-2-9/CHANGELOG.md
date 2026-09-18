@@ -5,8 +5,13 @@ Start date: 2026-09-18 09:03:01 MDT
 Successor to #9. That branch landed the mechanical layer only — `env.mjs`, `council-lib.sh`,
 `roster-rows.mjs`, `council-state.sh` and two test suites — and closed on merge of PR #13.
 The plugin ships no skills and is held out of `.claude-plugin/marketplace.json`, so it is
-inert. This branch lands the skills, the reference docs, the README and the retirement of
-the cjus-dev copy, taking the plugin from inert to installable.
+inert. This branch lands the skills, the reference docs and the README, taking the plugin
+from inert to installable.
+
+The retirement of the cjus-dev copy is **not** part of this branch. Phase 9 splits at the
+repo boundary — only its `detect.sh` half lands here, and the deletions in cjus-dev become
+their own ticket there, blocked on this PR. See `PLAN.md § Decision — phase 9 splits at the
+repo boundary`.
 
 ## Changes
 

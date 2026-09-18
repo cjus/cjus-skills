@@ -2,7 +2,7 @@
 name: ask
 description: Convene a council of independent perspectives on one question and reconcile their answers — side by side, sorted into agreement/complementary/conflict, or Delphi-pooled so a correct minority survives. Use for high-stakes technical decisions, design trade-offs, and cross-checking a single model's judgement, or when the user asks to "ask the council", wants several independent takes, wants disagreement made explicit, or asks to reduce single-model bias.
 argument-hint: "[individual|categorized|pooled] <question>"
-allowed-tools: Agent, Read, Grep, Glob, Bash(sh:*), Bash(node:*), Bash(curl:*), Bash(jq:*), Bash(codex exec:*), Bash(seq:*), Bash(sort:*), Bash(git:*)
+allowed-tools: Agent, Read, Grep, Glob, Write, Bash(sh:*), Bash(node:*), Bash(curl:*), Bash(jq:*), Bash(codex exec:*), Bash(seq:*), Bash(sort:*), Bash(mktemp:*), Bash(git diff:*), Bash(git config:*)
 ---
 
 # /council:ask
@@ -22,7 +22,11 @@ Read that block before seating anyone. It reports **availability, not consent.**
 - `roster: NONE` means **Claude-only**. That is the correct default, not a fault. Say
   so in the footer and mention `/council:setup`; do not offer to enable providers
   mid-answer, and never edit the roster from this skill.
-- If the block says `detection unavailable`, proceed Claude-only and say so.
+- If the block says `detection unavailable`, proceed without `codex` or `ollama` members
+  and say so — those are the two that need a local binary or a reachable endpoint.
+  **OpenRouter needs neither**, only the roster's `enabled` flag and the key chain, so seat
+  it from the roster as usual; `openrouter.mjs` exits `3` and reports itself if no key
+  resolves.
 
 ## Honesty contract — read first
 
@@ -258,7 +262,7 @@ The script reads **`COUNCIL_OPENROUTER_API_KEY`** through its own self-contained
 ```
 1. $COUNCIL_OPENROUTER_API_KEY in the environment   (per-invocation)
 2. ./.env in the current project                     (per-project)
-3. ~/.config/council/.env                            (per-user default)
+3. $XDG_CONFIG_HOME/council/.env, else ~/.config/council/.env   (per-user default)
 ```
 
 It sends `model` explicitly (OpenRouter treats it as optional and silently falls back to

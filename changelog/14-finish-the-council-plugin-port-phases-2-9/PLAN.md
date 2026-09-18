@@ -37,7 +37,10 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       implemented a third time, and have it report which source won. Replay `test-env.sh`'s
       oracle table against it.
 - [ ] Phase 4 (rest): have `skills/ask` call `council-state.sh` instead of re-deriving
-      seating, and ship `/council:status` as a read-only wrapper.
+      seating. **`/council:status` shipped early, in phase 1** — it was the natural place to
+      put it once the skill directories existed, and it needed nothing phase 4 adds. What
+      remains here is the `skills/ask` half, plus deleting `env.mjs:rosterPath` per the
+      decision below.
 - [ ] Phase 5: `COLLAPSED` correlation class, cost statement extended to `pooled`,
       per-choice cost in `/council:setup`.
 - [ ] Phase 6: split the reference docs out of `SKILL.md`, keeping the honesty contract and
@@ -339,6 +342,41 @@ path rather than removing.
 The fix is to attach the suffix to `PROBE_SKIPPED` wherever a seated Ollama member contributed
 to the class, not to the `CROSS-VENDOR` branch alone. Per #15's note on the test approach, the
 input belongs in the fixture table.
+
+`skills/status` now documents this gap rather than papering over it, so the skill does not
+assert an annotation the script may not emit.
+
+### `M=`/`P=` env prefixes defeat an `allowed-tools` prefix rule
+
+Raised by the phase 1-2 review, 2026-09-18. **Needs an operator decision, so it is not fixed
+here.**
+
+`skills/ask` instructs `M=<model> P=<file> node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"`.
+Claude Code strips a leading assignment only for a known-safe set of variables; `M` and `P`
+are not in it, so `Bash(node:*)` does not match and every OpenRouter member prompts. Nor can a
+narrower rule help: `${CLAUDE_PLUGIN_ROOT}` no more expands in a permission pattern than it
+does in `settings.json`.
+
+This is the same defect class the phase 9 notes already record for cjus-dev's
+`Bash(node -e:*)` grant — it reappeared one layer up, in the skill's own frontmatter.
+
+The fix worth considering is giving `openrouter.mjs` a `--model` / `--prompt-file` interface,
+which restores a plain `node …` prefix at no cost to secrecy: only the key must stay out of
+argv, and it already does via the env chain. That changes a shipped interface and phase 8 is
+what tests it, so the decision belongs to the operator rather than to a review follow-up.
+
+### Pre-existing: two shipped scripts document the key chain without `$XDG_CONFIG_HOME`
+
+Found 2026-09-18 while correcting the same wording in this branch's own files.
+`council-lib.sh:131` and `env.mjs:38` both describe level 3 as `~/.config/council/.env`, while
+`configDir`/`council_config_dir` resolve `$XDG_CONFIG_HOME/council` first. Both files are
+pre-existing and outside this diff, so the wording was left alone rather than widening the
+branch; it is the same class as #15's output-contract items and likely belongs there.
+
+### Declared-but-uninstructed: `Bash(jq:*)` in `skills/setup`
+
+Minor. Plausibly intended for parsing the OpenRouter catalogue the skill fetches with `curl`,
+but no step actually instructs `jq`. Either instruct it at that step or drop the grant.
 
 ## About Ticket
 

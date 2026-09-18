@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Configure which AI members the council seats. Detects installed model CLIs, asks which paid providers you consent to spend quota on, and writes the roster file /council:ask reads. Use when the user wants to add, remove, or review council members, enable external models like ChatGPT/Codex or local Ollama, or asks why the council is Claude-only.
-allowed-tools: Bash(sh:*), Bash(curl:*), Bash(jq:*), Read, Write, AskUserQuestion
+allowed-tools: Bash(sh:*), Bash(curl:*), Bash(jq:*), Bash(mkdir:*), Bash(chmod:*), Read, Write, AskUserQuestion
 ---
 
 # /council:setup
@@ -40,8 +40,9 @@ To see the resulting seating without changing anything, use `/council:status`.
      correlated roster: one key reaches many vendors, so the council stops being
      all-Claude. Requires **`COUNCIL_OPENROUTER_API_KEY`**, resolved most-specific-first
      from the environment, then `./.env` in the current project, then
-     `~/.config/council/.env` — never write the key into the roster. Ask which model IDs
-     to seat; if unsure, offer to fetch the live catalogue
+     `$XDG_CONFIG_HOME/council/.env` (else `~/.config/council/.env`) — never write the
+     key into the roster. Ask which model IDs to seat; if unsure, offer to fetch the
+     live catalogue
      (`curl -fsS https://openrouter.ai/api/v1/models`, no auth needed) and suggest two or
      three from *different* authors. Note `:free` slugs exist but are rate-limited to
      about 20 requests/minute.
@@ -58,8 +59,9 @@ To see the resulting seating without changing anything, use `/council:status`.
      key means those prompts are retained by whichever provider serves them.
 
      If the user wants the key available to every project, write it to
-     `~/.config/council/.env` as `COUNCIL_OPENROUTER_API_KEY=...` and `chmod 600` that
-     file. Never the roster, and never a project's `.claude/settings.json`.
+     `$XDG_CONFIG_HOME/council/.env`, else `~/.config/council/.env`, as
+     `COUNCIL_OPENROUTER_API_KEY=...` and `chmod 600` that file. Never the roster, and
+     never a project's `.claude/settings.json`.
    - *Ollama* — enable, at which `endpoint`, and which models? Free and no key.
      - Default `http://localhost:11434`. It also runs on a LAN host.
      - **Always write the port explicitly.** Bare `host` defaults to `:11434`, but

@@ -32,6 +32,10 @@ cannot read off it is which single fact explains the seating they did not expect
 Lead with whichever of these applies:
 
 - **`0 seated`, roster present** — the roster declares no members. `/council:setup`.
+- **`0 seated`, roster absent** — no roster file exists. Say explicitly that `/council:ask`
+  still seats the four Claude defaults, because the script reports only what a roster
+  declares and the two therefore disagree in the default configuration. Leaving this
+  unsaid reads as "the council is broken" when it is the documented default.
 - **`HOMOGENEOUS`** — every seated member is one vendor, so agreement among them is
   weak evidence. The fix is an OpenRouter key: one key reaches many vendors and needs
   nothing installed.
@@ -52,8 +56,14 @@ rather than decorating it:
 ```
 up      → ollama members seated
 down    → unseated, "endpoint not answering"
-unknown → seated anyway, and the report says the diversity is unconfirmed
+unknown → seated anyway, and a CROSS-VENDOR line is marked unconfirmed
 ```
+
+Note the gap in that third row: the unconfirmed suffix attaches only to `CROSS-VENDOR`, so
+an Ollama-only roster classed `HOMOGENEOUS (local)` carries no annotation even though it is
+equally unconfirmed. Do not add the caveat yourself — pass the script's output through, and
+if the operator asks, say the uncertainty is currently attached to the class rather than to
+the cause.
 
 `--no-probe` collapses `down` into `unknown`, which reports a seat that may not exist —
 an over-claim in exactly the direction the honesty contract exists to prevent. The

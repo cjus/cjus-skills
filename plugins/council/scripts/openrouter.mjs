@@ -14,7 +14,8 @@
  *    unprefixed name is set and belongs to an application, it stays that way.
  *
  * The key resolves most-specific-first -- the environment, then `./.env` in the
- * current project, then `~/.config/council/.env`. That chain lives in `env.mjs`
+ * current project, then `$XDG_CONFIG_HOME/council/.env` (else `~/.config/council/.env`).
+ * That chain lives in `env.mjs`
  * and is shared with `council-lib.sh`, so it is not implemented twice here.
  *
  * Usage:  M=<model-id> P=<prompt-file> node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"
