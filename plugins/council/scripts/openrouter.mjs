@@ -42,8 +42,10 @@
  *      a caller who mistyped something is never told their key is missing.
  *   3  no key configured. The caller must NOT seat this member, and must say so in
  *      the council footer.
- *   4  the provider answered, but not usefully: an HTTP error, or a 200 carrying no
- *      usable content. Exiting 0 with empty output would read as a member that
+ *   4  no usable answer: the request never completed (network failure, timeout), or
+ *      an HTTP error, or a 200 carrying nothing usable. All of these leave the
+ *      caller in the same place -- this member has nothing to contribute -- so they
+ *      share a code. Exiting 0 with empty output would instead read as a member that
  *      answered with silence, and silence is not a position.
  */
 
@@ -137,15 +139,28 @@ if (!key) {
 
 // `model` is always sent: OpenRouter treats it as optional and silently falls
 // back to the account default, which would misreport which member answered.
-const response = await fetch(ENDPOINT, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${key}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
-  signal: AbortSignal.timeout(TIMEOUT_MS),
-});
+let response;
+try {
+  response = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+} catch (cause) {
+  // Uncaught, this rejected and exited 1 with a stack trace -- a code outside this
+  // script's documented contract, on the most ordinary failure it has: the network.
+  // `cause.cause.code` is where undici puts ENOTFOUND, ECONNREFUSED and the like.
+  const why =
+    cause.name === "TimeoutError"
+      ? `no response within ${TIMEOUT_MS / 1000}s`
+      : (cause.cause?.code ?? cause.message);
+  console.error(`OpenRouter did not answer: ${why}. Treat this member as absent.`);
+  process.exit(4);
+}
 
 if (!response.ok) {
   const body = await response.text().catch(() => "");
@@ -153,7 +168,16 @@ if (!response.ok) {
   process.exit(4);
 }
 
-const payload = await response.json();
+// A 200 whose body is not JSON -- a captive portal or a proxy's HTML error page --
+// rejected here too, for the same exit 1.
+let payload;
+try {
+  payload = await response.json();
+} catch {
+  console.error("OpenRouter returned a 200 that is not JSON; treat this member as absent.");
+  process.exit(4);
+}
+
 const content = payload?.choices?.[0]?.message?.content;
 
 if (typeof content !== "string" || content.trim() === "") {

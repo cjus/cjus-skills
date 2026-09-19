@@ -249,12 +249,37 @@ else
   bad "text report no longer contradicts itself" "$(grep -E '^roster:|^seating:' <<<"$TXT" | tr '\n' ' ')"
 fi
 
-echo "== NONE now means a roster that declares nobody, and only that =="
+echo "== the two ways to seat nobody do not print alike =="
 R_EMPTY=$(roster '{"members":[]}')
 OUT=$(state "$R_EMPTY" 0)
 t "present-but-empty seats nobody"    0       "$(j "$OUT" '.seating.total')"
 t "present-but-empty is NONE"         NONE    "$(j "$OUT" '.projectedCorrelation')"
 t "present-but-empty is 'present'"    present "$(j "$OUT" '.roster.state')"
+
+# A roster that declared members and had every one unseated ALSO reaches NONE -- the
+# pin check is what made that reachable. Calling it "the roster declares no members"
+# contradicts the `not seated` rows printed directly above it, and sends the user to
+# rewrite a file whose only fault is one typo.
+txt_of() { # roster-path -> --text output
+  local d; d=$(mktemp -d "$TMP/txt.XXXXXX"); mkdir -p "$d/home"
+  ( cd "$d" && env -u XDG_CONFIG_HOME -u "$K" HOME="$d/home" \
+      COUNCIL_ROSTER="$1" sh "$STATE" --text --no-probe )
+}
+R_ALLBAD=$(roster '{"members":[{"id":"a","kind":"claude","model":"opus-4.5","stance":"risk-first"}]}')
+OUT=$(state "$R_ALLBAD" 0)
+t "all-unseated seats nobody"         0    "$(j "$OUT" '.seating.total')"
+t "all-unseated is still NONE"        NONE "$(j "$OUT" '.projectedCorrelation')"
+t "all-unseated lists the member"     1    "$(j "$OUT" '.notSeated|length')"
+TXT=$(txt_of "$R_ALLBAD")
+if grep -q 'declares no members' <<<"$TXT"; then
+  bad "all-unseated is not called 'declares no members'" "contradicts its own notSeated rows"
+else
+  ok "all-unseated is not called 'declares no members'" "$(grep 'correlation' <<<"$TXT")"
+fi
+TXT=$(txt_of "$R_EMPTY")
+grep -q 'declares no members' <<<"$TXT" \
+  && ok "a genuinely empty roster still says so" "declares no members" \
+  || bad "a genuinely empty roster still says so" "$(grep 'correlation' <<<"$TXT")"
 
 echo "== a pin the harness will not accept is caught in the join =="
 # `model` is a closed enum, but the roster's `model` field is free-form JSON, so

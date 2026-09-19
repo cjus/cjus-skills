@@ -51,141 +51,45 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 ## Status
 
-Updated 2026-09-18. Status only; the objective and the six phases above are unchanged.
+Updated 2026-09-19. Status only; the objective and the six phases above are unchanged. The
+per-phase narrative lives in `CHANGELOG.md` and is not repeated here.
 
-**Phase 3 is complete.** `scripts/detect.sh` exists, so the detection block in `skills/ask`
-and `skills/setup` no longer falls through to `detection unavailable`. The script sources
-`council-lib.sh` rather than re-deriving the key chain, and `scripts/test-detect.sh` replays
-`test-env.sh`'s oracle table against **what detect.sh prints**, not against the library
-variable — the printed line is what reaches the model's context, and a correct library behind
-a wrong render is the same defect to the reader.
+**All six phases are complete, and both open questions are resolved.** The plugin is no longer
+incomplete: `scripts/detect.sh` exists, so the capability block in `skills/ask` and
+`skills/setup` no longer falls through; `skills/ask` seats from `council-state.sh --json` instead
+of performing the join in prose; the four Claude defaults are declared once in `council-lib.sh`
+and an absent roster seats them; `COLLAPSED` can fire; the reference docs are split out; both
+READMEs exist; and four probe suites stand at **46, 40, 104 and 46**. `claude plugin
+validate --strict` passes for the plugin and the marketplace, and `detect.sh` and
+`council-state.sh` produce identical output under `dash`, `ksh`, `bash` and `zsh`.
 
-Three suites pass at 40, 46 and 81 cases; `claude plugin validate --strict` passes for both
-the plugin and the marketplace. `detect.sh` produces byte-identical output under `dash`, `ksh`,
-`bash` and `zsh`.
+**Phase 9 is absent by design**, split at the repo boundary on #14. Its cjus-dev half is
+[cjus/cjus-dev#89](https://github.com/cjus/cjus-dev/issues/89).
 
-The port closes one real divergence and carries three fixes over from the sibling script. The
-divergence: the original's `grep` did not accept `export KEY=value`, so detect.sh printed
-"absent -- do NOT seat" for a key `openrouter.mjs` resolved and spent. The three carried
-fixes: the probe URL now travels on stdin via `curl -K -` instead of argv, where basic-auth
-userinfo was visible in the process table; the roster path now resolves `$XDG_CONFIG_HOME`,
-which the original ignored; and a roster that exists but cannot be read now reports as
-unreadable rather than printing an empty summary that reads like an empty roster.
+**Two questions settled, and one deliberately left unanswered.** The `COLLAPSED` mechanism was
+resolved by probing the live Agent tool rather than by argument, which showed it held two
+failures under one name: an unacceptable pin is caught mechanically in the join, because `model`
+is a closed enum of exactly `opus|sonnet|haiku|fable`, while a genuine collapse is reported from
+member self-report with only a full collapse counting as confirmed. What that probe could **not**
+establish — whether a valid-but-unserved pin errors or silently substitutes — is recorded as
+still unknown, and nothing shipped assumes an answer. The `M=`/`P=` question was settled by the
+operator in favour of a flag interface and applied the same day, which also retired the exit-1
+defect its Deferred entry had parked.
 
-**Phase 4 is complete.** `skills/ask` runs `council-state.sh --json` and seats `.seated[]`
-rather than reading the roster and performing the consent-by-availability join in prose. The
-four Claude defaults are declared once, in `council-lib.sh:council_default_members`, and an
-absent roster now seats them and projects `HOMOGENEOUS (anthropic)` instead of reporting
-`0 seated`, which contradicted the `Claude-only council` line two rows above it.
-`env.mjs:rosterPath` is deleted; it had no callers and was the only reason a second roster-path
-resolver existed.
+**Three deviations, none of them scope changes.** Two of Decision 1's four bullets were not phase
+5 work: the README cost block had no README yet and landed in phase 7, and per-choice cost in
+`/council:setup` had already landed in phase 1 and was verified rather than redone. Two things
+stayed inline through the phase 6 split that the phase did not name — the untrusted-content
+notices, since a control needing a file read first is one that gets skipped, and the stance
+table, consulted every run.
 
-Two suites grew: `test-council-state.sh` is at 91 cases, including one that diffs the seating
-against `council_default_members` directly, so a second copy of the default list fails rather
-than drifting silently.
-
-**The question the decision left open is settled: `/council:ask` does not own the right to seat
-a different set.** One declaration, both readers. The skill lists the four defaults so a reader
-can recognise them and says explicitly that they are not there to be seated from.
-
-Phase 4 also removed a piece of prose that had gone stale: the detection block's fall-through
-branch told the skill to "proceed without `codex` or `ollama`" when detection was unavailable.
-That was correct when the skill derived seating from the block, and wrong once the join does
-its own `council_find_bin codex` and its own endpoint probe. The block is now documented as
-context, not a decision.
-
-**Phase 5 is complete**, and the open question it was blocked on is settled by experiment
-rather than by argument — see the decision below. The short version: `COLLAPSED` was two
-failures under one name. An unacceptable pin is now caught mechanically in the join, because
-the harness's `model` parameter is a closed enum of exactly the four values the council pins;
-a genuine collapse is reported from member self-report, and only a full collapse counts as
-confirmed. What the experiment could not settle — what a valid-but-unavailable pin does — is
-recorded as still open, and nothing shipped depends on assuming an answer.
-
-Two suites now stand at 99 and 40 cases.
-
-**Phase 6 is complete.** `skills/ask/SKILL.md` is 370 lines, down from 460, and the three
-reference files carry what moved out: `reference/roster.md` (the roster format, the three
-roster states, the join's JSON contract, the pin rules), `reference/providers.md` (how to call
-each external member, with exit codes, timeouts and costs) and `reference/trust-boundary.md`
-(attachment limits, the `git config filter.*` check, why the two notices differ).
-
-The honesty contract and the output contract stayed inline, as the phase requires. So did two
-things the phase did not name but that the same reasoning covers: the **two untrusted-content
-notices**, because they must be emitted verbatim and a control that needs a file read first is
-a control that gets skipped; and the **stance table**, because it is consulted on every run and
-moving it would have bought four lines at the cost of a read.
-
-Two things the split surfaced and fixed. A skill lives in `skills/<name>/`, so the bare
-`reference/…` paths the first pass wrote would have resolved nowhere — they now use
-`${CLAUDE_PLUGIN_ROOT}/reference/…`, matching how `skills/setup` already cites the example
-roster. And the transplanted provider section arrived carrying prose that had stayed inline,
-so `providers.md` briefly held a second copy of the opt-in rationale and the not-seated rule;
-both were cut.
-
-`skills/setup` and `skills/status` now point at `reference/roster.md` as well, so the roster
-format is documented in one place for all three skills.
-
-**Phase 7 is complete.** `plugins/council/README.md` is 194 lines, following the house style
-`plugins/explain/README.md` sets, and the repo-root README gains a `### council` section and a
-Layout entry, both placed alphabetically.
-
-Decision 1's **What it costs** block leads the README, ahead of Install, as the decision
-specified: the multiplier as Nx and 2Nx, about 4x and 8x at the default four members, with no
-dollar figure and no token estimate anywhere.
-
-The plan-dependence note the phase requires is under `## Limitations`, and it states the split
-phase 5 established rather than the vaguer version the plan inherited: a pin outside
-`opus|sonnet|haiku|fable` fails loudly before any model runs and the join unseats it, while a
-valid-but-unserved pin is the case that remains undetermined — so the plugin asks members and
-reports `COLLAPSED` only on a full collapse.
-
-Two things verified rather than assumed while writing it. **A Claude-only council needs neither
-`jq` nor Node**: `council_roster_rows` is called only from the roster-present branch
-(`council-state.sh:95`, inside the `else` at :89), so an absent roster never reaches a parser.
-And the "What ships here" tree was diffed against `find plugins/council -type f`, which matches
-at 18 files.
-
-Two judgement calls worth recording. The per-suite case counts were written in and then taken
-out: **phase 8 adds cases to two of those three suites**, so a README citing 99/40/46 would
-have been stale within the branch. And the root README stated "a skill refers to its own files
-through `${CLAUDE_PLUGIN_ROOT}`" twice in adjacent paragraphs — deduplicated while adding the
-council entry beside it, with the surviving sentence generalised to cover both plugins that now
-ship a `reference/` directory.
-
-**Phase 8 is complete, and with it every phase this branch carries.** `test-openrouter.sh` is
-new at 26 cases and `test-detect.sh` gained the probe cases phase 3 deliberately left out,
-taking it to 46. Four suites now stand at 46, 26, 99 and 46.
-
-Two testing decisions worth keeping. **The OpenRouter suite makes no network calls and does not
-ask for an endpoint override to achieve that** — an env var pointing that script somewhere else
-would mean anyone who can set an environment variable can redirect a bearer token to a host
-they control, which is the exact property the script exists to hold. A `node --import` preload
-replaces `fetch` before the script loads instead: no production change, no new interface, and
-the stub records what it was handed, so the suite can assert the key really *was* sent as a
-bearer token while never appearing in output. A script that leaked nothing because it sent
-nothing would otherwise pass the leak case.
-
-**The `detect.sh` probe cases use a real loopback server rather than a mocked `curl`**, because
-what is under test is which reply shapes the probe accepts, and a mock would only restate the
-assertion. They cover the Ollama fingerprint, a healthy server with no models pulled, a
-non-Ollama service answering on the port, an HTTP 500, and a closed port — and assert the probe
-asks `/api/tags` rather than trusting that it did.
-
-**The invocation lives in one function**, `run_or`. The `M=`/`P=` interface still has the open
-operator decision against it, so when it changes the suite changes in one place rather than in
-thirty call sites.
-
-**The `M=`/`P=` decision landed on 2026-09-19 and was applied the same day**, so no open
-question remains on this branch. `openrouter.mjs` takes `--model`/`--prompt-file`, OpenRouter
-members stop prompting on every call, and the exit-1-on-an-unreadable-prompt-file defect went
-with it rather than waiting — which is what its Deferred entry said should happen. That entry is
-gone, since it is no longer deferred work. `test-openrouter.sh` is at 36 cases.
-
-The branch is ready for `/pr:close`, with one Deferred item left to triage: the
-wrong-architecture `jq` that is selected anyway, never falls back to Node, and makes a valid
-roster report as malformed. The `council_normalize_endpoint` entry stays on #15 by the decision
-recorded with it.
+**The close-gate review returned `APPROVE` and its findings were applied, not carried.** One was
+a defect this branch introduced: phase 5's pin check made `NONE` reachable for a roster that
+declares members and had them all unseated, while the message still read "the roster declares no
+members" — contradicting the `not seated` rows two lines above it. Fixed, with the regression
+case whose absence let it through. The review also surfaced that `openrouter.mjs` still exited
+`1` on a network failure, a timeout, or a 200 whose body is not JSON, contradicting the
+exit-code contract this branch had just documented; those exit `4` now and name the cause.
 
 ## Open Questions
 
@@ -245,6 +149,20 @@ like a typo. The only in-repo caller, `reference/providers.md`, was updated in t
       belongs here or stays on its own ticket; it is not in this branch's objective either way.
 
 ## Deferred
+
+**Triage outcome, 2026-09-19.** Six items were triaged at close — the two recorded below, plus
+four raised by the close-gate review. One was ticketed, two were already tracked, two dropped, and
+one was fixed outright rather than deferred.
+
+| Item | Outcome |
+|---|---|
+| A binary that cannot exec is selected anyway | TICKET → [#15](https://github.com/cjus/cjus-skills/issues/15), added as a comment; backend *selection*, adjacent to its parity items |
+| `council_normalize_endpoint` path-mangling and IPv6 | Already on [#15](https://github.com/cjus/cjus-skills/issues/15), by the decision recorded with it |
+| `council-state.sh` emits `.roster.path` and `.key.source` unescaped | Already [#15](https://github.com/cjus/cjus-skills/issues/15)'s second item |
+| `openrouter.mjs` exits 1 on a network failure, timeout or non-JSON 200 | **FIXED at close**, not deferred — it contradicted the exit-code contract this branch had just documented |
+| `detect.sh`'s endpoint scrape takes the first `"endpoint"` | DROP — speculative; needs a second `endpoint` field the schema does not have, and `/council:status` is the authoritative read |
+| Whether a valid-but-unserved pin errors or substitutes | DROP as work — no action available on demand. Documented as a limitation in the README and above instead |
+
 
 Raised while landing a phase. Each is recorded here and triaged at `/pr:close`; nothing here
 is in this branch's objective.

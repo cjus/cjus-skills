@@ -128,7 +128,7 @@ plugins/
     skills/<name>/SKILL.md        one directory per skill
   council/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
-    reference/roster.example.json  a commented roster to copy
+    reference/roster.example.json a commented roster to copy
     reference/*.md                roster format, provider calls, trust boundary
     scripts/council-lib.sh        shared sh helpers: key chain, paths, defaults
     scripts/council-state.sh      the seating join, --text or --json

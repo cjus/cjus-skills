@@ -21,9 +21,9 @@
 #      that actually won                         -- "which source won", phase 3's
 #                                                   own requirement
 #
-# The probe cases belong to phase 8 and are deliberately not here yet; every row
-# below runs with no roster, so the endpoint is the localhost default and a closed
-# port refuses immediately.
+# The oracle rows below run with no roster, so the endpoint is the localhost default
+# and a closed port refuses immediately. The probe cases, which stand up a real
+# loopback server, are in their own section further down.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 DETECT="$HERE/detect.sh"

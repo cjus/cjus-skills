@@ -69,8 +69,8 @@ none — council prompts carry repo content, so an unguarded key means those pro
 retained by whichever provider serves them.
 
 **Ollama** — local or LAN, no key. Substitute the exact `ollama-endpoint:` value printed
-in the availability block above (it already resolves roster > `$OLLAMA_HOST` > default
-and normalises the port). Never hardcode `localhost`, and if that line carried a
+in the capability block at the top of `/council:ask` (it already resolves
+roster > `$OLLAMA_HOST` > default and normalises the port). Never hardcode `localhost`, and if that line carried a
 `[WARNING: no port ...]`, fix the endpoint before calling rather than probing `:80`:
 
 ```bash

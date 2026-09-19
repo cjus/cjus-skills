@@ -124,11 +124,19 @@ seating is printed. Report that and stop. Falling back to the defaults would run
 Claude-only council that looks exactly like a correct one, while the user believes a
 roster full of external members is in effect.
 
-**Zero seated is a stop, not a council.** `.projectedCorrelation: "NONE"` with
-`.seating.total: 0` means the roster is present and declares nobody. Say so, point at
-`/council:setup`, and answer as an ordinary turn if that is wanted — but do not seat the
-defaults over it. A roster declaring no members is a decision; an absent roster is the
-case the defaults exist for.
+**Zero seated is a stop, not a council.** Either way, say so, point at `/council:setup`,
+and answer as an ordinary turn if that is wanted — but **do not seat the defaults over
+it.** An absent roster is the case the defaults exist for; this is not.
+
+Check `.notSeated[]` before saying *why*, because there are two ways to seat nobody and
+they call for opposite advice:
+
+- **Empty `.notSeated[]`** — the roster declares no members. That is a decision the user
+  made, and nothing here overrides it.
+- **Non-empty `.notSeated[]`** — the roster declared members and every one of them was
+  unavailable. Name the reasons, which are already in `.reason`: an unacceptable pin is a
+  typo to fix, a missing key is a key to set. Telling this user their roster "declares no
+  members" would send them to rewrite a file that is very nearly correct.
 
 **The defaults are not this skill's to choose.** An absent roster seats four Claude
 members from the single declaration in `scripts/council-lib.sh`. Read them from

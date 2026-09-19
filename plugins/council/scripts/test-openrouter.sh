@@ -72,6 +72,11 @@ globalThis.fetch = async (url, init) => {
     case "empty":     return json({ choices: [{ message: { content: "   " } }] });
     case "nochoice":  return json({});
     case "nonstring": return json({ choices: [{ message: { content: 42 } }] });
+    case "throw":     { const e = new Error("connect ECONNREFUSED"); e.cause = { code: "ECONNREFUSED" }; throw e; }
+    case "timeout":   { const e = new Error("timed out"); e.name = "TimeoutError"; throw e; }
+    case "badjson":   return { ok: true, status: 200,
+                               json: async () => { throw new SyntaxError("Unexpected token <"); },
+                               text: async () => "<html>portal</html>" };
     default:          return json({ choices: [{ message: { content: "stub answer" } }] });
   }
 };
@@ -265,6 +270,15 @@ rc_case "HTTP 500"                     4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.
 rc_case "200, whitespace-only content"   4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=empty
 rc_case "200, no choices at all"         4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=nochoice
 rc_case "200, content is not a string"   4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=nonstring
+
+# The request never completing is the most ordinary failure this script has, and it
+# used to reject unhandled and exit 1 -- outside its own documented contract.
+rc_case "the network refuses the connection" 4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=throw
+rc_case "the request times out"              4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=timeout
+rc_case "a 200 that is not JSON"             4 "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=badjson
+run_or "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=throw
+grep -q 'ECONNREFUSED' "$ERR" && ok "the network error names the cause" "ECONNREFUSED" \
+                             || bad "the network error names the cause" "$(head -1 "$ERR")"
 
 run_or "$(sandbox "$K=sk-p")" "a/b" "./prompt.txt" STUB_MODE=http401
 grep -q '401' "$ERR" && ok "the HTTP status is named" "401" \

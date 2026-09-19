@@ -34,7 +34,9 @@
 # An ABSENT roster is not an empty one. It seats the four default Claude members
 # declared in council-lib.sh and projects HOMOGENEOUS (anthropic), which is the
 # honest reading of four members from one vendor. `NONE` is reserved for a roster
-# that is present and declares nobody.
+# that is present and seats nobody -- either because it declares no members, or
+# because every member it declared was unseated as unavailable. Those two print
+# differently, since only one of them is a roster problem.
 #
 # Correlation here is always PROJECTED. `COLLAPSED` -- every model override
 # failing so that N members all ran on the session model -- is only observable
@@ -291,7 +293,16 @@ fi
 UNCONFIRMED=''
 [ "${PROBE_SKIPPED:-0}" = 1 ] && UNCONFIRMED=' -- ollama was not probed, so this diversity is unconfirmed'
 case "$CLASS" in
-  NONE)         printf 'projected correlation: NONE -- the roster declares no members\n' ;;
+  NONE)
+    # Two different ways to seat nobody, and saying the wrong one is a lie the
+    # report contradicts two rows above. A roster that declared members and had
+    # them all unseated is not a roster that declares none -- the pin check made
+    # that case reachable, and `not seated` is already printed right there.
+    if [ -s "$UNSEATED" ]; then
+      printf 'projected correlation: NONE -- every declared member was unseated; see above\n'
+    else
+      printf 'projected correlation: NONE -- the roster declares no members\n'
+    fi ;;
   HOMOGENEOUS)  printf 'projected correlation: HOMOGENEOUS (%s) -- one vendor; agreement is weak evidence\n' "$VENDORS" ;;
   CROSS-VENDOR) printf 'projected correlation: CROSS-VENDOR (%s)%s\n' "$VENDORS" "$UNCONFIRMED" ;;
 esac
