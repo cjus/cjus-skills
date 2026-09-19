@@ -269,6 +269,122 @@ line=$( ( cd "$NOEP/project" && env -u "$K" -u XDG_CONFIG_HOME -u COUNCIL_ROSTER
   && ok "scheme without a port is called out" "warned" \
   || bad "scheme without a port is called out" "$line"
 
+echo "== the probe: what actually answered on the endpoint =="
+# Phase 3 deliberately left these out; this is phase 8. A real loopback server is
+# used rather than a mocked curl, because the thing under test is the shape of the
+# reply detect.sh accepts -- and a mock would just restate the assertion.
+cat > "$TMP/server.mjs" <<'JS'
+import { createServer } from "node:http";
+import { writeFileSync } from "node:fs";
+const status = Number(process.argv[2]);
+const body = process.argv[3];
+const pathLog = process.argv[4];
+const srv = createServer((req, res) => {
+  if (pathLog) writeFileSync(pathLog, req.url);
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(body);
+});
+srv.listen(0, "127.0.0.1", () => console.log(srv.address().port));
+JS
+
+# The port and the pid travel through FILES and start_server is never called in a
+# command substitution, because a variable it set there would die with the subshell
+# -- which is how a "stopped" server went on answering the next case.
+PORTF="$TMP/port"; PIDF="$TMP/pid"; SRV_PORT=''
+start_server() { # status, body, [path-log] -> sets $SRV_PORT
+  : > "$PORTF"
+  node "$TMP/server.mjs" "$1" "$2" "${3:-}" > "$PORTF" 2>/dev/null &
+  echo $! > "$PIDF"
+  # Drop it from the job table. Otherwise bash announces "Terminated" on every
+  # stop_server, interleaved with the results, where it reads like a failure.
+  disown 2>/dev/null || true
+  local i
+  SRV_PORT=''
+  for ((i = 0; i < 200; i++)); do
+    SRV_PORT=$(tr -d '[:space:]' < "$PORTF")
+    [[ -n "$SRV_PORT" ]] && return 0
+    command sleep 0.05
+  done
+  return 1
+}
+stop_server() {
+  local pid; pid=$(cat "$PIDF" 2>/dev/null)
+  [[ -n "$pid" ]] && kill "$pid" 2>/dev/null
+  : > "$PIDF"
+}
+# A killed listener can linger for a moment, and asserting "not reachable" while it
+# is still up would be a flake that looks like a defect.
+wait_closed() { # port
+  local i
+  for ((i = 0; i < 200; i++)); do
+    curl -fsS -m 1 "http://127.0.0.1:$1/api/tags" >/dev/null 2>&1 || return 0
+    command sleep 0.05
+  done
+  return 1
+}
+
+probe_line() { # dir, port -> the ollama-server: line
+  ( cd "$1/project" && env -u "$K" -u XDG_CONFIG_HOME -u COUNCIL_ROSTER \
+      HOME="$1/home" OLLAMA_HOST="127.0.0.1:$2" sh "$DETECT" 2>/dev/null ) \
+    | grep '^ollama-server: '
+}
+
+PD=$(fixture '' '')
+PATHLOG="$TMP/reqpath"
+
+start_server 200 '{"models":[{"name":"a:1b"},{"name":"b:2b"}]}' "$PATHLOG" || bad "server start" "timed out"
+line=$(probe_line "$PD" "$SRV_PORT")
+[[ "$line" == *'UP (~2 models)'* ]] \
+  && ok "an Ollama-shaped reply is UP, with a count" "$line" \
+  || bad "an Ollama-shaped reply is UP, with a count" "$line"
+# /api/tags emits `models` unconditionally, which is what makes that key a usable
+# fingerprint. Assert the probe actually asked that endpoint.
+[[ "$(cat "$PATHLOG" 2>/dev/null)" == "/api/tags" ]] \
+  && ok "the probe asks /api/tags" "/api/tags" \
+  || bad "the probe asks /api/tags" "'$(cat "$PATHLOG" 2>/dev/null)'"
+stop_server
+
+# A healthy server with nothing pulled yet must NOT read as down. That is why the
+# fingerprint is the `models` key rather than a non-empty model list.
+start_server 200 '{"models":[]}'
+line=$(probe_line "$PD" "$SRV_PORT")
+[[ "$line" == *'UP'* ]] \
+  && ok "a server with no models pulled is still UP" "$line" \
+  || bad "a server with no models pulled is still UP" "$line"
+stop_server
+
+# Something else on the port is a different fact from nothing on the port, and
+# seating on it would send council prompts to whatever that service is.
+start_server 200 '{"status":"ok","service":"not-ollama"}'
+line=$(probe_line "$PD" "$SRV_PORT")
+[[ "$line" == *'not Ollama'* ]] \
+  && ok "a non-Ollama 200 is called out, not accepted" "$line" \
+  || bad "a non-Ollama 200 is called out, not accepted" "$line"
+stop_server
+
+# curl -fsS turns a 5xx into a non-zero exit and an empty body, so a proxy's error
+# page never gets parsed as an answer.
+start_server 500 '<html>bad gateway</html>'
+line=$(probe_line "$PD" "$SRV_PORT")
+[[ "$line" == *'not reachable'* ]] \
+  && ok "an HTTP 500 is not reachable, not an answer" "$line" \
+  || bad "an HTTP 500 is not reachable, not an answer" "$line"
+stop_server
+
+# Nothing listening at all. Bind a port, learn it, release it -- asking for a port
+# nobody is on is otherwise a guess that can collide with a real service.
+start_server 200 '{"models":[]}'
+CLOSED_PORT="$SRV_PORT"
+stop_server
+if wait_closed "$CLOSED_PORT"; then
+  line=$(probe_line "$PD" "$CLOSED_PORT")
+  [[ "$line" == *'not reachable'* ]] \
+    && ok "a closed port is not reachable" "$line" \
+    || bad "a closed port is not reachable" "$line"
+else
+  bad "a closed port is not reachable" "the listener never went away"
+fi
+
 echo "== a missing library degrades instead of half-reporting =="
 ORPHAN="$TMP/orphan"; mkdir -p "$ORPHAN"; cp "$DETECT" "$ORPHAN/detect.sh"
 out=$(sh "$ORPHAN/detect.sh" 2>/dev/null); rc=$?

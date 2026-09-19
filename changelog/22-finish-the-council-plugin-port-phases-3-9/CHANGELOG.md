@@ -278,3 +278,59 @@ separate step and not this phase's call.
 
 Verified: `claude plugin validate --strict` passes for the plugin and the marketplace; suites
 unchanged at 40, 99 and 46.
+
+### 2026-09-19 — Phase 8: the remaining suites
+
+`plugins/council/scripts/test-openrouter.sh` (new), `plugins/council/scripts/test-detect.sh`,
+`plugins/council/README.md`, `README.md`.
+
+The last phase on this branch. Four suites now stand at 46, 26, 99 and 46.
+
+**`test-openrouter.sh`, 26 cases, no network.** It covers every documented exit: `5` on bad
+usage and, separately, that a usage error is reported *before* the key chain, so a caller who
+mistyped the invocation is not told their key is missing; `3` with no key at any level, naming
+all three levels it checked; `4` on HTTP 401, HTTP 500, and the three shapes of a 200 that
+carries nothing usable — whitespace-only content, no `choices`, and a non-string content.
+
+The 200-with-nothing cases matter more than they look. Exiting `0` with empty stdout would read
+to the caller as a member that answered with silence, and silence is not a position.
+
+It also pins what the request is: `/api/v1/…` and not `/v1/…`, `model` always sent explicitly
+because OpenRouter treats it as optional and silently falls back to the account default, and a
+prompt full of shell metacharacters arriving byte-identical — which is the reason this is a
+script rather than a `curl` pipeline.
+
+**The network is stubbed with a preload, not with an endpoint override.** An env var pointing
+this script elsewhere would mean anyone who can set an environment variable can redirect a
+bearer token to a host they control, and that is the exact property the script exists to hold.
+`node --import` replaces `fetch` before the script loads: no production change, no new
+interface. The stub also records what it received, which is how the suite asserts the key
+really *was* sent as a bearer token while never appearing in stdout or stderr — a script that
+leaked nothing because it sent nothing would pass the leak case on its own.
+
+**`run_or` is the only function that knows the calling convention.** The `M=`/`P=` interface
+still has an open operator decision against it, so when it changes the suite changes in one
+place rather than in thirty call sites.
+
+**`test-detect.sh` gained the probe cases phase 3 deliberately left out**, taking it to 46.
+They use a real loopback server rather than a mocked `curl`, because what is under test is which
+reply shapes the probe accepts and a mock would only restate the assertion: an Ollama-shaped
+reply reports `UP` with a count; a healthy server with no models pulled is still `UP`, which is
+why the fingerprint is the `models` key rather than a non-empty list; a non-Ollama 200 is called
+out instead of accepted, since seating on it would send council prompts to whatever that service
+is; an HTTP 500 is `not reachable` rather than an answer, because `curl -fsS` turns a proxy's
+error page into a non-zero exit; and a closed port is `not reachable`. It also asserts the probe
+asks `/api/tags` rather than trusting that it did.
+
+Three harness bugs were found and fixed while writing these, all the same family — state set
+inside a subshell never reaching the parent. `RC` set in a command substitution left callers
+reading the *previous* case's exit status; `SRV_PID` set the same way left a "stopped" server
+still answering the next case; and the test server used `require` inside an `.mjs`, so it died
+on first request and read as an unreachable endpoint. Results now travel through files, and the
+suites were run repeatedly to confirm the server cases are not flaky.
+
+One finding recorded under `PLAN.md § Deferred` rather than fixed: **`openrouter.mjs` exits `1`
+on a missing prompt file**, which is none of its three documented codes — `readFile` rejects
+and nothing catches it. The fix is small, but it touches the same interface the `M=`/`P=`
+decision covers, so both belong in one pass. The suite asserts what is safe to assert today:
+non-zero, nothing on stdout, not blamed on the key chain.

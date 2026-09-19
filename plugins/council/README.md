@@ -184,8 +184,9 @@ plugins/council/
   scripts/openrouter.mjs             one OpenRouter member call
   scripts/roster-rows.mjs            the Node roster parser, when jq is absent
   scripts/test-council-state.sh      probe suite: the key chain and the join
-  scripts/test-detect.sh             probe suite: what the capability block prints
+  scripts/test-detect.sh             probe suite: the capability block, and the probe
   scripts/test-env.sh                probe suite: the Node key chain, value-exact
+  scripts/test-openrouter.sh         probe suite: exit codes, offline
   skills/ask/SKILL.md
   skills/setup/SKILL.md
   skills/status/SKILL.md

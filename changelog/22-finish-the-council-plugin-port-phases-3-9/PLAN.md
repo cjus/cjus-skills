@@ -47,7 +47,7 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       **Also inherits Decision 1's "What it costs" block**, which phase 5 could not land
       because no README existed: the structural multiplier, roughly 4x a normal turn and 8x
       for `pooled`, with no dollar figure and no token estimate. **Landed 2026-09-19.**
-- [ ] **Phase 8** — `detect.sh` probes and `openrouter.mjs` exit-code tests.
+- [x] **Phase 8** — `detect.sh` probes and `openrouter.mjs` exit-code tests. **Landed 2026-09-19.**
 
 ## Status
 
@@ -153,8 +153,31 @@ through `${CLAUDE_PLUGIN_ROOT}`" twice in adjacent paragraphs — deduplicated w
 council entry beside it, with the surviving sentence generalised to cover both plugins that now
 ship a `reference/` directory.
 
-Next is phase 8, the last phase on this branch: `detect.sh` probes and `openrouter.mjs`
-exit-code tests.
+**Phase 8 is complete, and with it every phase this branch carries.** `test-openrouter.sh` is
+new at 26 cases and `test-detect.sh` gained the probe cases phase 3 deliberately left out,
+taking it to 46. Four suites now stand at 46, 26, 99 and 46.
+
+Two testing decisions worth keeping. **The OpenRouter suite makes no network calls and does not
+ask for an endpoint override to achieve that** — an env var pointing that script somewhere else
+would mean anyone who can set an environment variable can redirect a bearer token to a host
+they control, which is the exact property the script exists to hold. A `node --import` preload
+replaces `fetch` before the script loads instead: no production change, no new interface, and
+the stub records what it was handed, so the suite can assert the key really *was* sent as a
+bearer token while never appearing in output. A script that leaked nothing because it sent
+nothing would otherwise pass the leak case.
+
+**The `detect.sh` probe cases use a real loopback server rather than a mocked `curl`**, because
+what is under test is which reply shapes the probe accepts, and a mock would only restate the
+assertion. They cover the Ollama fingerprint, a healthy server with no models pulled, a
+non-Ollama service answering on the port, an HTTP 500, and a closed port — and assert the probe
+asks `/api/tags` rather than trusting that it did.
+
+**The invocation lives in one function**, `run_or`. The `M=`/`P=` interface still has the open
+operator decision against it, so when it changes the suite changes in one place rather than in
+thirty call sites.
+
+The branch is ready for `/pr:close`, with two Deferred items to triage and the `M=`/`P=`
+decision still outstanding.
 
 ## Open Questions
 
@@ -265,6 +288,29 @@ existing "projected" caveat is correct and was left alone. `skills/status` now p
 
 Raised while landing a phase. Each is recorded here and triaged at `/pr:close`; nothing here
 is in this branch's objective.
+
+### `openrouter.mjs` exits 1, undocumented, when the prompt file is missing
+
+Found 2026-09-19 by the phase 8 suite, which is what the suite was for.
+
+The script documents three failure codes — `3` no key, `4` HTTP or empty content, `5` bad usage
+— and the skill's prose repeats them. A `P=` pointing at a file that does not exist hits none of
+them: `readFile` rejects, nothing catches it, and Node exits **1** after printing an unhandled
+rejection with a stack trace.
+
+*symptom:* a mistyped prompt path produces a stack trace rather than a usage error, and a caller
+matching on the documented codes sees an unrecognised `1`. It is not dangerous — the suite
+confirms it writes nothing to stdout and does not blame the key chain — but it is the one
+failure path that does not behave as documented.
+*occasion:* any caller that builds the prompt path, which is every `/council:ask` with an
+OpenRouter member.
+
+The fix is small: read the prompt inside a `try`, and exit `5` with a message naming the path,
+since an unreadable prompt file is a usage error in the same sense a missing `P=` is. It is
+held back only because **it touches the same interface the `M=`/`P=` operator decision covers**,
+and doing both in one pass is cheaper than doing them a week apart. The suite already asserts
+what is safe to assert today — non-zero, nothing on stdout, not blamed on the key — so the fix
+will not go unnoticed.
 
 ### A binary that cannot exec is selected anyway, and the roster gets blamed for it
 

@@ -134,7 +134,7 @@ plugins/
     scripts/council-state.sh      the seating join, --text or --json
     scripts/detect.sh             capability probe, injected at skill load
     scripts/*.mjs                 the Node side: key chain, OpenRouter, roster parser
-    scripts/test-*.sh             three probe suites
+    scripts/test-*.sh             four probe suites
     skills/<name>/SKILL.md        one directory per skill
   explain/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
