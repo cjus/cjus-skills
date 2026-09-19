@@ -218,10 +218,82 @@ else
 fi
 chmod 600 "$UNREAD"
 
+echo "== an absent roster seats the DEFAULTS, not nobody =="
 MISSING="$TMP/no-such-roster.json"
 OUT=$(state "$MISSING" 0)
-t "absent roster is legitimate"      absent "$(j "$OUT" '.roster.state')"
-t "absent roster seats nobody"       0      "$(j "$OUT" '.seating.total')"
+t "absent roster is legitimate"       absent      "$(j "$OUT" '.roster.state')"
+t "absent roster seats the defaults"  4           "$(j "$OUT" '.seating.total')"
+t "all four are claude"               4           "$(j "$OUT" '.seating.claude')"
+t "absent roster is HOMOGENEOUS"      HOMOGENEOUS "$(j "$OUT" '.projectedCorrelation')"
+t "one vendor, and it is named"       anthropic   "$(j "$OUT" '.vendors')"
+t "nothing is listed as unavailable"  0           "$(j "$OUT" '.notSeated|length')"
+t "concurrency still defaults to 2"   2           "$(j "$OUT" '.maxConcurrentExternal')"
+
+# ONE DECLARATION, TWO READERS. The seating must be exactly what council-lib.sh
+# declares, in the same order. A second copy of the defaults would satisfy every
+# row above and still put a different council in the room -- which is the whole
+# reason the list lives in the library rather than in each reader.
+DECL=$(sh -c '. "$1"; council_default_members' _ "$LIB")
+SEEN=$(j "$OUT" '.seated[] | "\(.stance)\t\(.model)"')
+t "seating IS the single declaration" "$DECL" "$SEEN"
+
+# The defect the decision names: `roster: NONE ... Claude-only council` printed
+# two rows above `0 seated`, so the report contradicted itself in the text format
+# a human actually reads.
+TXTDIR=$(mktemp -d "$TMP/txt.XXXXXX"); mkdir -p "$TXTDIR/home"
+TXT=$( cd "$TXTDIR" && env -u XDG_CONFIG_HOME -u "$K" HOME="$TXTDIR/home" \
+       COUNCIL_ROSTER="$MISSING" sh "$STATE" --text --no-probe )
+if grep -q 'Claude-only council' <<<"$TXT" && grep -q '(4 seated)' <<<"$TXT"; then
+  ok "text report no longer contradicts itself" "Claude-only + 4 seated"
+else
+  bad "text report no longer contradicts itself" "$(grep -E '^roster:|^seating:' <<<"$TXT" | tr '\n' ' ')"
+fi
+
+echo "== NONE now means a roster that declares nobody, and only that =="
+R_EMPTY=$(roster '{"members":[]}')
+OUT=$(state "$R_EMPTY" 0)
+t "present-but-empty seats nobody"    0       "$(j "$OUT" '.seating.total')"
+t "present-but-empty is NONE"         NONE    "$(j "$OUT" '.projectedCorrelation')"
+t "present-but-empty is 'present'"    present "$(j "$OUT" '.roster.state')"
+
+echo "== a pin the harness will not accept is caught in the join =="
+# `model` is a closed enum, but the roster's `model` field is free-form JSON, so
+# this is a typo anyone can make. Catching it here turns a crash partway through a
+# paid fan-out into an unseated member with a reason.
+R_BADPIN=$(roster '{"members":[
+  {"id":"a","kind":"claude","model":"opus","stance":"risk-first"},
+  {"id":"b","kind":"claude","model":"opus-4.5","stance":"contrarian"}]}')
+OUT=$(state "$R_BADPIN" 0)
+t "the acceptable pin seats"          1 "$(j "$OUT" '.seating.claude')"
+t "the unacceptable pin does not"     1 "$(j "$OUT" '.notSeated|length')"
+t "and the offending value is shown"  "opus-4.5" "$(j "$OUT" '.notSeated[0].model')"
+REASON=$(j "$OUT" '.notSeated[0].reason')
+case "$REASON" in
+  *"opus|sonnet|haiku|fable"*) ok "the reason names what IS accepted" "$REASON" ;;
+  *) bad "the reason names what IS accepted" "$REASON" ;;
+esac
+
+# Declaring no model is NOT the same mistake: the member runs on the session
+# model, contributing no diversity. It must seat, and must not be called an error.
+R_NOPIN=$(roster '{"members":[{"id":"a","kind":"claude","stance":"risk-first"}]}')
+OUT=$(state "$R_NOPIN" 0)
+t "a member with no pin still seats"  1   "$(j "$OUT" '.seating.claude')"
+t "no pin is not an unseated member"  0   "$(j "$OUT" '.notSeated|length')"
+t "and its model reads as unpinned"   "-" "$(j "$OUT" '.seated[0].model')"
+
+# If anyone edits council_default_members to a value the enum does not carry, the
+# DEFAULT council would unseat itself -- a four-member roster reporting NONE. The
+# two declarations are independent, so nothing but this row couples them.
+DECL_PINS=$(sh -c '. "$1"; council_default_members | cut -f2' _ "$LIB")
+BADDEFAULT=''
+for pin in $DECL_PINS; do
+  sh -c '. "$1"; council_pin_is_accepted "$2"' _ "$LIB" "$pin" || BADDEFAULT="$BADDEFAULT $pin"
+done
+if [[ -z "$BADDEFAULT" ]]; then
+  ok "every default pin is an accepted pin" "$(tr '\n' ' ' <<<"$DECL_PINS")"
+else
+  bad "every default pin is an accepted pin" "rejected:$BADDEFAULT"
+fi
 
 echo "== the key value never appears in output =="
 LEAKDIR=$(mktemp -d "$TMP/leak.XXXXXX"); mkdir -p "$LEAKDIR/home"

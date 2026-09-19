@@ -80,3 +80,13 @@ The script says **projected**, and so should you. `COLLAPSED` — every model ov
 failing onto one session model — is only observable after members actually answer, so
 neither the script nor this skill can predict it. Report what the roster and the key
 chain establish, and nothing beyond that.
+
+Point at `/council:ask` for the part this cannot answer: it collects each member's own
+model report and classifies the spread as confirmed, `COLLAPSED` or unverified once the
+round lands. Saying "projected, and `/council:ask` confirms it" is honest. Implying this
+report already confirmed it is not.
+
+One thing this skill *can* state, because the join checks it: a member listed under
+`not seated` with a reason naming `opus|sonnet|haiku|fable` has a pin the harness will
+not accept. That is a roster typo, fixable with `/council:setup`, and it is worth calling
+out plainly rather than leaving as a generic unavailability.

@@ -86,6 +86,14 @@ To see the resulting seating without changing anything, use `/council:status`.
    same path `detect.sh` resolves — writing the default while detection reads an override
    leaves the user configuring a file nothing reads.
 
+   **A Claude member's `model` must be one of `opus`, `sonnet`, `haiku` or `fable`.**
+   That is the complete set the subagent tool accepts; anything else is unseated by the
+   join with a reason, so writing it here would produce a roster that looks configured
+   and seats fewer members than it lists. Never invent a version-suffixed name like
+   `opus-4.5`. A member may also omit `model` entirely, which means "no pin": it runs on
+   the session model and adds no model diversity — worth saying out loud if the user asks
+   for it, since decorrelation is the reason the pins exist.
+
    Write `members[]` (Claude subagents: `id`, `kind`, `model`, `stance`), the
    `external` block (`openrouter`/`ollama` each with `enabled` plus a `models[]` of
    `{id, stance}`, and `ollama` also an `endpoint`; `codex` just `enabled`), and
