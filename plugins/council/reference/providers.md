@@ -32,8 +32,16 @@ multi-line prompt while leaving the JSON valid).
 reaches argv, a command line, or stdout. Model IDs are `<author>/<slug>` from the roster:
 
 ```bash
-M=openai/gpt-5.5 P=./prompt.txt node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs" \
+  --model openai/gpt-5.5 --prompt-file ./prompt.txt
 ```
+
+`--flag=value` works too. **The command has to begin with `node`**, which is why these
+are flags rather than the `M=`/`P=` environment variables the script used to take:
+Claude Code strips a leading `VAR=value` before matching a permission rule only for a
+known-safe set of variable names, so `Bash(node:*)` did not match an invocation starting
+`M=` and every OpenRouter member prompted the user. Nothing in argv is secret — the model
+id and the prompt *path* are not sensitive, and the key is never passed as an argument.
 
 The script reads **`COUNCIL_OPENROUTER_API_KEY`** through its own self-contained reader
 (`scripts/env.mjs`), resolving most-specific-first:
@@ -45,8 +53,9 @@ The script reads **`COUNCIL_OPENROUTER_API_KEY`** through its own self-contained
 ```
 
 It sends `model` explicitly (OpenRouter treats it as optional and silently falls back to
-the account default), and posts to `/api/v1/...`, not `/v1/...`. Its exit codes are
-`3` no key configured, `4` HTTP or empty-content failure, `5` bad usage.
+the account default), and posts to `/api/v1/...`, not `/v1/...`. Its exit codes are `3` no key configured, `4` HTTP or empty-content failure, and `5` bad
+usage — which includes a `--prompt-file` that cannot be read. Usage is checked before the
+key chain, so a mistyped invocation is never reported as a missing key.
 
 **Read only `COUNCIL_OPENROUTER_API_KEY`, never `OPENROUTER_API_KEY`.** Council seats
 only its own key, which keeps council spend separable from whatever else on the machine

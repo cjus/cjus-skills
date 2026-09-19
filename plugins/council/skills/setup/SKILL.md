@@ -113,10 +113,16 @@ To see the resulting seating without changing anything, use `/council:status`.
    ```json
    { "permissions": { "allow": [
      "Bash(codex exec *)",
-     "Bash(node /abs/path/to/council/scripts/openrouter.mjs*)",
      "Bash(curl -fsS http://localhost:11434/*)"
    ] } }
    ```
+
+   **OpenRouter needs no entry here.** `openrouter.mjs` takes `--model` and
+   `--prompt-file`, so the command begins with `node` and `/council:ask`'s own
+   `Bash(node:*)` already covers it. It used to need one because the invocation began
+   `M=...`, which no prefix rule matches — and the grant offered for it did not match
+   either. Adding it now would be a rule that changes nothing, which is the habit the
+   paragraph above exists to avoid.
 
    Two substitutions are mandatory, and both are silent failures if skipped:
 

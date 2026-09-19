@@ -176,8 +176,16 @@ asks `/api/tags` rather than trusting that it did.
 operator decision against it, so when it changes the suite changes in one place rather than in
 thirty call sites.
 
-The branch is ready for `/pr:close`, with two Deferred items to triage and the `M=`/`P=`
-decision still outstanding.
+**The `M=`/`P=` decision landed on 2026-09-19 and was applied the same day**, so no open
+question remains on this branch. `openrouter.mjs` takes `--model`/`--prompt-file`, OpenRouter
+members stop prompting on every call, and the exit-1-on-an-unreadable-prompt-file defect went
+with it rather than waiting — which is what its Deferred entry said should happen. That entry is
+gone, since it is no longer deferred work. `test-openrouter.sh` is at 36 cases.
+
+The branch is ready for `/pr:close`, with one Deferred item left to triage: the
+wrong-architecture `jq` that is selected anyway, never falls back to Node, and makes a valid
+roster report as malformed. The `council_normalize_endpoint` entry stays on #15 by the decision
+recorded with it.
 
 ## Open Questions
 
@@ -185,96 +193,48 @@ decision still outstanding.
       split the question in two and ship the half that is observable.** See
       `## Decision — COLLAPSED splits into a checkable half and a reported half` below.
 
-- [ ] **Needs an operator decision: `M=`/`P=` env prefixes defeat an `allowed-tools` prefix
-      rule.** `skills/ask` instructs
-      `M=<model> P=<file> node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"`. Claude Code
-      strips a leading assignment only for known-safe variables, so `Bash(node:*)` does not
-      match and every OpenRouter member prompts. A narrower rule cannot help, because
-      `${CLAUDE_PLUGIN_ROOT}` does not expand in a permission pattern.
+- ~~**Needs an operator decision: `M=`/`P=` env prefixes defeat an `allowed-tools` prefix
+      rule.**~~ **Resolved 2026-09-19 by the operator: give `openrouter.mjs` a
+      `--model`/`--prompt-file` interface.** Applied the same day. See
+      `## Decision — openrouter.mjs takes flags` below.
 
-      The fix worth considering is giving `openrouter.mjs` a `--model` / `--prompt-file`
-      interface. It costs nothing in secrecy — only the key must stay out of argv, and it
-      already is — but it changes a shipped interface that phase 8 is meant to test, so the
-      call belongs to the operator rather than to whoever picks up phase 3.
+## Decision — openrouter.mjs takes flags
 
-## Decision — COLLAPSED splits into a checkable half and a reported half
+Settled 2026-09-19 by the operator, and applied immediately.
 
-Settled 2026-09-19, by running the experiment rather than reasoning about it.
+`openrouter.mjs` now takes `--model <id> --prompt-file <path>` (and `--flag=value`) instead of
+reading `M` and `P` from the environment. The command therefore begins with `node`, which
+`/council:ask`'s existing `allowed-tools` entry `Bash(node:*)` matches — so OpenRouter members
+stop prompting the user on every call. A leading `M=` did not match, because Claude Code strips
+an assignment before matching only for a known-safe set of variable names, and no narrower rule
+could help: `${CLAUDE_PLUGIN_ROOT}` does not expand inside a permission pattern, so the script
+cannot be named there.
 
-The question assumed one mechanism was needed. Probing the live Agent tool showed there are
-**two different failures** wearing one name, and only one of them needed a mechanism at all.
+**It costs nothing in secrecy.** Only the key must stay out of the process table, and it still
+does — it is resolved inside the process through `env.mjs`. A model id and a prompt *path* are
+not secrets, and the prompt *content* still never reaches argv, which is the property that made
+this a script rather than a `curl` pipeline. `test-openrouter.sh` now asserts both halves
+directly: argv carries the model and the path, and argv never carries the key.
 
-### What the experiment found
+**No environment fallback.** Supporting both would leave two interfaces for one idea, which is
+what this port has refused everywhere else. Instead, an invocation with `M` or `P` set and no
+flags exits 5 and names what replaced it, so the retired form fails loudly rather than looking
+like a typo. The only in-repo caller, `reference/providers.md`, was updated in the same change.
 
-Five spawns: one per pin, plus one deliberately invalid value.
+**Three consequences beyond the script itself:**
 
-| `model` passed | Result |
-|---|---|
-| `opus` | Claude Opus 5 (1M context), `claude-opus-5[1m]` |
-| `sonnet` | Sonnet 5 |
-| `haiku` | Claude Haiku 4.5, `claude-haiku-4-5-20251001` |
-| `fable` | Claude Fable 5.1, `claude-fable-5-1` |
-| `opus-4.5` | `InputValidationError`, before any model ran |
-
-Three facts came out of it:
-
-1. **`model` is a closed enum, and it is exactly `opus|sonnet|haiku|fable`** — the same four
-   the council pins. An unacceptable value fails at the tool boundary, with no model involved.
-2. **The roster's `model` field is free-form JSON**, so an unacceptable pin is a typo anyone
-   can make, and it would previously have surfaced as an `InputValidationError` partway
-   through a fan-out that had already begun spending.
-3. **All four pins resolve on this account**, giving four distinct identities, three of them
-   different from the session model.
-
-### What it did NOT settle, and the plan does not pretend otherwise
-
-The original framing — what happens when a pin is *valid but unavailable on the plan* — is
-**still unanswered**, because all four enum values resolve here and there was no valid-but-
-unserved model to probe with. That needs a restricted plan to test on, or an answer from
-Claude Code's own documentation. Nothing below depends on assuming it either way.
-
-### The resolution
-
-**The unacceptable-pin half is now checked mechanically, in the join.** `council-state.sh`
-validates every Claude member's `model` against `council-lib.sh:COUNCIL_ACCEPTED_PINS` and
-unseats a bad one with a reason that names the accepted set — the same shape `no key resolves`
-already uses, so it stays out of the participation invariant and out of `DEGRADED`. This is
-pure observation; no self-report is involved. `/council:setup` also refuses to write such a
-pin, so the tool cannot author the roster its own join would reject.
-
-**The collapse half is reported from member self-report, scoped honestly.** Each member ends
-its reply with a `MODEL:` line; the skill strips it before reconciling and compares the set
-against the pins passed, in three states: confirmed distinct, `COLLAPSED`, or unverified.
-
-Only a **full** collapse is treated as established — every member independently agreeing it is
-the session model is hard to get wrong in the same direction. Any partial mismatch is
-`unverified`, because one loose self-description is far likelier than a half-collapse. That is
-the same three-state discipline `council-state.sh` already applies to the Ollama probe, where
-`unknown` is kept out of both confident branches.
-
-**A correction to this plan's earlier reasoning.** The #14 decision called member self-report
-"the likely mechanism" and this branch's own analysis then argued against it as introspection
-rather than observation. The experiment weakened that objection: all four members named
-themselves specifically and correctly, and one cited its system prompt as the source, which
-suggests the harness *tells* a subagent its model rather than leaving it to infer. That makes
-self-report closer to reading a supplied fact than to guessing. It is still not proof, which is
-why it carries only the full-collapse case.
-
-### Where the class lives
-
-In `skills/ask`, not in `council-state.sh`. The script runs before anyone answers, so its
-existing "projected" caveat is correct and was left alone. `skills/status` now points at
-`/council:ask` for the confirmation it cannot perform itself.
-
-### Two Decision 1 bullets that are not phase 5 work
-
-- **The README "What it costs" block is phase 7.** Decision 1 opens with it, and there is no
-  `plugins/council/README.md` yet. Carried to phase 7 so it is not lost: state the structural
-  multiplier, roughly 4x a normal turn and 8x for `pooled`, with no dollar figure and no token
-  estimate.
-- **Per-choice cost in `/council:setup` already landed in phase 1.** `skills/setup` states the
-  Claude member count's cost inside the `AskUserQuestion` bullet that offers it, which is what
-  the bullet asked for. Verified rather than redone.
+- **`skills/setup`'s suggested project-level grant for `openrouter.mjs` was removed.** It is now
+  a rule that changes nothing, since the skill's own `Bash(node:*)` covers the flag form — and
+  offering a no-op grant is precisely the habit that step's own warning exists to prevent. Worth
+  noting it never worked anyway: the grant began `Bash(node /abs/path/...)`, which an invocation
+  starting `M=` could not match either.
+- **The exit-1 defect went with it**, as the Deferred entry said it should. A `--prompt-file`
+  that cannot be read is now exit 5 naming the path, rather than an uncaught rejection exiting 1
+  with a stack trace. The read also moved ahead of key resolution, so every usage error is
+  reported before any key problem.
+- **`test-openrouter.sh` changed in one function.** `run_or` was deliberately the only thing in
+  the suite that knew the calling convention, which is exactly why this cost one edit instead of
+  thirty.
 
 ## Related tickets
 
@@ -288,29 +248,6 @@ existing "projected" caveat is correct and was left alone. `skills/status` now p
 
 Raised while landing a phase. Each is recorded here and triaged at `/pr:close`; nothing here
 is in this branch's objective.
-
-### `openrouter.mjs` exits 1, undocumented, when the prompt file is missing
-
-Found 2026-09-19 by the phase 8 suite, which is what the suite was for.
-
-The script documents three failure codes — `3` no key, `4` HTTP or empty content, `5` bad usage
-— and the skill's prose repeats them. A `P=` pointing at a file that does not exist hits none of
-them: `readFile` rejects, nothing catches it, and Node exits **1** after printing an unhandled
-rejection with a stack trace.
-
-*symptom:* a mistyped prompt path produces a stack trace rather than a usage error, and a caller
-matching on the documented codes sees an unrecognised `1`. It is not dangerous — the suite
-confirms it writes nothing to stdout and does not blame the key chain — but it is the one
-failure path that does not behave as documented.
-*occasion:* any caller that builds the prompt path, which is every `/council:ask` with an
-OpenRouter member.
-
-The fix is small: read the prompt inside a `try`, and exit `5` with a message naming the path,
-since an unreadable prompt file is a usage error in the same sense a missing `P=` is. It is
-held back only because **it touches the same interface the `M=`/`P=` operator decision covers**,
-and doing both in one pass is cheaper than doing them a week apart. The suite already asserts
-what is safe to assert today — non-zero, nothing on stdout, not blamed on the key — so the fix
-will not go unnoticed.
 
 ### A binary that cannot exec is selected anyway, and the roster gets blamed for it
 

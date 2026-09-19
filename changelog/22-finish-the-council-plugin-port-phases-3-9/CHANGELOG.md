@@ -334,3 +334,46 @@ on a missing prompt file**, which is none of its three documented codes — `rea
 and nothing catches it. The fix is small, but it touches the same interface the `M=`/`P=`
 decision covers, so both belong in one pass. The suite asserts what is safe to assert today:
 non-zero, nothing on stdout, not blamed on the key chain.
+
+### 2026-09-19 — `openrouter.mjs` takes flags, and OpenRouter members stop prompting
+
+`plugins/council/scripts/openrouter.mjs`, `plugins/council/scripts/test-openrouter.sh`,
+`plugins/council/reference/providers.md`, `plugins/council/skills/setup/SKILL.md`.
+
+The operator settled the open `M=`/`P=` question in favour of a flag interface, and it was
+applied the same day.
+
+**`openrouter.mjs` now takes `--model <id> --prompt-file <path>`**, or `--flag=value`. The
+command therefore begins with `node`, which `/council:ask`'s existing `Bash(node:*)` grant
+matches, so OpenRouter members stop prompting the user on every single call. A leading `M=` did
+not match — Claude Code strips an assignment before matching only for a known-safe set of
+variable names — and no narrower rule could help, because `${CLAUDE_PLUGIN_ROOT}` does not
+expand inside a permission pattern.
+
+**It costs nothing in secrecy, and the suite now proves that rather than asserting it.** Only
+the key must stay out of the process table and it still does, resolved inside the process
+through `env.mjs`. The prompt *content* still never reaches argv, which is why this is a script
+and not a `curl` pipeline. Two new cases read the recorded argv directly: it carries the model
+and the prompt path, and it never carries the key.
+
+**No environment fallback.** Two interfaces for one idea is what this port has refused
+everywhere else. An invocation with `M` or `P` set and no flags exits 5 naming what replaced it,
+so the retired form fails loudly instead of looking like a typo.
+
+**The exit-1 defect went with it**, as its Deferred entry said it should, since both live in the
+same argument-handling code. A `--prompt-file` that cannot be read — missing or unreadable — is
+now exit 5 naming the path, not an uncaught rejection exiting 1 with a stack trace. The read
+also moved *ahead* of key resolution, so every usage error is reported before any key problem: a
+caller who mistyped a path is never told their key is missing.
+
+**`skills/setup`'s suggested grant for `openrouter.mjs` was removed.** It is now a rule that
+changes nothing, and offering a no-op grant is the exact habit that step's own warning exists to
+prevent. It never worked anyway: the grant began `Bash(node /abs/path/…)`, which an invocation
+starting `M=` could not match either.
+
+`test-openrouter.sh` went from 26 cases to 36 and changed **in one function**. `run_or` was
+deliberately the only thing in the suite that knew the calling convention, which is why this
+cost one edit rather than thirty. The new cases cover both flag forms, an unknown flag, a flag
+that would otherwise swallow the next flag as its value (which would have billed a request for a
+model id of `--prompt-file`), an empty `--flag=`, the retired form's migration message, and the
+two argv assertions.

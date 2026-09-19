@@ -23,11 +23,15 @@
 #
 # THE INVOCATION LIVES IN ONE FUNCTION ON PURPOSE
 #
-# `run_or` is the only thing here that knows the script takes `M=` and `P=` as
-# environment variables. That interface has an open operator decision against it: a
-# `--model`/`--prompt-file` pair would let an `allowed-tools` entry match a plain
-# `Bash(node:*)` prefix, which a leading `M=` assignment does not. When it changes,
-# this suite changes in one function rather than in thirty call sites.
+# `run_or` is the only thing here that knows how the script takes its arguments. It
+# was written that way while the `M=`/`P=` interface was still under an operator
+# decision, and when that decision landed as `--model`/`--prompt-file` this suite
+# changed in one function rather than in thirty call sites. Keep it that way.
+#
+# The point of the flags is that the command now BEGINS with `node`, so an
+# `allowed-tools` entry of `Bash(node:*)` matches it. A leading `M=` assignment did
+# not match, because Claude Code strips one only for a known-safe set of variable
+# names -- so every OpenRouter member used to prompt the user.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 OR="$HERE/openrouter.mjs"
@@ -59,6 +63,7 @@ globalThis.fetch = async (url, init) => {
       url: String(url),
       auth: init?.headers?.Authorization ?? null,
       body: init?.body ?? null,
+      argv: process.argv,
     }));
   }
   switch (mode) {
@@ -82,6 +87,7 @@ const pick = {
   auth: () => String(rec.auth),
   model: () => String(body.model),
   prompt: () => String(body.messages?.[0]?.content),
+  argv: () => rec.argv.join(" "),
 };
 process.stdout.write(pick[process.argv[2]]());
 JS
@@ -105,12 +111,25 @@ OUT="$TMP/stdout"; ERR="$TMP/stderr"; RCF="$TMP/rc"; SENT="$TMP/sent.json"
 # THE ONLY PLACE THAT KNOWS THE CALLING CONVENTION. See the header.
 run_or() { # dir, model, prompt-path, [extra env...]
   local dir="$1" model="$2" prompt="$3"; shift 3
-  ( cd "$dir/project" && env -u "$K" -u XDG_CONFIG_HOME HOME="$dir/home" \
+  # An array, so a value containing a space stays one argument. `${a[@]+"${a[@]}"}`
+  # rather than `"${a[@]}"`: this is bash 3.2, where an empty array under `set -u`
+  # is an unbound-variable error, and several cases below pass no flags at all.
+  local -a flags=()
+  [[ -n "$model" ]]  && flags+=(--model "$model")
+  [[ -n "$prompt" ]] && flags+=(--prompt-file "$prompt")
+  ( cd "$dir/project" && env -u "$K" -u XDG_CONFIG_HOME -u M -u P HOME="$dir/home" \
       STUB_LOG="${WANT_LOG:-}" "$@" \
-      ${model:+M="$model"} ${prompt:+P="$prompt"} \
-      node --import "$TMP/stub.mjs" "$OR" ) >"$OUT" 2>"$ERR"
+      node --import "$TMP/stub.mjs" "$OR" ${flags[@]+"${flags[@]}"} ) >"$OUT" 2>"$ERR"
   printf '%s' $? > "$RCF"
 }
+# For cases that test the argument GRAMMAR rather than a normal call.
+run_argv() { # dir, [literal args...]
+  local dir="$1"; shift
+  ( cd "$dir/project" && env -u "$K" -u XDG_CONFIG_HOME -u M -u P HOME="$dir/home" \
+      node --import "$TMP/stub.mjs" "$OR" "$@" ) >"$OUT" 2>"$ERR"
+  printf '%s' $? > "$RCF"
+}
+
 rc()  { cat "$RCF"; }
 outp() { cat "$OUT"; }
 
@@ -123,9 +142,9 @@ rc_case() { # name, want-rc, dir, model, prompt, [env...]
 
 echo "== exit 5: bad usage, before anything else happens =="
 D=$(sandbox)
-rc_case "neither M nor P"              5 "$D" ""    ""
-rc_case "M without P"                  5 "$D" "a/b" ""
-rc_case "P without M"                  5 "$D" ""    "./prompt.txt"
+rc_case "neither flag"                 5 "$D" ""    ""
+rc_case "--model without --prompt-file" 5 "$D" "a/b" ""
+rc_case "--prompt-file without --model" 5 "$D" ""    "./prompt.txt"
 # Usage is checked BEFORE the key chain: a caller who mistyped the invocation must
 # not be told their key is missing.
 run_or "$D" "" ""
@@ -133,6 +152,36 @@ if grep -qi 'usage' "$ERR" && ! grep -q "$K" "$ERR"; then
   ok "a usage error does not blame the key chain" "usage only"
 else
   bad "a usage error does not blame the key chain" "$(head -1 "$ERR")"
+fi
+
+echo "== the argument grammar =="
+DK=$(sandbox "$K=sk-p")
+run_argv "$DK" --model=a/b --prompt-file=./prompt.txt
+[[ "$(rc)" == 0 ]] && ok "--flag=value is accepted" "exit 0" \
+                   || bad "--flag=value is accepted" "exit $(rc) -- $(head -1 "$ERR")"
+run_argv "$DK" --model a/b --prompt-file ./prompt.txt
+[[ "$(rc)" == 0 ]] && ok "--flag value is accepted" "exit 0" \
+                   || bad "--flag value is accepted" "exit $(rc) -- $(head -1 "$ERR")"
+run_argv "$DK" --model a/b --prompt-file ./prompt.txt --colour never
+[[ "$(rc)" == 5 ]] && ok "an unknown flag is refused" "exit 5" \
+                   || bad "an unknown flag is refused" "exit $(rc)"
+# Taking the next flag as a value would send the string "--prompt-file" to
+# OpenRouter as a model id, and bill a request for it.
+run_argv "$DK" --model --prompt-file ./prompt.txt
+[[ "$(rc)" == 5 ]] && ok "a flag swallowing the next flag is refused" "exit 5" \
+                   || bad "a flag swallowing the next flag is refused" "exit $(rc)"
+run_argv "$DK" --model= --prompt-file ./prompt.txt
+[[ "$(rc)" == 5 ]] && ok "an empty --flag= is refused" "exit 5" \
+                   || bad "an empty --flag= is refused" "exit $(rc)"
+
+# The retired interface must fail LOUDLY and say what changed, not look like a typo.
+( cd "$DK/project" && env -u "$K" -u XDG_CONFIG_HOME HOME="$DK/home" \
+    M=a/b P=./prompt.txt node --import "$TMP/stub.mjs" "$OR" ) >"$OUT" 2>"$ERR"
+retired_rc=$?
+if [[ "$retired_rc" == 5 ]] && grep -q 'M=/P=' "$ERR" && grep -q -- '--prompt-file' "$ERR"; then
+  ok "the retired M=/P= form names what replaced it" "exit 5, migration named"
+else
+  bad "the retired M=/P= form names what replaced it" "exit $retired_rc -- $(head -1 "$ERR")"
 fi
 
 echo "== exit 3: no key resolves anywhere =="
@@ -169,6 +218,17 @@ fi
 [[ "$(outp)" == "stub answer" ]] \
   && ok "the answer goes to stdout, alone" "stub answer" \
   || bad "the answer goes to stdout, alone" "got '$(outp)'"
+
+# The arguments moved into argv, which every other user on the box can read from
+# the process table. That is fine for a model id and a path, and is exactly what
+# must never happen to the key -- so assert both halves rather than trusting the
+# split.
+[[ "$(field argv)" == *"openai/gpt-5.6-sol"* && "$(field argv)" == *"prompt.txt"* ]] \
+  && ok "argv carries the model and the prompt path" "both present" \
+  || bad "argv carries the model and the prompt path" "$(field argv)"
+[[ "$(field argv)" != *"sk-SECRET"* ]] \
+  && ok "argv never carries the key" "clean" \
+  || bad "argv never carries the key" "LEAKED INTO ARGV"
 
 echo "== the request is shaped the way the skill promises =="
 [[ "$(field url)" == "https://openrouter.ai/api/v1/chat/completions" ]] \
@@ -215,12 +275,25 @@ grep -q 'sk-SECRET' "$ERR" && bad "an HTTP failure does not leak the key" "LEAKE
 [[ ! -s "$OUT" ]] && ok "a failed member writes nothing to stdout" "empty" \
                   || bad "a failed member writes nothing to stdout" "$(head -c 40 "$OUT")"
 
-echo "== a prompt file that is not there =="
-# Not one of the three documented codes. Asserted only as far as it is safe to:
-# non-zero, and not blamed on the key. See PLAN's Deferred entry.
+echo "== a prompt file that cannot be read =="
+# This used to reject unhandled and exit 1 with a stack trace -- a code the caller
+# does not know and cannot act on. It is a usage error in the same sense a missing
+# --prompt-file is, so it is exit 5 and names the path.
 run_or "$(sandbox "$K=sk-p")" "a/b" "./no-such-prompt.txt"
-[[ "$(rc)" != 0 ]] && ok "a missing prompt file is a non-zero exit" "exit $(rc)" \
-                   || bad "a missing prompt file must not exit 0" "exit 0"
+[[ "$(rc)" == 5 ]] && ok "a missing prompt file is exit 5" "exit 5" \
+                   || bad "a missing prompt file is exit 5" "exit $(rc)"
+grep -q 'no-such-prompt.txt' "$ERR" \
+  && ok "and the message names the path" "named" \
+  || bad "and the message names the path" "$(head -1 "$ERR")"
+UNREADABLE=$(sandbox "$K=sk-p"); chmod 000 "$UNREADABLE/project/prompt.txt"
+if [[ $(id -u) -eq 0 ]]; then
+  printf '  skip %-52s (running as root)\n' "an unreadable prompt file is exit 5"
+else
+  run_or "$UNREADABLE" "a/b" "./prompt.txt"
+  [[ "$(rc)" == 5 ]] && ok "an unreadable prompt file is exit 5" "exit 5" \
+                     || bad "an unreadable prompt file is exit 5" "exit $(rc)"
+fi
+chmod 600 "$UNREADABLE/project/prompt.txt"
 grep -q "$K" "$ERR" && bad "a missing prompt file is not blamed on the key" "blamed the key" \
                     || ok "a missing prompt file is not blamed on the key" "clean"
 [[ ! -s "$OUT" ]] && ok "and writes nothing to stdout" "empty" \
