@@ -50,9 +50,64 @@ council_config_dir() {
   else printf '%s/.config/council' "$HOME"; fi
 }
 
+# The roster's path. $COUNCIL_ROSTER wins over the config dir unconditionally, so
+# it overrides $XDG_CONFIG_HOME/council/roster.json and the ~/.config default
+# alike. It is how both suites inject a fixture roster, and a test seam that
+# shapes the public API is still public: anything that WRITES a roster has to
+# resolve the path this way too, or the user configures a file nothing reads.
 council_roster_path() {
   if [ -n "${COUNCIL_ROSTER:-}" ]; then printf '%s' "$COUNCIL_ROSTER"
   else printf '%s/roster.json' "$(council_config_dir)"; fi
+}
+
+# THE MODEL VALUES THE HARNESS ACCEPTS for a subagent pin, declared once.
+#
+# Verified 2026-09-19 against the live Agent tool schema: `model` is a CLOSED
+# enum and these four are all of it. Passing anything else fails as an
+# InputValidationError before a model runs -- which is the good case, because it
+# cannot be mistaken for an answer.
+#
+# It matters because the roster's `model` field is free-form JSON. `"model":
+# "opus-4.5"` or `"model": "claude-3-5-sonnet"` is easy to write and looks
+# reasonable, and nothing in the roster schema rejects it. Catching it in the join
+# turns a mid-fan-out crash -- after the council has begun spending -- into an
+# unseated member with a reason, which is how every other unavailability is
+# already reported.
+#
+# If the harness ever widens the enum, this list is what goes stale. Prefer
+# widening it here over teaching a caller to guess.
+COUNCIL_ACCEPTED_PINS='opus sonnet haiku fable'
+COUNCIL_ACCEPTED_PINS_DISPLAY='opus|sonnet|haiku|fable'
+
+council_pin_is_accepted() { # model -> 0 accepted, 1 not
+  for _ap in $COUNCIL_ACCEPTED_PINS; do
+    [ "$1" = "$_ap" ] && return 0
+  done
+  return 1
+}
+
+# THE DEFAULT COUNCIL, declared exactly once, here.
+#
+# An absent roster is the documented normal case rather than a fault, and it
+# seats these four rather than nobody. Both readers take them from this one
+# declaration: council-state.sh joins them like any other member, and skills/ask
+# seats whatever that join returns. A second copy would drift exactly the way two
+# key chains did, and the drift would be a member list where the status report
+# and the council itself disagree about who is in the room.
+#
+# Emitted as `stance<TAB>model`, which is what `members claude` yields from
+# council_roster_rows, so the join cannot tell a default from a declared member
+# and needs no branch for them.
+#
+# The four models are pins, not guarantees: nothing here can verify that a plan
+# resolves `opus`/`sonnet`/`haiku`/`fable`, and council-state.sh reports seating
+# as PROJECTED for that reason.
+council_default_members() { # -> stance<TAB>model, one per line
+  printf '%s\t%s\n' \
+    risk-first       opus \
+    simplicity-first sonnet \
+    long-horizon     haiku \
+    contrarian       fable
 }
 
 # Render a path with $HOME as `~`, matching env.mjs:displayPath.

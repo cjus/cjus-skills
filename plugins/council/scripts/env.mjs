@@ -150,9 +150,6 @@ export function userEnvPath(opts) {
   return join(configDir(opts), ".env");
 }
 
-export function rosterPath(opts) {
-  return join(configDir(opts), "roster.json");
-}
 
 /**
  * The user-level file holds a credential and nothing else, so it should be 600.

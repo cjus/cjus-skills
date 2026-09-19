@@ -86,11 +86,21 @@ To see the resulting seating without changing anything, use `/council:status`.
    same path `detect.sh` resolves — writing the default while detection reads an override
    leaves the user configuring a file nothing reads.
 
+   **A Claude member's `model` must be one of `opus`, `sonnet`, `haiku` or `fable`.**
+   That is the complete set the subagent tool accepts; anything else is unseated by the
+   join with a reason, so writing it here would produce a roster that looks configured
+   and seats fewer members than it lists. Never invent a version-suffixed name like
+   `opus-4.5`. A member may also omit `model` entirely, which means "no pin": it runs on
+   the session model and adds no model diversity — worth saying out loud if the user asks
+   for it, since decorrelation is the reason the pins exist.
+
    Write `members[]` (Claude subagents: `id`, `kind`, `model`, `stance`), the
    `external` block (`openrouter`/`ollama` each with `enabled` plus a `models[]` of
    `{id, stance}`, and `ollama` also an `endpoint`; `codex` just `enabled`), and
    `maxConcurrentExternal` — the same shape as
    `${CLAUDE_PLUGIN_ROOT}/reference/roster.example.json`. Write only what the user chose.
+   `${CLAUDE_PLUGIN_ROOT}/reference/roster.md` documents every field, the three roster
+   states, and why an absent file is the normal case rather than a fault.
    **Never write an API key or a credentialed URL into this file** — `detect.sh` injects
    its first 40 lines into the model's context on every invocation.
 
@@ -103,10 +113,16 @@ To see the resulting seating without changing anything, use `/council:status`.
    ```json
    { "permissions": { "allow": [
      "Bash(codex exec *)",
-     "Bash(node /abs/path/to/council/scripts/openrouter.mjs*)",
      "Bash(curl -fsS http://localhost:11434/*)"
    ] } }
    ```
+
+   **OpenRouter needs no entry here.** `openrouter.mjs` takes `--model` and
+   `--prompt-file`, so the command begins with `node` and `/council:ask`'s own
+   `Bash(node:*)` already covers it. It used to need one because the invocation began
+   `M=...`, which no prefix rule matches — and the grant offered for it did not match
+   either. Adding it now would be a rule that changes nothing, which is the habit the
+   paragraph above exists to avoid.
 
    Two substitutions are mandatory, and both are silent failures if skipped:
 

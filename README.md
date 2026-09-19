@@ -33,6 +33,20 @@ Writes a book, binds it, revises it, and checks that it told the truth. Four ski
 | `/bookcraft:updatebook` | Revises a book in place. Edits only the chapters an instruction reaches and leaves every other chapter byte-identical, so the paragraph tags other files cite keep pointing where they did. |
 | `/bookcraft:check-claims` | Reads each chapter's sources for real, one agent per chapter, and checks that the paraphrased claims are ones those sources actually support. It catches what no script can: a provenance mark that resolves perfectly and sits beside a sentence its source does not support. |
 
+### council
+
+Puts one question to several independent members and reconciles their answers without manufacturing consensus. A single model asked three times gives you three draws from one error distribution; this is for the calls where that difference matters.
+
+Nothing to configure to start: with no roster the council is four Claude members on distinct models, needing no key, no Node and no `jq`. Everything beyond that is opt-in.
+
+| Skill | What it does |
+|---|---|
+| `/council:ask` | Fans one question out to every seated member, then reconciles — verbatim, sorted into agreement/complementary/conflict, or Delphi-pooled so a correct minority survives the second round. Refuses to compute a consensus score, and reports how correlated the roster actually is every time. |
+| `/council:setup` | Writes the roster, which is a consent record rather than a capability list. Asks provider by provider what you agree to spend, stating each choice's cost where it offers it, and never seats a paid provider just because it is installed. |
+| `/council:status` | A read-only 20-second answer to "what would this seat right now, and why is it still HOMOGENEOUS": key resolution and its source, roster state, per-member seating, and anything consented but unavailable with the reason. |
+
+Seating is a join, not a lookup — a member needs both the roster's consent and availability on this machine. A roster can enable OpenRouter with four vetted models while no key resolves anywhere, and the council then runs, agrees with itself, and reports a class that reads like a roster problem rather than a key problem. `/council:status` is what shows you which it was.
+
 ### explain
 
 Explains a topic for a mid-level engineer, in prose or as a page you can look at. Same audience and same honesty bar; the medium is the only difference.
@@ -112,6 +126,16 @@ plugins/
     scripts/install.sh            one-time venv setup
     scripts/bookcraft-python      runs a bookcraft script under that venv
     skills/<name>/SKILL.md        one directory per skill
+  council/
+    .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    reference/roster.example.json a commented roster to copy
+    reference/*.md                roster format, provider calls, trust boundary
+    scripts/council-lib.sh        shared sh helpers: key chain, paths, defaults
+    scripts/council-state.sh      the seating join, --text or --json
+    scripts/detect.sh             capability probe, injected at skill load
+    scripts/*.mjs                 the Node side: key chain, OpenRouter, roster parser
+    scripts/test-*.sh             four probe suites
+    skills/<name>/SKILL.md        one directory per skill
   explain/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
     skills/<name>/SKILL.md        one directory per skill
@@ -126,9 +150,9 @@ plugins/
     skills/<name>/SKILL.md        one directory per skill
 ```
 
-A skill refers to its own files through `${CLAUDE_PLUGIN_ROOT}`. The `pr` plugin's reference documents are how its skills stay repo-agnostic: they carry the ticketing, evidence, scope and lifecycle rules the skills cite, so nothing depends on the host repo having a `CLAUDE.md`.
-
 A skill refers to its own files through `${CLAUDE_PLUGIN_ROOT}`, which Claude Code sets to the installed plugin's directory. Nothing in a skill assumes a path relative to the project you are working in.
+
+Reference documents are how a plugin's skills stay repo-agnostic. `pr` carries the ticketing, evidence, scope and lifecycle rules its skills cite, so nothing depends on the host repo having a `CLAUDE.md`; `council` carries the roster format, the provider invocations and the trust boundary, so its three skills document each of those once between them.
 
 ## Releasing
 

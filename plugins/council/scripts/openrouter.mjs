@@ -18,10 +18,35 @@
  * That chain lives in `env.mjs`
  * and is shared with `council-lib.sh`, so it is not implemented twice here.
  *
- * Usage:  M=<model-id> P=<prompt-file> node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"
+ * Usage:
+ *   node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs" --model <id> --prompt-file <path>
  *
- * Exit codes: 3 = no key configured (caller must NOT seat this member and must
- * say so in the footer), 4 = HTTP error, 5 = bad usage.
+ * WHY FLAGS, AND NOT `M=` / `P=` IN THE ENVIRONMENT
+ *
+ * The earlier interface took both as environment variables, so every invocation
+ * began `M=... P=... node ...`. Claude Code strips a leading assignment before
+ * matching a permission rule only for a known-safe set of variable names, and `M`
+ * and `P` are not in it -- so `Bash(node:*)` never matched and EVERY OpenRouter
+ * member prompted the user. A narrower rule could not rescue it either:
+ * `${CLAUDE_PLUGIN_ROOT}` does not expand inside a permission pattern, so the
+ * script cannot be named there.
+ *
+ * Moving the model and the prompt PATH into argv costs nothing in secrecy. Only the
+ * key has to stay out of the process table, and it still does -- point 1 above is
+ * unchanged. A model id and a file path are not secrets.
+ *
+ * Exit codes, in the order they are checked:
+ *
+ *   5  bad usage -- a missing or unknown flag, OR a prompt file that cannot be
+ *      read. Every usage problem is reported before the key chain is consulted, so
+ *      a caller who mistyped something is never told their key is missing.
+ *   3  no key configured. The caller must NOT seat this member, and must say so in
+ *      the council footer.
+ *   4  no usable answer: the request never completed (network failure, timeout), or
+ *      an HTTP error, or a 200 carrying nothing usable. All of these leave the
+ *      caller in the same place -- this member has nothing to contribute -- so they
+ *      share a code. Exiting 0 with empty output would instead read as a member that
+ *      answered with silence, and silence is not a position.
  */
 
 import { readFile } from "node:fs/promises";
@@ -30,12 +55,69 @@ import { KEY_NAME, resolveCouncilKey, userEnvPath, displayPath } from "./env.mjs
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const TIMEOUT_MS = 600_000;
 
-const model = process.env.M;
-const promptPath = process.env.P;
+const USAGE =
+  "usage: node openrouter.mjs --model <id> --prompt-file <path>";
+
+function badUsage(detail) {
+  console.error(`${detail}\n${USAGE}`);
+  process.exit(5);
+}
+
+let model = "";
+let promptPath = "";
+
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i += 1) {
+  const arg = argv[i];
+  let name = arg;
+  let value;
+
+  // Accept both `--flag value` and `--flag=value`; callers write either, and
+  // rejecting one of them would be a trap rather than a contract.
+  const eq = arg.indexOf("=");
+  if (arg.startsWith("--") && eq !== -1) {
+    name = arg.slice(0, eq);
+    value = arg.slice(eq + 1);
+  }
+
+  if (name !== "--model" && name !== "--prompt-file") {
+    badUsage(`unknown argument ${JSON.stringify(arg)}.`);
+  }
+
+  if (value === undefined) {
+    value = argv[i + 1];
+    i += 1;
+  }
+  // A value that is itself a flag means the previous one was left empty. Taking it
+  // literally would send `--prompt-file` to OpenRouter as a model id.
+  if (value === undefined || value === "" || value.startsWith("--")) {
+    badUsage(`${name} needs a value.`);
+  }
+
+  if (name === "--model") model = value;
+  else promptPath = value;
+}
 
 if (!model || !promptPath) {
-  console.error("usage: M=<model-id> P=<prompt-file> node openrouter.mjs");
-  process.exit(5);
+  // A caller still on the retired interface gets told what changed, rather than a
+  // bare usage line that reads as though they mistyped something.
+  if (process.env.M || process.env.P) {
+    badUsage("the M=/P= environment interface was replaced by --model / --prompt-file.");
+  }
+  badUsage("--model and --prompt-file are both required.");
+}
+
+// Read the prompt BEFORE resolving the key, so every usage error is reported ahead
+// of any key problem. Previously this read happened after, and a rejection from it
+// was not caught at all: a mistyped path exited 1 with a stack trace, which is a
+// code the caller does not know and cannot act on.
+let prompt;
+try {
+  prompt = await readFile(promptPath, "utf8");
+} catch (cause) {
+  badUsage(
+    `cannot read the prompt file ${JSON.stringify(promptPath)}: ${cause.code ?? cause.message}`,
+  );
 }
 
 const { value: key } = resolveCouncilKey();
@@ -54,19 +136,31 @@ if (!key) {
   process.exit(3);
 }
 
-const prompt = await readFile(promptPath, "utf8");
 
 // `model` is always sent: OpenRouter treats it as optional and silently falls
 // back to the account default, which would misreport which member answered.
-const response = await fetch(ENDPOINT, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${key}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
-  signal: AbortSignal.timeout(TIMEOUT_MS),
-});
+let response;
+try {
+  response = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }] }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+} catch (cause) {
+  // Uncaught, this rejected and exited 1 with a stack trace -- a code outside this
+  // script's documented contract, on the most ordinary failure it has: the network.
+  // `cause.cause.code` is where undici puts ENOTFOUND, ECONNREFUSED and the like.
+  const why =
+    cause.name === "TimeoutError"
+      ? `no response within ${TIMEOUT_MS / 1000}s`
+      : (cause.cause?.code ?? cause.message);
+  console.error(`OpenRouter did not answer: ${why}. Treat this member as absent.`);
+  process.exit(4);
+}
 
 if (!response.ok) {
   const body = await response.text().catch(() => "");
@@ -74,7 +168,16 @@ if (!response.ok) {
   process.exit(4);
 }
 
-const payload = await response.json();
+// A 200 whose body is not JSON -- a captive portal or a proxy's HTML error page --
+// rejected here too, for the same exit 1.
+let payload;
+try {
+  payload = await response.json();
+} catch {
+  console.error("OpenRouter returned a 200 that is not JSON; treat this member as absent.");
+  process.exit(4);
+}
+
 const content = payload?.choices?.[0]?.message?.content;
 
 if (typeof content !== "string" || content.trim() === "") {

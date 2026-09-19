@@ -11,22 +11,36 @@ Fan one question out to N independent members, then reconcile. Three modes only.
 Read the **Honesty contract** before producing any output — it is the part of this
 skill that matters most.
 
+**Reference.** Three files carry the detail behind this skill. Read one when you need
+it; do not read all three by reflex.
+
+| File | When |
+|---|---|
+| `${CLAUDE_PLUGIN_ROOT}/reference/roster.md` | changing a roster, reading the join's full JSON, or deciding what a pin result means |
+| `${CLAUDE_PLUGIN_ROOT}/reference/providers.md` | calling an external member — invocations, exit codes, timeouts, costs |
+| `${CLAUDE_PLUGIN_ROOT}/reference/trust-boundary.md` | attachment limits, and why the two untrusted-content notices differ |
+
 ## What is available right now
 
 !`sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect.sh" 2>/dev/null || echo "detection unavailable"`
 
-Read that block before seating anyone. It reports **availability, not consent.**
+That block is **context, not a decision.** It reports availability — what is installed,
+which key source won, whether the endpoint answered — and availability is not consent.
+Seating comes from `council-state.sh`, which crosses it against the roster; see *Seating
+the council* below.
 
-- A provider listed as `FOUND` is *installable-and-present*, **not** approved. Seat it
-  only if the roster file enables it.
-- `roster: NONE` means **Claude-only**. That is the correct default, not a fault. Say
-  so in the footer and mention `/council:setup`; do not offer to enable providers
-  mid-answer, and never edit the roster from this skill.
-- If the block says `detection unavailable`, proceed without `codex` or `ollama` members
-  and say so — those are the two that need a local binary or a reachable endpoint.
-  **OpenRouter needs neither**, only the roster's `enabled` flag and the key chain, so seat
-  it from the roster as usual; `openrouter.mjs` exits `3` and reports itself if no key
-  resolves.
+Use it for two things:
+
+- **Explaining why a member is missing.** When `.notSeated[]` names a provider, the
+  reason string is one line and this block has the detail behind it.
+- **Telling the user how to fix that**, in the footer, once.
+
+A provider listed as `FOUND` is *installed*, **not** approved. It is seated only if the
+roster enables it, and the join is what checks.
+
+If the block says `detection unavailable`, **seat from the join as usual** and mention
+it once. The join resolves the key chain and probes the endpoint itself, so it does not
+depend on this block for anything.
 
 ## Honesty contract — read first
 
@@ -70,66 +84,93 @@ gains nothing from it — it reconciles member answers, not source material.
 Do not read files, fetch URLs, or run commands during reconciliation. The sole exception
 is the `sort -R` shuffle in `pooled` step 3, which takes no member text as input.
 
-### Attachments
-
-Use Read/Grep/Glob to gather file content into `MEMBER_QUESTION`. Cap the total at
-roughly **500 KB per file and 1.5 MB overall across at most 32 files** — the cost
-multiplies by every member and every round. If a diff is wanted, prefer:
-
-```bash
-git -c core.fsmonitor= -c core.hooksPath=/dev/null diff --no-ext-diff --no-textconv <ref>
-```
-
-Before diffing a repo you do not control, check `git config --get-regexp '^filter\.'`
-and refuse if any `filter.*.clean/smudge/process` key is set — those execute arbitrary
-commands during a diff. This is weaker than a blanket neutralisation; say so if the
-repo is untrusted.
+Gathering attachments has size caps and a `git config filter.*` check that must run
+before diffing a repo you do not control — both in `${CLAUDE_PLUGIN_ROOT}/reference/trust-boundary.md`.
 
 ## Seating the council
 
-**Read the roster first.** Use `Read` on `$COUNCIL_ROSTER` if set, else
-`$XDG_CONFIG_HOME/council/roster.json`, else `~/.config/council/roster.json`. The
-detection block above is a 40-line *summary* and is not the source of truth — a real
-roster can exceed it, so never decide seating from the detection block alone.
+**Run the join. Never derive seating by hand.**
 
-The roster has two independent halves, and the council is the union of both:
+```bash
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/council-state.sh" --json
+```
 
-- **`members[]` — Claude subagents.** Seat exactly these: each entry's `model` is the
-  subagent `model` parameter, `stance` drives the stance prompt, `id` is the footer
-  label. (`kind` is always `"claude"` here; it exists so the file is self-describing.)
-  If `members[]` is absent or the roster is unreadable, fall back to the default table
-  below and say in the footer that defaults were used.
-- **`external.<provider>` — everything else.** Seat one member per entry in that
-  provider's `models[]`, each with its own `id`/`stance`, **and only when that
-  provider's `enabled` is `true`** (see *External members*). `openrouter` and `ollama`
-  each carry a `models[]`; `codex` seats a single member with no model list.
+Seating is a join across two sources that disagree in practice: the roster's `enabled`
+flags, which are the user's **consent**, and what actually resolves on this machine,
+which is **availability**. A member needs both — a roster can enable OpenRouter with
+four vetted models while no key resolves anywhere, and those four are then silently not
+seated. The detection block above reports availability only, so it is context and never
+the basis for a seating decision.
 
-So a roster with four `members[]` plus three enabled OpenRouter models is a
-seven-member, cross-vendor council — and the footer must say `CROSS-VENDOR`.
+**Seat exactly `.seated[]`, one entry per member:** `.kind` says which call to make,
+`.model` is the subagent `model` parameter or the provider's model id, `.stance` picks
+the stance prompt and labels the member, `.vendor` feeds the footer's vendor list.
 
-Default roster: **four** members. Ask for more only if the user does.
+Then the footer reads from:
+
+- **`.projectedCorrelation`** with **`.vendors`** — report this class, not one you
+  judged yourself.
+- **`.notSeated[]`** — one line each, naming `.reason`. Never seated, so **not**
+  `DEGRADED`, and they do not count against the participation invariant.
+- **`.roster.state`** — `absent` means no roster file, so the defaults were seated. Say
+  so and mention `/council:setup`. Never offer to enable providers mid-answer, and never
+  edit the roster from this skill.
+- **`.ollamaProbed`** — `false` means a seated Ollama endpoint was not confirmed. Say
+  the diversity is unconfirmed rather than claiming it.
+- **`.maxConcurrentExternal`** — honour it. Nothing in the harness enforces it.
+
+**Exit 2 means refuse, not fall back.** The roster exists and could not be read; no
+seating is printed. Report that and stop. Falling back to the defaults would run a
+Claude-only council that looks exactly like a correct one, while the user believes a
+roster full of external members is in effect.
+
+**Zero seated is a stop, not a council.** Either way, say so, point at `/council:setup`,
+and answer as an ordinary turn if that is wanted — but **do not seat the defaults over
+it.** An absent roster is the case the defaults exist for; this is not.
+
+Check `.notSeated[]` before saying *why*, because there are two ways to seat nobody and
+they call for opposite advice:
+
+- **Empty `.notSeated[]`** — the roster declares no members. That is a decision the user
+  made, and nothing here overrides it.
+- **Non-empty `.notSeated[]`** — the roster declared members and every one of them was
+  unavailable. Name the reasons, which are already in `.reason`: an unacceptable pin is a
+  typo to fix, a missing key is a key to set. Telling this user their roster "declares no
+  members" would send them to rewrite a file that is very nearly correct.
+
+**The defaults are not this skill's to choose.** An absent roster seats four Claude
+members from the single declaration in `scripts/council-lib.sh`. Read them from
+`.seated[]` like any other member. The roster format, the full JSON contract and the pin
+rules are in `${CLAUDE_PLUGIN_ROOT}/reference/roster.md`.
+
+### Stances
+
+`.stance` is a short label. Expand it into the member's prompt:
+
+| Label | Stance prompt |
+|---|---|
+| `risk-first` | What breaks, what is irreversible, what is the failure mode |
+| `simplicity-first` | The smallest thing that works; argue against complexity |
+| `long-horizon` | Maintenance, migration, who owns this in a year |
+| `contrarian` | Argue the position the others are least likely to take |
+
+A roster may use any label it likes. For one not listed here, phrase the stance from the
+label itself and keep it to one line; do not substitute a stance from this table.
+
+### Spawning
 
 **Pin a different model to each member.** This is the only real decorrelation an
-internal council has — pass the subagent tool's `model` parameter (`opus`, `sonnet`,
-`haiku`, `fable`). Distinct models have distinct error profiles; distinct personas on
-one model mostly do not.
+internal council has — pass the subagent tool's `model` parameter. Distinct models have
+distinct error profiles; distinct personas on one model mostly do not.
 
-Seat members as `Agent({ subagent_type: "general-purpose", model: "<model>", ... })`.
+Seat Claude members as `Agent({ subagent_type: "general-purpose", model: "<model>", ... })`.
 Do **not** use `subagent_type: "fork"` — it ignores the `model` override and would
 silently collapse the roster to one model wearing four hats.
 
-| Member | Model | Stance |
-|---|---|---|
-| 1 | `opus` | Risk-first — what breaks, what is irreversible, what is the failure mode |
-| 2 | `sonnet` | Simplicity-first — the smallest thing that works; argue against complexity |
-| 3 | `haiku` | Long-horizon — maintenance, migration, who owns this in a year |
-| 4 | `fable` | Contrarian — argue the position the others are least likely to take |
-
-**The model pins are not guaranteed to resolve on every plan.** Report the actual model
-beside each member label in the output, so the reader can see what the spread was drawn
-from. If a model override is unavailable and every member lands on the session model,
-say so in the footer — a roster of one model wearing four hats is worth far less and
-must not be presented as four members.
+A member whose `.model` is `-` declared **no pin**. Spawn it with no `model` argument at
+all; it runs on the session model. That is not an error and not a collapse — it is a
+roster that did not ask for a pin — but it contributes no model diversity, so do not
+count it as evidence of a spread.
 
 Spawn all members **in one message, concurrently.** Prefix every member prompt with:
 
@@ -138,13 +179,59 @@ Spawn all members **in one message, concurrently.** Prefix every member prompt w
 > specific; state your actual position rather than surveying options. If you are
 > uncertain, say so and say what would resolve it.
 
-Then the stance, then `MEMBER_QUESTION` verbatim.
+Then the stance, then `MEMBER_QUESTION` verbatim. Then, as the last instruction:
+
+> End your reply with a final line, on its own, in exactly this form, and nothing
+> after it: `MODEL: <the model you are running as>`
+
+**Strip that line before reconciling.** It is metadata, not part of the answer; a judge
+that sees it will classify it as content.
+
+### Did the pins resolve?
+
+Pinning a different model to each member is the only real decorrelation an internal
+council has, and it is the one thing that can silently not happen. The join cannot check
+it — it runs before anyone answers — so this is the only place it can be checked.
+
+Compare the `MODEL:` lines against the pins you passed:
+
+| State | When | Report |
+|---|---|---|
+| confirmed distinct | the lines name distinct models, matching the pins | nothing extra; the spread is real |
+| `COLLAPSED` | **every** line names the same model, and distinct pins were passed | the `COLLAPSED` block in the output contract |
+| unverified | anything else — a missing line, a vague answer, a partial mismatch | say the pins are unverified; claim neither |
+
+Only a **full** collapse is confirmed; a partial mismatch is `unverified`, never
+`COLLAPSED`. `${CLAUDE_PLUGIN_ROOT}/reference/roster.md` has the reasoning, and what is still unknown about it.
+
+Two rules that are easy to get wrong:
+
+- **Never read a collapse off a pin you did not pass.** Members seated with `-` were
+  always going to run on the session model. Exclude them first, and if that leaves fewer
+  than two pinned members there is nothing to collapse.
+- **`COLLAPSED` sits beside the vendor class, not instead of it.** A roster whose Claude
+  members collapsed while a seated Ollama member answered is still `CROSS-VENDOR`. What
+  collapsed is the Claude half. Report both.
+
+An unacceptable pin never reaches this check: the join already unseated it and named it
+in `.notSeated[]`.
 
 **Keep concurrency modest.** The harness does cap concurrent subagents (default 20,
 raised via `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`), but nothing rate-limits the fan-out
 against the user's *subscription quota* — and these are billed to their own session.
-Four concurrent is fine; do not launch a twelve-member council without stating the cost
-first.
+
+**State the cost before fanning out**, on either trigger:
+
+- **any council larger than the four defaults** — one round is roughly Nx a normal turn
+  for N members;
+- **`pooled`, at any member count** — it polls twice, so a four-member `pooled` round
+  costs about what an eight-member single round does.
+
+The second trigger exists because the first one fires on size alone, which let the
+cheaper-looking mode through: doubling a four-member council costs the same as running
+an eight-member one. No dollar figure and no token estimate — the reasoning that makes
+this skill refuse a consensus percentage argues equally against a number implying
+precision it cannot have.
 
 ## Untrusted-content notices
 
@@ -224,94 +311,26 @@ running it.
 
 ## External members (opt-in, off by default)
 
-Seat an external member **only when the roster file's `external.<provider>.enabled` is
-`true`.** Installed-and-detected is not sufficient. A provider that is present but not
-enabled stays out, silently — mention it once in the footer, not as a prompt.
+**The join already decided who is seated.** An external member appears in `.seated[]`
+only when the roster enabled that provider and it resolved here. A provider that is
+present but not enabled stays out silently — mention it once in the footer, not as a
+prompt.
 
 **Enabled but unreachable is NOT a failed member.** A provider whose credential or
-endpoint does not resolve (`openrouter.mjs` exits `3`, the Ollama endpoint refuses a
-connection, `codex` is absent) was never seated, so it has no answer to be missing.
-Do not count it toward the participation invariant and do not print `DEGRADED` for it:
-report it as a one-line footer note naming the provider and the fix. Reserve `DEGRADED`
-for a member that **was** seated and then failed, errored, or returned empty, which is
-the case that actually costs you evidence.
+endpoint does not resolve was never seated, so it has no answer to be missing. Do not
+count it toward the participation invariant and do not print `DEGRADED` for it: report it
+as a one-line footer note naming the provider and the fix. Reserve `DEGRADED` for a
+member that **was** seated and then failed, errored, or returned empty — the case that
+actually costs you evidence.
 
-This rule exists because a skill has no Configure UI, no persistent tier state, and no
-quota-warning surface. A tool that auto-seats a logged-in CLI starts drawing down the
-user's subscription on first use, with no way to surface or undo that — so the only
-safe default here is that **every external provider is opt-in.**
+Respect `.maxConcurrentExternal` (default 2). Nothing in the harness enforces it.
 
-Respect `maxConcurrentExternal` from the roster (default 2). Nothing in the harness
-enforces it.
+**Never interpolate a prompt into argv.** Write it to a file, build the JSON body with
+`jq -n --rawfile`, and send it with `--data-binary @-`.
 
-Write the prompt to a file first. **Never interpolate a prompt into argv** — build the
-JSON body with `jq -n --rawfile` so quotes, `$`, backticks and newlines need no escaping,
-and send it with `--data-binary @-` (plain `-d @-` strips newlines and silently mangles a
-multi-line prompt while leaving the JSON valid).
-
-**OpenRouter** — one key, many vendors. The call goes through a script, so the key never
-reaches argv, a command line, or stdout. Model IDs are `<author>/<slug>` from the roster:
-
-```bash
-M=openai/gpt-5.5 P=./prompt.txt node "${CLAUDE_PLUGIN_ROOT}/scripts/openrouter.mjs"
-```
-
-The script reads **`COUNCIL_OPENROUTER_API_KEY`** through its own self-contained reader
-(`scripts/env.mjs`), resolving most-specific-first:
-
-```
-1. $COUNCIL_OPENROUTER_API_KEY in the environment   (per-invocation)
-2. ./.env in the current project                     (per-project)
-3. $XDG_CONFIG_HOME/council/.env, else ~/.config/council/.env   (per-user default)
-```
-
-It sends `model` explicitly (OpenRouter treats it as optional and silently falls back to
-the account default), and posts to `/api/v1/...`, not `/v1/...`. Its exit codes are
-`3` no key configured, `4` HTTP or empty-content failure, `5` bad usage.
-
-**Read only `COUNCIL_OPENROUTER_API_KEY`, never `OPENROUTER_API_KEY`.** Council seats
-only its own key, which keeps council spend separable from whatever else on the machine
-uses OpenRouter. If `OPENROUTER_API_KEY` is set and belongs to an application, keep it
-that way.
-
-Two things to state when a user mints a council key: give it a **spend cap**, because a
-fan-out multiplies by every member and every round; and **attach whatever retention
-guardrail the account offers**, because guardrails bind per key and a new key inherits
-none — council prompts carry repo content, so an unguarded key means those prompts are
-retained by whichever provider serves them.
-
-**Ollama** — local or LAN, no key. Substitute the exact `ollama-endpoint:` value printed
-in the availability block above (it already resolves roster > `$OLLAMA_HOST` > default
-and normalises the port). Never hardcode `localhost`, and if that line carried a
-`[WARNING: no port ...]`, fix the endpoint before calling rather than probing `:80`:
-
-```bash
-jq -n --rawfile p ./prompt.txt \
-  '{model:"qwen3", messages:[{role:"user",content:$p}], stream:false}' \
-| curl -fsS -m 600 "<ollama-endpoint>/api/chat" \
-    -H 'Content-Type: application/json' --data-binary @- \
-| jq -r '.message.content'
-```
-
-**Codex** — ChatGPT on the user's own plan, read-only sandbox, never auto-approving:
-
-```bash
-codex exec --sandbox read-only --skip-git-repo-check --ephemeral \
-  -c approval_policy=never --color never -C "$(mktemp -d)" -o out.txt < prompt.txt
-```
-
-Rules, not suggestions:
-
-- Always pass `curl -fsS` so a proxy's HTML error page becomes a non-zero exit instead
-  of garbage parsed as an answer.
-- Foreground `Bash` calls cap at **10 minutes**, and a cold model load on a remote box
-  can take minutes. Use `run_in_background` for a heavy member and tell the user there is
-  no deadline enforcement, or decline the member.
-- Nothing rate-limits these against the user's quota. Honour `maxConcurrentExternal`
-  (default 2). On a 429, back off exponentially and honour `Retry-After`; do not retry a
-  quota refusal.
-- An Ollama endpoint has **no authentication of any kind.** If the resolved endpoint is
-  not loopback, say so once — the user is trusting their whole network segment.
+**`${CLAUDE_PLUGIN_ROOT}/reference/providers.md` has the invocation for each provider** — OpenRouter, Ollama
+and Codex — with exit codes, the key chain, timeouts, the 429 rule, and what each one
+spends. Read it before calling one.
 
 ## Output contract
 
@@ -320,15 +339,38 @@ Lead with the answer, not the process. Then the mode-specific body. Then always:
 ```
 ── Council ──────────────────────────────────────────
 Members: <n> seated, <m> answered   Mode: <mode>
-Roster: <label (model)>, ...   Judge: this session (not seated as a member)
+Roster: <stance (actual model)>, ...   Judge: this session (not seated as a member)
 [DEGRADED: <what failed> — no agreement credited from this round]
-Correlation: <one of>
-  HOMOGENEOUS — all members are Claude models; their errors are
-  correlated and agreement is weak evidence. Add OpenRouter or
-  Ollama members (/council:setup) to fix this.
+[Not seated: <provider> — <reason>]
+[COLLAPSED — model overrides did not resolve; every member ran on
+ <model>. This is one model wearing N hats. Agreement here is not
+ evidence of anything.]
+[Pins: unverified — members did not report their models consistently,
+ so the spread above is not confirmed.]
+Correlation: <the class the join reported>
+  HOMOGENEOUS — every member came from one vendor (<vendors>), so
+  their errors are correlated and agreement is weak evidence. Add
+  OpenRouter or Ollama members (/council:setup) to fix this.
   CROSS-VENDOR — members span <vendors>; errors are far less
   correlated, so agreement here is meaningfully stronger.
 ```
+
+`Roster:` labels each member by its `.stance`, with the model from its `MODEL:` line in
+parentheses — what it **actually ran on**, not the pin the join projected. Those differ
+exactly when an override did not resolve, which is the case the reader most needs to see.
+Where a member gave no usable `MODEL:` line, write the pin with a trailing `?`
+(`risk-first (opus?)`) so the uncertainty is visible per member rather than averaged away
+into the `Pins:` line.
+
+Report the class `.projectedCorrelation` gave. Do not re-derive it, and do not soften
+`HOMOGENEOUS` into `CROSS-VENDOR` because a roster *lists* external members: the join
+already excluded the ones that were not seated, and they are in `.notSeated[]`.
+
+`COLLAPSED` and `Pins:` are mutually exclusive and both optional — emit `COLLAPSED` on a
+confirmed full collapse, `Pins: unverified` when the reports were inconsistent, and
+neither when the spread was confirmed. `COLLAPSED` is bracketed like `DEGRADED` for the
+same reason: a class that lives only in prose is the one that gets omitted from the one
+report that needed it.
 
 In `individual` mode omit the `Judge:` field entirely — no judge step ran.
 

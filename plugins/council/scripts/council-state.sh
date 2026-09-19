@@ -31,6 +31,13 @@
 # Either is a real parser; the pure-sh alternative is regex-scraping nested JSON,
 # which is how you get a confident, wrong answer about what a council costs.
 #
+# An ABSENT roster is not an empty one. It seats the four default Claude members
+# declared in council-lib.sh and projects HOMOGENEOUS (anthropic), which is the
+# honest reading of four members from one vendor. `NONE` is reserved for a roster
+# that is present and seats nobody -- either because it declares no members, or
+# because every member it declared was unseated as unavailable. Those two print
+# differently, since only one of them is a roster problem.
+#
 # Correlation here is always PROJECTED. `COLLAPSED` -- every model override
 # failing so that N members all ran on the session model -- is only observable
 # after the subagents land, so a script genuinely cannot predict it.
@@ -104,8 +111,24 @@ members() { awk -F'\t' -v k="$1" '$1=="member" && $2==k {print $3 "\t" $4}' "$RO
 if [ "$ROSTER_STATE" = present ]; then
   MAXCONC=$(meta maxConcurrentExternal); [ -n "$MAXCONC" ] || MAXCONC=2
   # Claude members carry no `enabled` flag: being listed IS the consent.
+  #
+  # A pin the harness will not accept is caught HERE rather than at spawn time.
+  # `model` is a closed enum (council-lib.sh:COUNCIL_ACCEPTED_PINS) while the
+  # roster's `model` is free-form JSON, so an unacceptable pin is easy to write
+  # and would otherwise surface as an InputValidationError partway through a
+  # fan-out that has already started spending.
+  #
+  # `-` is the backends' marker for a member that declared NO model, and that is
+  # not an error: it seats with no pin and runs on the session model, adding no
+  # model diversity. "declared no pin" and "declared a pin that cannot exist" are
+  # different facts and must not print alike.
   members claude | while IFS="$(printf '\t')" read -r stance model; do
-    [ -n "${stance:-}" ] && seat "$stance" claude "$model" anthropic
+    [ -n "${stance:-}" ] || continue
+    if [ "$model" = "-" ] || council_pin_is_accepted "$model"; then
+      seat "$stance" claude "$model" anthropic
+    else
+      unseat "$stance" claude "$model" "not a model this harness accepts ($COUNCIL_ACCEPTED_PINS_DISPLAY)"
+    fi
   done
 
   # OpenRouter: consent from the roster, availability from the key chain.
@@ -159,7 +182,18 @@ if [ "$ROSTER_STATE" = present ]; then
     else unseat "-" codex "(cli)" "codex CLI not installed"; fi
   fi
 else
+  # An absent roster is the documented normal case, and it seats the four default
+  # members rather than nobody. Reporting `0 seated` here contradicted the line
+  # two rows above it -- `roster: NONE ... Claude-only council` -- and answered a
+  # question nobody asks: people open this to learn what the next council will
+  # do, not what a file says. The defaults are declared once in council-lib.sh so
+  # this join and skills/ask cannot disagree about who is in the room, and they
+  # arrive in the same `stance<TAB>model` shape as a declared member, so nothing
+  # below this point needs a branch for them.
   MAXCONC=2
+  council_default_members | while IFS="$(printf '\t')" read -r stance model; do
+    [ -n "${stance:-}" ] && seat "$stance" claude "$model" anthropic
+  done
 fi
 
 N_SEATED=$(wc -l < "$SEATED" | tr -d ' ')
@@ -176,6 +210,9 @@ N_VENDORS=$(printf '%s' "$VENDORS" | wc -w | tr -d ' ')
 # must not depend on how the list is punctuated.
 VENDORS=$(printf '%s' "$VENDORS" | sed 's/ /, /g')
 
+# NONE is now reachable ONLY from a roster that is present and declares no
+# members, which is what makes its message ("the roster declares no members")
+# exactly true. It used to fire for an absent roster too, where it was false.
 if [ "$N_SEATED" -eq 0 ]; then
   CLASS=NONE
 elif [ "$N_VENDORS" -le 1 ]; then
@@ -256,7 +293,16 @@ fi
 UNCONFIRMED=''
 [ "${PROBE_SKIPPED:-0}" = 1 ] && UNCONFIRMED=' -- ollama was not probed, so this diversity is unconfirmed'
 case "$CLASS" in
-  NONE)         printf 'projected correlation: NONE -- the roster declares no members\n' ;;
+  NONE)
+    # Two different ways to seat nobody, and saying the wrong one is a lie the
+    # report contradicts two rows above. A roster that declared members and had
+    # them all unseated is not a roster that declares none -- the pin check made
+    # that case reachable, and `not seated` is already printed right there.
+    if [ -s "$UNSEATED" ]; then
+      printf 'projected correlation: NONE -- every declared member was unseated; see above\n'
+    else
+      printf 'projected correlation: NONE -- the roster declares no members\n'
+    fi ;;
   HOMOGENEOUS)  printf 'projected correlation: HOMOGENEOUS (%s) -- one vendor; agreement is weak evidence\n' "$VENDORS" ;;
   CROSS-VENDOR) printf 'projected correlation: CROSS-VENDOR (%s)%s\n' "$VENDORS" "$UNCONFIRMED" ;;
 esac
