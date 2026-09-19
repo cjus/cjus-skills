@@ -235,3 +235,46 @@ Verified by grepping every load-bearing block to confirm it survived and landed 
 file: the three provider invocations, the exit codes, the attachment caps, the `filter.*`
 check, both verbatim notices, the honesty contract and the output contract. Suites unchanged at
 40, 99 and 46; `claude plugin validate --strict` passes for the plugin and the marketplace.
+
+### 2026-09-19 — Phase 7: the READMEs
+
+`plugins/council/README.md` (new), `README.md`.
+
+`plugins/council/README.md` is 194 lines in the house style `plugins/explain/README.md` sets —
+title, intro, contents, per-skill sections with real invocations, and a "What ships here" tree.
+The repo-root README gains a `### council` section and a Layout entry, both alphabetical.
+
+**Decision 1's "What it costs" block leads the file**, ahead of Install, as that decision
+specified. It gives the multiplier — Nx for `individual`/`categorized`, 2Nx for `pooled`, so
+about 4x and 8x at the default four members — and no dollar figure or token estimate anywhere,
+because the reasoning that makes the skills refuse a consensus percentage argues equally against
+a number implying precision they cannot have.
+
+**The plan-dependence note states what phase 5 actually established**, not the vaguer version
+the plan inherited. Under `## Limitations`: a pin outside `opus|sonnet|haiku|fable` fails before
+any model runs and the join unseats it with a reason; a pin that is a valid name the plan cannot
+serve is the case that was *not* determined; so the plugin asks each member what it ran on and
+reports `COLLAPSED` only when every member names the same model. It also says plainly that a
+member's model report is the member's own and not an observation the plugin made.
+
+The README carries the four correlation classes as a table, the three roster states and why the
+unparseable one refuses rather than falling back, Ollama's total absence of authentication, and
+the write-the-port-explicitly rule.
+
+Two claims verified rather than asserted. **A Claude-only council needs neither `jq` nor Node** —
+`council_roster_rows` is called only from the roster-present branch (`council-state.sh:95`,
+inside the `else` at :89), so an absent roster never reaches a parser. And the "What ships here"
+tree was diffed against `find plugins/council -type f`: 18 files, matching.
+
+Two judgement calls. The per-suite case counts were written in and then removed, because
+**phase 8 adds cases to two of those three suites** and a README citing 99/40/46 would have gone
+stale inside the same branch. And the root README stated "a skill refers to its own files through
+`${CLAUDE_PLUGIN_ROOT}`" twice in adjacent paragraphs; that was deduplicated while adding the
+council entry beside it, and the surviving sentence generalised to cover both plugins that now
+ship a `reference/` directory.
+
+No version bump. `plugins/council/.claude-plugin/plugin.json` stays at `0.1.0`; releasing is a
+separate step and not this phase's call.
+
+Verified: `claude plugin validate --strict` passes for the plugin and the marketplace; suites
+unchanged at 40, 99 and 46.

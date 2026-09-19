@@ -41,12 +41,12 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 - [x] **Phase 6** — split the reference docs out of `SKILL.md` into `reference/providers.md`,
       `reference/trust-boundary.md` and `reference/roster.md`, keeping the honesty contract
       and output contract inline. **Landed 2026-09-19.**
-- [ ] **Phase 7** — `plugins/council/README.md` plus the repo-root README section and Layout
+- [x] **Phase 7** — `plugins/council/README.md` plus the repo-root README section and Layout
       block, including the plan-dependence note that the per-member model pins
       (`opus`/`sonnet`/`haiku`/`fable`) are not guaranteed to resolve on every plan.
       **Also inherits Decision 1's "What it costs" block**, which phase 5 could not land
       because no README existed: the structural multiplier, roughly 4x a normal turn and 8x
-      for `pooled`, with no dollar figure and no token estimate.
+      for `pooled`, with no dollar figure and no token estimate. **Landed 2026-09-19.**
 - [ ] **Phase 8** — `detect.sh` probes and `openrouter.mjs` exit-code tests.
 
 ## Status
@@ -126,8 +126,35 @@ both were cut.
 `skills/setup` and `skills/status` now point at `reference/roster.md` as well, so the roster
 format is documented in one place for all three skills.
 
-Next is phase 7 (`README.md`), which inherits Decision 1's cost block, then phase 8 (the
-remaining suites).
+**Phase 7 is complete.** `plugins/council/README.md` is 194 lines, following the house style
+`plugins/explain/README.md` sets, and the repo-root README gains a `### council` section and a
+Layout entry, both placed alphabetically.
+
+Decision 1's **What it costs** block leads the README, ahead of Install, as the decision
+specified: the multiplier as Nx and 2Nx, about 4x and 8x at the default four members, with no
+dollar figure and no token estimate anywhere.
+
+The plan-dependence note the phase requires is under `## Limitations`, and it states the split
+phase 5 established rather than the vaguer version the plan inherited: a pin outside
+`opus|sonnet|haiku|fable` fails loudly before any model runs and the join unseats it, while a
+valid-but-unserved pin is the case that remains undetermined — so the plugin asks members and
+reports `COLLAPSED` only on a full collapse.
+
+Two things verified rather than assumed while writing it. **A Claude-only council needs neither
+`jq` nor Node**: `council_roster_rows` is called only from the roster-present branch
+(`council-state.sh:95`, inside the `else` at :89), so an absent roster never reaches a parser.
+And the "What ships here" tree was diffed against `find plugins/council -type f`, which matches
+at 18 files.
+
+Two judgement calls worth recording. The per-suite case counts were written in and then taken
+out: **phase 8 adds cases to two of those three suites**, so a README citing 99/40/46 would
+have been stale within the branch. And the root README stated "a skill refers to its own files
+through `${CLAUDE_PLUGIN_ROOT}`" twice in adjacent paragraphs — deduplicated while adding the
+council entry beside it, with the surviving sentence generalised to cover both plugins that now
+ship a `reference/` directory.
+
+Next is phase 8, the last phase on this branch: `detect.sh` probes and `openrouter.mjs`
+exit-code tests.
 
 ## Open Questions
 
