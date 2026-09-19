@@ -2,7 +2,7 @@
 
 A [Claude Code](https://claude.com/claude-code) plugin marketplace holding skills by Carlos Justiniano.
 
-Each plugin is a self-contained set of skills you install into Claude Code and invoke with a slash command. The marketplace exists so the collection can grow: `bookcraft` is the first plugin in it, not the whole of it.
+Each plugin is a self-contained set of skills you install into Claude Code and invoke with a slash command. Four ship today — `bookcraft`, `council`, `explain` and `pr` — and the marketplace exists so the collection can grow.
 
 ## Install
 
@@ -26,6 +26,8 @@ Restart Claude Code, and the plugin's skills become available as slash commands.
 
 Writes a book, binds it, revises it, and checks that it told the truth. Four skills that share one folder format, so the output of each is the input of the next.
 
+**Full documentation: [`plugins/bookcraft/README.md`](plugins/bookcraft/README.md)** — the book folder format, paragraph tags, provenance and the four checkers, type sizing, troubleshooting, and the one-time `/makebook` setup (`/makebook` is the only skill here needing third-party packages; the other three work the moment the plugin is installed).
+
 | Skill | What it does |
 |---|---|
 | `/bookcraft:createbook` | Turns a one-line description into a planned chapter outline, then narrates every chapter into its own markdown file, named so a plain filename sort is the reading order. |
@@ -39,6 +41,8 @@ Puts one question to several independent members and reconciles their answers wi
 
 Nothing to configure to start: with no roster the council is four Claude members on distinct models, needing no key, no Node and no `jq`. Everything beyond that is opt-in.
 
+**Full documentation: [`plugins/council/README.md`](plugins/council/README.md)** — what a round costs, the roster format, the three modes, and what agreement is actually worth.
+
 | Skill | What it does |
 |---|---|
 | `/council:ask` | Fans one question out to every seated member, then reconciles — verbatim, sorted into agreement/complementary/conflict, or Delphi-pooled so a correct minority survives the second round. Refuses to compute a consensus score, and reports how correlated the roster actually is every time. |
@@ -50,6 +54,8 @@ Seating is a join, not a lookup — a member needs both the roster's consent and
 ### explain
 
 Explains a topic for a mid-level engineer, in prose or as a page you can look at. Same audience and same honesty bar; the medium is the only difference.
+
+**Full documentation: [`plugins/explain/README.md`](plugins/explain/README.md)** — both skills in depth, rendering notes, and a table for choosing between them.
 
 | Skill | What it does |
 |---|---|
@@ -66,6 +72,8 @@ Run `/pr:init` once per repo. It detects what it can, asks about the rest, write
 /pr:init → /pr:ticket → /pr:start → [ work ] → /pr:pre-test → /pr:close → (merge) → /pr:cleanup
 ```
 
+**Full documentation: [`plugins/pr/README.md`](plugins/pr/README.md)** — all 22 skills, the full config schema, the plan folder, the three hooks, and the detection rules every skill obeys. The seven below are the spine; the table stops there because the rest are optional.
+
 | Skill | What it does |
 |---|---|
 | `/pr:init` | One-time setup: config file plus the label scheme. |
@@ -80,11 +88,11 @@ Alongside the spine: `/pr:cp`, `/pr:status`, `/pr:resume`, `/pr:sync`, `/pr:plan
 
 #### Configuration
 
-Everything repo-shaped lives in `.claude/pr-config.json`, and every key is optional. Defaults give you `feature/123-slug` branches with the bare issue number as the ticket ID, worktrees on, and no check commands. Set `ticketPrefix` for `ABC-123`-style IDs, turn worktrees off, point `checks.*` at your lint and test commands, or disable the continuity and assertions conventions entirely. The full table is in `plugins/pr/reference/config.md`.
+Everything repo-shaped lives in `.claude/pr-config.json`, and every key is optional. Defaults give you `feature/123-slug` branches with the bare issue number as the ticket ID, worktrees on, and no check commands. Set `ticketPrefix` for `ABC-123`-style IDs, turn worktrees off, point `checks.*` at your lint and test commands, or disable the continuity and assertions conventions entirely. The full table is in [`plugins/pr/reference/config.md`](plugins/pr/reference/config.md).
 
 #### Hooks
 
-Three, declared in the plugin's own `hooks/hooks.json`, so they install with the plugin and need no `.claude/settings.json` edit. **They are inert in any repo that has no `.claude/pr-config.json`**, which makes `/pr:init` writing that file the act that turns them on: a plugin enabled at user scope otherwise reaches every repo on the machine, and a hook is ambient where a skill is invoked. See `plugins/pr/hooks/README.md`.
+Three, declared in the plugin's own `hooks/hooks.json`, so they install with the plugin and need no `.claude/settings.json` edit. **They are inert in any repo that has no `.claude/pr-config.json`**, which makes `/pr:init` writing that file the act that turns them on: a plugin enabled at user scope otherwise reaches every repo on the machine, and a hook is ambient where a skill is invoked. See [`plugins/pr/hooks/README.md`](plugins/pr/hooks/README.md).
 
 - **Session start** loads the current branch's plan folder into a new or compacted session.
 - **Default-branch guard** (`PreToolUse`) requires operator approval for a commit or push on the default branch. Ships with a probe suite; run it after any edit to that hook, because nearly every defence in it exists because the obvious spelling was measured to fail open.
@@ -92,29 +100,6 @@ Three, declared in the plugin's own `hooks/hooks.json`, so they install with the
 
 Turn the guard or the close gate off per repo with `mainGuard.enabled` and `closeGate.enabled`. To turn all three off, disable the plugin.
 
-#### One-time setup for `/makebook`
-
-`/makebook` renders its PDF through headless Chromium and needs Python packages the others do not. Run the installer once. Inside a Claude Code session the plugin's directory is in `$CLAUDE_PLUGIN_ROOT`:
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/install.sh
-```
-
-From an ordinary shell, ask `claude` where the plugin landed and run it from there:
-
-```bash
-"$(claude plugin list --json | jq -r '.[] | select(.id | startswith("bookcraft@")) | .installPath')"/scripts/install.sh
-```
-
-It builds a virtualenv, installs `playwright`, `markdown-it-py`, `mdit-py-plugins` and `EbookLib`, and fetches Chromium. Re-running it is safe.
-
-**Python 3.12 or newer is required.** `build-book.py` uses nested same-quote f-strings ([PEP 701](https://peps.python.org/pep-0701/)), so an older interpreter fails while parsing the file rather than with a useful message. The installer checks the version and refuses rather than building a venv that cannot work. macOS ships 3.9 at `/usr/bin/python3`; `brew install python@3.12` or newer covers it.
-
-Two host tools are used and are not Python packages. `pdftotext` (`brew install poppler`) is required, because the builder reads the rendered PDF back to resolve page numbers. `epubcheck` (`brew install epubcheck`) is optional, and only needed to verify a built EPUB rather than trust it.
-
-**The venv lives at `~/.cache/bookcraft/venv`, outside the plugin,** honoring `XDG_CACHE_HOME` where it is set. Claude Code installs each plugin version into its own directory, so a venv kept inside one would be discarded on every update and rebuilt from nothing, at about 170 MB plus a Chromium download. One venv at a stable path serves every version and every project. `scripts/bookcraft-python` is the wrapper that finds it, which is why the documented commands name that rather than an interpreter path.
-
-The other three skills need no setup. Their scripts use only the Python standard library and bash.
 
 ## Layout
 
@@ -123,11 +108,13 @@ The other three skills need no setup. Their scripts use only the Python standard
 plugins/
   bookcraft/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    README.md                     the plugin's full documentation
     scripts/install.sh            one-time venv setup
     scripts/bookcraft-python      runs a bookcraft script under that venv
     skills/<name>/SKILL.md        one directory per skill
   council/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    README.md                     the plugin's full documentation
     reference/roster.example.json a commented roster to copy
     reference/*.md                roster format, provider calls, trust boundary
     scripts/council-lib.sh        shared sh helpers: key chain, paths, defaults
@@ -138,10 +125,12 @@ plugins/
     skills/<name>/SKILL.md        one directory per skill
   explain/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    README.md                     the plugin's full documentation
     skills/<name>/SKILL.md        one directory per skill
     skills/qve/references/        the page template qve fills in
   pr/
     .claude-plugin/plugin.json    the plugin manifest, and the version of record
+    README.md                     the plugin's full documentation
     reference/*.md                the rules the skills cite, owned by the plugin
     scripts/pr-lifecycle-state.mjs  computes where a branch sits in the lifecycle
     hooks/hooks.json              declares the three hooks, so they ship with the plugin
