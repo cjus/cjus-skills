@@ -192,3 +192,46 @@ passing; `claude plugin validate --strict` passes. The eight new rows cover the 
 and one invariant that nothing else couples — that every pin in `council_default_members` is
 itself an accepted pin, so editing the defaults to an unacceptable value fails the suite instead
 of producing a default council that unseats itself.
+
+### 2026-09-19 — Phase 6: the reference split
+
+`plugins/council/reference/roster.md`, `plugins/council/reference/providers.md`,
+`plugins/council/reference/trust-boundary.md`, `plugins/council/skills/ask/SKILL.md`,
+`plugins/council/skills/setup/SKILL.md`, `plugins/council/skills/status/SKILL.md`.
+
+`skills/ask/SKILL.md` goes from 460 lines to 370, with the detail behind it moved into three
+reference files and a pointer table near the top saying when to read which. The rule applied
+throughout: **the skill carries the action, the reference carries the contract and the why.**
+
+- **`reference/roster.md`** — the roster file's shape, the three roster states that must never
+  print alike (absent seats the defaults, present-and-empty seats nobody, unparseable refuses),
+  the default council and where it is declared, the model-pin rules, and the join's full JSON
+  contract with its exit codes.
+- **`reference/providers.md`** — what each provider spends, the never-interpolate-into-argv
+  rule, and the invocation for OpenRouter, Ollama and Codex with exit codes, the key chain,
+  timeouts and the 429 rule.
+- **`reference/trust-boundary.md`** — the `MEMBER_QUESTION`/`JUDGE_QUESTION` split, the
+  attachment caps, the `git config filter.*` check before diffing an untrusted repo, and why
+  the judge notice and the member notice are deliberately different.
+
+The honesty contract and output contract stayed inline, as the phase specifies. Two more things
+stayed for the same reason, though the phase did not name them: the **two untrusted-content
+notices**, which must be emitted verbatim — a security control that first requires reading
+another file is a control that gets skipped — and the **stance table**, consulted on every run,
+where moving it would have saved four lines and cost a read.
+
+Two problems the split surfaced. A skill lives in `skills/<name>/`, so the bare `reference/…`
+paths the first pass wrote would have resolved nowhere; they now use
+`${CLAUDE_PLUGIN_ROOT}/reference/…`, matching how `skills/setup` already cites the example
+roster. And the transplanted provider section arrived still carrying prose that had stayed
+inline, leaving `providers.md` with a second copy of the opt-in rationale and the
+not-seated-is-not-DEGRADED rule — both cut, since duplication across a split is the failure
+mode the split exists to remove.
+
+`skills/setup` and `skills/status` also point at `reference/roster.md` now, so the roster format
+is documented once for all three skills.
+
+Verified by grepping every load-bearing block to confirm it survived and landed in the right
+file: the three provider invocations, the exit codes, the attachment caps, the `filter.*`
+check, both verbatim notices, the honesty contract and the output contract. Suites unchanged at
+40, 99 and 46; `claude plugin validate --strict` passes for the plugin and the marketplace.

@@ -74,6 +74,9 @@ does not answer; a Claude-only council never probes at all.
 Where `--no-probe` is right: a scripted or CI caller that wants only the roster join, or
 a user who already knows the LAN host is down and does not want to wait for it.
 
+`${CLAUDE_PLUGIN_ROOT}/reference/roster.md` carries the join's full JSON contract, the
+roster format and the pin rules, if a question needs more than this report gives.
+
 ## What this skill must not claim
 
 The script says **projected**, and so should you. `COLLAPSED` — every model override

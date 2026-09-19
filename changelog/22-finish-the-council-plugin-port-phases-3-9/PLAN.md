@@ -38,9 +38,9 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       per-choice cost in `/council:setup`. **Landed 2026-09-19**, after settling the open
       question by experiment. One of Decision 1's four bullets moves to phase 7 (the README
       cost block) and one had already landed in phase 1; see the decision below.
-- [ ] **Phase 6** — split the reference docs out of `SKILL.md` into `reference/providers.md`,
+- [x] **Phase 6** — split the reference docs out of `SKILL.md` into `reference/providers.md`,
       `reference/trust-boundary.md` and `reference/roster.md`, keeping the honesty contract
-      and output contract inline.
+      and output contract inline. **Landed 2026-09-19.**
 - [ ] **Phase 7** — `plugins/council/README.md` plus the repo-root README section and Layout
       block, including the plan-dependence note that the per-member model pins
       (`opus`/`sonnet`/`haiku`/`fable`) are not guaranteed to resolve on every plan.
@@ -104,8 +104,30 @@ recorded as still open, and nothing shipped depends on assuming an answer.
 
 Two suites now stand at 99 and 40 cases.
 
-Next is phase 6 (splitting the reference docs out of `SKILL.md`), which is unblocked. Phase 7
-inherits one bullet from Decision 1 that phase 5 could not do: the README's cost block.
+**Phase 6 is complete.** `skills/ask/SKILL.md` is 370 lines, down from 460, and the three
+reference files carry what moved out: `reference/roster.md` (the roster format, the three
+roster states, the join's JSON contract, the pin rules), `reference/providers.md` (how to call
+each external member, with exit codes, timeouts and costs) and `reference/trust-boundary.md`
+(attachment limits, the `git config filter.*` check, why the two notices differ).
+
+The honesty contract and the output contract stayed inline, as the phase requires. So did two
+things the phase did not name but that the same reasoning covers: the **two untrusted-content
+notices**, because they must be emitted verbatim and a control that needs a file read first is
+a control that gets skipped; and the **stance table**, because it is consulted on every run and
+moving it would have bought four lines at the cost of a read.
+
+Two things the split surfaced and fixed. A skill lives in `skills/<name>/`, so the bare
+`reference/…` paths the first pass wrote would have resolved nowhere — they now use
+`${CLAUDE_PLUGIN_ROOT}/reference/…`, matching how `skills/setup` already cites the example
+roster. And the transplanted provider section arrived carrying prose that had stayed inline,
+so `providers.md` briefly held a second copy of the opt-in rationale and the not-seated rule;
+both were cut.
+
+`skills/setup` and `skills/status` now point at `reference/roster.md` as well, so the roster
+format is documented in one place for all three skills.
+
+Next is phase 7 (`README.md`), which inherits Decision 1's cost block, then phase 8 (the
+remaining suites).
 
 ## Open Questions
 

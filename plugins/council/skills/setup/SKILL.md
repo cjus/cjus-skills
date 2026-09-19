@@ -99,6 +99,8 @@ To see the resulting seating without changing anything, use `/council:status`.
    `{id, stance}`, and `ollama` also an `endpoint`; `codex` just `enabled`), and
    `maxConcurrentExternal` — the same shape as
    `${CLAUDE_PLUGIN_ROOT}/reference/roster.example.json`. Write only what the user chose.
+   `${CLAUDE_PLUGIN_ROOT}/reference/roster.md` documents every field, the three roster
+   states, and why an absent file is the normal case rather than a fault.
    **Never write an API key or a credentialed URL into this file** — `detect.sh` injects
    its first 40 lines into the model's context on every invocation.
 
