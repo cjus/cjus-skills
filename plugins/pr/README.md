@@ -119,6 +119,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-lifecycle-state.mjs" --offline   # git + 
 | `docs.assertionsFile` | `"ASSERTIONS.md"` | The invariants file audited at close. `null` disables the audit. |
 | `migrations.dir` | `null` | Hand-applied migrations, for the drift gate at close. |
 | `closeGate.requiredArtifacts` | `["pr-summary", "continuity"]` | What must exist and be tracked before the close gate releases. |
+| `closeGate.enabled` | `true` | Whether the `Stop` hook blocks a close that has not landed. |
 | `mainGuard.enabled` | `true` | Whether default-branch commits and pushes need explicit approval. |
 
 **A `null` check is absent, not failing.** Skills skip it in silence and never report it as a gap. A repo whose test command exists but has no tests is the repo's business; configure it or leave it `null`, but do not configure it and then explain the exit code.
@@ -129,7 +130,7 @@ The config is resolved from `git rev-parse --git-common-dir`, never from the wor
 
 ## The lifecycle spine
 
-Seven skills with a fixed place in the order.
+Seven skills with a fixed place in the order — though `abort` is the exit rather than a step, which is why the diagram above draws it to the side.
 
 ### `/pr:init`
 
@@ -138,7 +139,7 @@ Seven skills with a fixed place in the order.
 /pr:init --force
 ```
 
-Runs **once per repo**, not once per branch. Detects the GitHub repo, the package manager and the check commands, asks about the choices it cannot detect, writes `.claude/pr-config.json`, and creates the `status:` and `priority:` labels the queue runs on.
+Runs **once per repo**, not once per branch. Detects the GitHub repo, the package manager and the check commands, asks about the choices it cannot detect, writes `.claude/pr-config.json`, and creates the `status:` and `priority:` labels the queue runs on, plus the type labels `/pr:ticket` picks from.
 
 It is also what arms the hooks. Until this file exists, all three are inert.
 
@@ -393,7 +394,7 @@ Two things the guard **cannot** do, both worth knowing before relying on it:
 
 The close gate is scoped by a sentinel at `$(git rev-parse --git-dir)/pr-close-active` — per-worktree, and outside the work tree so it can never dirty the status it guards. `/pr:close` arms it; the hook disarms itself once the checks pass. Blocking is bounded to once per turn, so it can never wedge a session.
 
-`hooks/README.md` documents all three in full, including the bypasses the guard closes and why several of them read as correct.
+`hooks/README.md` documents all three in full, including the bypasses the guard closes and why two of them read as correct.
 
 ---
 
@@ -433,7 +434,7 @@ plugins/pr/
   reference/pr-config.schema.json      JSON Schema for .claude/pr-config.json
   reference/scope-contract.md          what "done" means, and what Deferred is for
   reference/ticketing.md               issues as tickets, labels, the queue
-  scripts/pr-lifecycle-state.mjs       the lifecycle authority, --text or --json
+  scripts/pr-lifecycle-state.mjs       the lifecycle authority, --text or bare for JSON
   scripts/test-acceptance.sh           the whole substrate through a throwaway repo
   skills/                              22 skills, one SKILL.md each
     abort/  cleanup/  close/  commitmsg/  condense/  continuity-add/

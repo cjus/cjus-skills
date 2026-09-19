@@ -76,3 +76,15 @@ Both resolved 2026-09-19, by operator decision.
 - **`jq` on this machine is the wrong architecture** — `/usr/local/bin/jq: Bad CPU type in
   executable` (x86 binary, arm64 host). That, not a plugin defect, is what failed 42 of the
   73 guard probe cases. Environment fix for the operator: reinstall `jq` for arm64.
+
+From the `/pr:pre-test` code review, 2026-09-19. Both verified pre-existing on `main` and
+untouched by this branch, so both fail the in-scope test:
+
+- **The root catalog omits `/pr:continuity-add` and `/pr:continuity-prune`.** `README.md:88`
+  enumerates 13 of the 15 non-spine `pr` skills, so those two are undiscoverable from the
+  root. Byte-identical on `main`. Largely mitigated by this branch's link into the plugin
+  README, which does cover all 22. Occasion: next edit to the root `### pr` section.
+- **The `## Releasing` section is hardcoded to bookcraft.** It names
+  `plugins/bookcraft/plugin.json` and `claude plugin tag plugins/bookcraft` as *the*
+  procedure, now that four plugins ship. Occasion: the next release of a non-bookcraft
+  plugin.

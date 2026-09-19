@@ -72,7 +72,7 @@ Run `/pr:init` once per repo. It detects what it can, asks about the rest, write
 /pr:init → /pr:ticket → /pr:start → [ work ] → /pr:pre-test → /pr:close → (merge) → /pr:cleanup
 ```
 
-**Full documentation: [`plugins/pr/README.md`](plugins/pr/README.md)** — all 22 skills, the full config schema, the plan folder, the three hooks, and the detection rules every skill obeys. The seven below are the spine; the table stops there because the rest are optional.
+**Full documentation: [`plugins/pr/README.md`](plugins/pr/README.md)** — all 22 skills, the config defaults, the plan folder, the three hooks, and the detection rules every skill obeys. The seven below are the spine; the table stops there because the rest are optional.
 
 | Skill | What it does |
 |---|---|
@@ -99,7 +99,6 @@ Three, declared in the plugin's own `hooks/hooks.json`, so they install with the
 - **Close gate** (`Stop`) refuses to end a turn while a close is in flight and its artifacts are uncommitted.
 
 Turn the guard or the close gate off per repo with `mainGuard.enabled` and `closeGate.enabled`. To turn all three off, disable the plugin.
-
 
 ## Layout
 
