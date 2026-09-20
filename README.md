@@ -79,6 +79,39 @@ route, and would face the same two edits as Linux, but it is untested here. Git 
 
 Each plugin's own README is its full documentation — every skill it ships, plus whatever setup, configuration and running costs that plugin has.
 
+## Working on the plugins
+
+A skill file is a prompt an agent reads mid-run, so a cross-reference that points
+at the wrong place is a fault the agent acts on rather than one a reader notices.
+Nothing in a plain diff catches it. `scripts/check-citations.py` does:
+
+```bash
+git config core.hooksPath .githooks   # once per clone
+```
+
+That runs the checker ahead of every commit. It resolves three forms of
+reference and refuses a fourth:
+
+| Form | Resolves against |
+|---|---|
+| `build-book.py:load_chapters` | a `def` or `class` in that file |
+| `createbook/SKILL.md § 5. Draft the chapters` | a markdown heading |
+| `chapter-prose.md § The reader` | a bold rule lead, which is how that file names its rules |
+| `build-book.py:<line>` | refused outright — every insertion above a line number silently invalidates it |
+
+Rename a heading and the checker names every file that cited it. References to
+files it does not track are left alone: those point into a book folder
+`/createbook` writes, or stand as an illustration rather than as a pointer.
+`changelog/` is skipped entirely, since a line number in a frozen branch note was
+accurate on the day it was written.
+
+Run it on its own at any time, and pass `--no-verify` on the rare commit that has
+to move a reference and its target apart:
+
+```bash
+python3 scripts/check-citations.py
+```
+
 ## Releasing
 
 Each plugin releases on its own, and the procedure is the same for all four. `plugins/<plugin>/.claude-plugin/plugin.json` carries that plugin's version and is the source of truth for it. To cut a release, raise `version` there, commit, then:

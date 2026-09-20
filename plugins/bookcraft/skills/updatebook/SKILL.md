@@ -29,7 +29,7 @@ Three things follow, and they are the whole skill:
 
 - **A chapter the instruction does not reach comes back byte-identical.** Not similar. Identical, and provably so.
 - **`OUTLINE.md` is the record the book was written against**, so a change to a chapter's scope, its terms or its anchors moves the outline in the same run or the record stops being one.
-- **The glossary is derived from the outline's term ledger** (`createbook/SKILL.md:189`), so a term that arrives or retires reaches `glossary.md` in the same run.
+- **The glossary is derived from the outline's term ledger** (`createbook/SKILL.md § 6. Write the front matter and the glossary`), so a term that arrives or retires reaches `glossary.md` in the same run.
 
 ## Procedure
 
@@ -88,7 +88,7 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 
 **Edit, never rewrite.** Use the Edit tool on the passage. Writing a chapter file whole reflows prose the instruction never reached, and a chapter that was supposed to come back byte-identical comes back merely equivalent. That distinction is invisible in a summary and obvious in a diff.
 
-**Do not delegate the prose to a subagent.** The edit is small, local, and depends on the surrounding paragraphs you have just read, which is exactly the context a spawn discards. Chapter prose also makes claims a reader takes as taught, which `CLAUDE.md § Model Delegation` keeps on the session's own tier. The one exception is a whole new chapter, which is a `/createbook`-shaped job and uses `/createbook`'s own chapter prompt (`createbook/SKILL.md:165-183`).
+**Do not delegate the prose to a subagent.** The edit is small, local, and depends on the surrounding paragraphs you have just read, which is exactly the context a spawn discards. Chapter prose also makes claims a reader takes as taught, and `createbook/SKILL.md § 5. Draft the chapters` keeps that work on the session's own tier. The one exception is a whole new chapter, which is a `/createbook`-shaped job and uses that same section's chapter prompt.
 
 **Every budget is still per chapter and still does not pool** (`chapter-prose.md § Every budget is per chapter`). An edit that adds a term, an anchor or a number spends this chapter's allowance, and the outline's ledgers are where you check what is already spent. Moving prose into a neighbouring chapter is not a fix: it changes a chapter the instruction never reached.
 
@@ -163,7 +163,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
 
 **`--type-size` is in that command because a rebind overwrites an existing edition.** `/makebook` binds at 14pt unless told otherwise, so a bare command re-editions any book bound at another size rather than refreshing it. Pass the size the folder's current PDF was actually bound at rather than inheriting a default that has moved twice; the reference book is 14pt. `makebook/SKILL.md` § Type size has the sizes.
 
-**Do not bind unless asked**, matching `/createbook`'s last step (`createbook/SKILL.md:251`). A rebind rewrites two tracked binaries and `/makebook`'s own procedure wants the figure decisions made against the finished chapters first, so it is a separate decision by the operator.
+**Do not bind unless asked**, matching `/createbook`'s last step (`createbook/SKILL.md § 9. Report`). A rebind rewrites two tracked binaries and `/makebook`'s own procedure wants the figure decisions made against the finished chapters first, so it is a separate decision by the operator.
 
 ## Adding prose
 
@@ -200,7 +200,7 @@ Cutting a paragraph is the same problem with the shift running the other way.
 
 ## Adding a chapter
 
-`/createbook` already owns this at `SKILL.md:253-259`, and it says the thing that matters: **append rather than insert.** Inserting renames every later file, rewrites the chapter half of every tag inside those files, and breaks every `ch. N` and `[N-M]` citation into them from outside the book.
+`/createbook` already owns this at `createbook/SKILL.md § Adding to a book that already exists`, and it says the thing that matters: **append rather than insert.** Inserting renames every later file, rewrites the chapter half of every tag inside those files, and breaks every `ch. N` and `[N-M]` citation into them from outside the book.
 
 What appending obliges here, beyond that section:
 
@@ -223,7 +223,7 @@ What appending obliges here, beyond that section:
 
 - **It does not bind.** See step 6.
 - **It does not judge the prose.** `check-book.sh` checks structure; a clean run means the folder will bind, and says nothing about whether the book reads well.
-- **It does not repoint references wholesale.** It repoints the citations its own edit moved. A book replacing another book is a different job, at `createbook/SKILL.md:261-277`.
+- **It does not repoint references wholesale.** It repoints the citations its own edit moved. A book replacing another book is a different job, at `createbook/SKILL.md § When the book supersedes one that already exists`.
 - **It does not verify that a repointed tag now names the right paragraph.** `check-references.sh` verifies that a cited `[N-M]` resolves, and that it still names the prose it named at the baseline. Neither answers whether the paragraph supports the sentence citing it, and a tag moved by hand from one real paragraph to another real one satisfies both checks. That one is verified by reading.
 
 ## Notes

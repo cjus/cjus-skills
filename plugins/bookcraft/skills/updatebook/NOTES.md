@@ -43,7 +43,7 @@ Swept the reference book's folder for `3.51.0` on 2026-09-10. Six occurrences ac
 
 That is the evidence behind the sweep in `SKILL.md § 1`. The instruction that reaches chapter 5 reaches five other places, and two of them are not chapters.
 
-**The `.svg` half of that rule is precautionary rather than measured.** The same sweep found no version string in any of the nine SVGs under `diagrams/`, so nothing here shows a figure going stale with its chapter. The rule stands on what a figure is: `makebook/SKILL.md:95` treats a fact drawn in a figure as a fact checked, and grepping only `*.md` would not see one.
+**The `.svg` half of that rule is precautionary rather than measured.** The same sweep found no version string in any of the nine SVGs under `diagrams/`, so nothing here shows a figure going stale with its chapter. The rule stands on what a figure is: `makebook/SKILL.md § Deciding where a figure helps` treats a fact drawn in a figure as a fact checked, and grepping only `*.md` would not see one.
 
 ## Why git is the proof
 
@@ -51,7 +51,7 @@ The claim "every other chapter came back byte-identical" is the skill's whole pr
 
 `git diff --stat` on the book folder answers the actual question, which is why step 0 refuses to start over a dirty folder: a pre-existing edit makes the diff say nothing. The `shasum` fallback exists because `/createbook` and `/makebook` are copyable into a repo that may not be under git, and this skill should not be the one that breaks that.
 
-The reference book's folder is fully tracked, the bound `.pdf` and `.epub` included, so an in-place edit leaves two tracked binaries stale. `SKILL.md § 6` reports that rather than rebinding, matching `createbook/SKILL.md:251`.
+The reference book's folder is fully tracked, the bound `.pdf` and `.epub` included, so an in-place edit leaves two tracked binaries stale. `SKILL.md § 6` reports that rather than rebinding, matching `createbook/SKILL.md § 9. Report`.
 
 ## The baseline this was written against
 
@@ -92,7 +92,7 @@ The glossary's 61 terms match the outline's term ledger exactly, summed row by r
 
 - **The order of the three ways to add prose.** Cheapest-first is a judgment about what an edit costs, not a finding.
 - **The change taxonomy in step 2.** Seven kinds chosen to cover what the ticket named and what the reference book would plausibly need. Nothing shows the list is complete.
-- **The instruction not to delegate the prose edit.** It follows `CLAUDE.md § Model Delegation` on work whose output a reader takes as taught, and it has not been tried both ways here.
+- **The instruction not to delegate the prose edit.** It follows the rule at `createbook/SKILL.md § 5. Draft the chapters` on work whose output a reader takes as taught, and it has not been tried both ways here.
 - **Reading `OUTLINE.md` first as the targeting step.** It is the cheapest index the book has, and no alternative was measured against it.
 
 ## Copies

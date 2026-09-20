@@ -1,6 +1,6 @@
 {
   "subtitle": "A book that declares everything, for the jq guard",
-  "byline": "Carlos Justiniano",
+  "byline": "Claude Opus 5",
   "description": [
     "A fixture for check-book.sh's jq guard. The book declares `tags`, `provenance`, `suggested_reading`, `overview` and `glossary` all true, and it is structurally valid, so a run that can read book.json passes it in the strongest mode available.",
     "That is the whole point of it. Where jq cannot run, every declaration reads as absent and the same folder would pass in the weakest mode instead: tags inferred, the provenance sweep off, the concept-list check off. The guard at check-book.sh:112 exists to stop that, and run.sh is what proves the guard still fires."
