@@ -201,8 +201,10 @@ From the argument, settle the title, the slug, the reader, and the angle. The re
 
 | Where | What to divide by 175 |
 |---|---|
-| Step 3, before the chapters exist | Chapters × about 1,900 words of prose, **× 1.8 for everything else on the page** |
+| Step 3, before the chapters exist | Chapters × about 1,900 words of prose — **an estimator's constant, never a drafting target** — **× 1.8 for everything else on the page** |
 | Step 9, from the finished book | `check-book.sh`'s `prose` and `structure` figures added together |
+
+**The 1,900 is an input to this arithmetic and nothing else.** It is the reference book's measured average (§ Sizing the book), here to turn a chapter count into a read time before any chapter exists. It is not a length a chapter should come out at, not a line for the outline, and not a number to put in a chapter agent's prompt. `reference/chapter-prose.md § Length` sets no ceiling, no target and no floor, and `check-book.sh` reports both word figures without capping either. **A plan that says a chapter stays at about 1,900 words has turned this estimate into a budget**, which is what § Sizing the book forbids; the fix is to strike the number, not to hold the chapters to it.
 
 **The 1.8 is one measurement on one book and it is the weakest number here.** The reference book ran 61,723 words across eighteen chapters with 34,281 of them prose, so the prose was 55.5% of the page and everything else was the rest (`NOTES.md § What the read-time estimate counts`). Report the estimate as a range where it matters, and prefer step 9's real figures to step 3's factor whenever both exist.
 

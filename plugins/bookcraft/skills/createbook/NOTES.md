@@ -609,6 +609,39 @@ had to land twice: **the two builders are separate because their markup is**,
 and a term filed under P in one edition and under `#` in the other is exactly
 the divergence that split them.
 
+## The estimator's constant read as a budget, 2026-09-20
+
+**Observed once, reported by an operator mid-book.** A session writing a book
+under this skill put "each week chapter stays ~1,900 words" in its plan. Nothing
+in the plugin asks for that. `chapter-prose.md § Length` sets no ceiling, no
+target and no floor, `check-book.sh` reports both word figures and fails on
+neither, and step 5's brief hands a chapter agent paths and the prose spec with
+no word figure in it. The number was invented by the session out of the one
+place the plugin still prints it.
+
+**The cause was distance between a number and its guard.** `SKILL.md § Sizing
+the book` says the sizing estimate is "never a budget handed to a chapter
+agent", and that sentence is correct and was already there. But the 1,900 itself
+lives one subsection further down, in § The read-time estimate's table, where it
+appears as a bare multiplicand with nothing next to it saying what it is not. A
+reader arriving at the table for the arithmetic does not necessarily carry the
+guard down from the prose above it.
+
+**What changed.** The table cell now carries "an estimator's constant, never a
+drafting target" inline, and a paragraph under the table restates the guard with
+the failure named in the words it actually appears in — a plan saying a chapter
+stays at about 1,900 words has turned the estimate into a budget — and says the
+fix is to strike the number rather than hold the chapters to it. Naming the
+symptom sentence is the point: a guard phrased only as a principle does not
+match against the line a session is about to write.
+
+**Not done, and this is the weak part.** One report, from one session, and no
+book has been written since the wording changed. Whether an inline caveat stops
+a number from being read as a target is not something this entry can claim. It
+is the same open question § The ceiling removed left behind, one layer up: that
+entry removed the limit and this one removes a number that was standing in for
+it.
+
 ## The rule most worth keeping
 
 Scope discipline in the Never section earned its place: an earlier version twice wrote that 513 fragments came from "the nine transcripts" when the figure was measured over five. A real number widened past its measured population is an invented number. That guard is why `chapter-prose.md § Never` requires the sentence carrying a figure to name the population it covers.
