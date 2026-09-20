@@ -429,7 +429,7 @@ plugins/pr/
   reference/config.md                  the full schema, derivations, the slug rule
   reference/evidence-discipline.md     classifying a claim before asserting it
   reference/git-conventions.md         branch, commit and PR shapes
-  reference/handoff-docs.md            the four document kinds and their audiences
+  reference/handoff-docs.md            the six document kinds and their audiences
   reference/lifecycle.md               the map every skill shares
   reference/pr-config.schema.json      JSON Schema for .claude/pr-config.json
   reference/scope-contract.md          what "done" means, and what Deferred is for

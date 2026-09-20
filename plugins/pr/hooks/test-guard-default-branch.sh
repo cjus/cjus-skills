@@ -19,6 +19,14 @@ esac
 # command, so a non-executable file is a guard that silently never runs, which is
 # fail-open in the one place that must fail closed. Invoking through bash would
 # mask exactly that, and once did.
+# -f before -x, because a DIRECTORY satisfies -x. With no argument at all $HOOK
+# becomes "$PWD/", which is a directory, so an -x-only check passes it through and
+# every case below then fails against it -- burying the usage error under dozens of
+# failures that read like a broken guard.
+if [[ ! -f "$HOOK" ]]; then
+  echo "FAIL: $HOOK is not a file. Usage: $0 <path to guard-default-branch.sh>" >&2
+  exit 1
+fi
 if [[ ! -x "$HOOK" ]]; then
   echo "FAIL: $HOOK is not executable. The harness runs it as a command, so it would never fire." >&2
   exit 1
