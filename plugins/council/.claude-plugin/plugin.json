@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "council",
   "description": "Fan one question out to N independent members and reconcile their answers without manufacturing consensus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "cjus"
   },

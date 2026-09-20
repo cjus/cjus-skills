@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "explain",
   "description": "Explain a topic for a mid-level engineer — in 250 words of prose, or as a self-contained HTML page with diagrams that opens in the browser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "cjus"
   },
