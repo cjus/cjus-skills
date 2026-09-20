@@ -166,12 +166,16 @@ From the argument, settle the title, the slug, the reader, and the angle. The re
 
 | Profile | For | Reads like |
 |---|---|---|
-| `narration` (the default) | A book read once, straight through, in order. An explainer, a primer, a long-form argument. | Chapters chained noun to noun, headings redundant with the prose, every part exiting on a weakness. |
-| `guide` | A book opened at one chapter the week it is needed, scanned under time pressure, returned to with a specific question. A preparation guide, a runbook, a handbook. | Chapters that stand alone, headings that carry the point, callouts marking what kind of sentence you are reading, numbered procedures, reference matter in appendices. |
+| `narration` | A book read once, straight through, in order. An explainer, a primer, a long-form argument. | Chapters chained noun to noun, headings redundant with the prose, every part exiting on a weakness. |
+| `guide` (the default) | A book opened at one chapter the week it is needed, scanned under time pressure, returned to with a specific question. A preparation guide, a runbook, a handbook. | Chapters that stand alone, headings that carry the point, callouts marking what kind of sentence you are reading, numbered procedures, reference matter in appendices. |
 
 **The test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, on a Saturday, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead, which is the finding `NOTES.md § The guide profile` records.
 
-**Decide it before the outline and never after the chapters exist.** It is one word in `book.json` at this point and a rewrite of every chapter afterwards, which is why it goes to the operator at the gate (§ 3) alongside the tag decision and for the same reason. Where the argument does not say and the subject does not obviously answer it, default to `narration` and say at the gate that you did.
+**Decide it before the outline and never after the chapters exist.** It is one word in `book.json` at this point and a rewrite of every chapter afterwards, which is why it goes to the operator at the gate (§ 3) alongside the tag decision and for the same reason. Where the argument does not say and the subject does not obviously answer it, **write `guide`** and say at the gate that you did.
+
+**`guide` is the default this skill writes, and `narration` is what the checker assumes when the key is absent.** Those are two different defaults and both are deliberate. A new book gets `"profile": "guide"` in `book.json` because a book built from a set of sources is nearly always opened at the chapter somebody needs, and the reader this skill is for is short on time rather than settling in. `check-book.sh` still reads an absent key as `narration`, because every book written before profiles existed has to keep passing untouched, and re-checking one under rules it was not written to would fail it on a `## In short` section nobody had asked for. So the default changes what gets **written**, never how an existing book is **read** (`NOTES.md § The guide profile`).
+
+**Choose `narration` where the book really is read start to finish** — an explainer, a primer, a long-form argument whose chapters build one case. Say so at the gate the same way.
 
 ### Sizing the book
 
@@ -275,6 +279,7 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
 {
   "subtitle": "...",
   "byline": "Claude Opus 5",
+  "profile": "guide",
   "description": ["One or two paragraphs for the cover."],
   "tags": true,
   "provenance": true,
@@ -301,13 +306,12 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
 
 | Key | Add it when | Leaving it out means |
 |---|---|---|
-| `"profile": "guide"` | The operator agreed `guide` at step 3 | The narration rules, which is what every book written before profiles existed is held to |
 | `"slide_figures": "diagrams/slides"` | The book carries lesson-script slide art in that folder | No slides; every image is a numbered figure |
 | `"edition": "reading"` | Every bind of this book should default to the reading edition | `/makebook` binds the default edition, and `--reading-edition` is there for the times you want the other one |
 
 **`edition` is `/makebook`'s key, not this skill's**, and setting it here only changes what a bind with no flag produces. Prefer leaving it out and passing `--reading-edition` when you want that binding, so the folder does not quietly decide for every future bind. `makebook/SKILL.md § The reading edition` owns it.
 
-**`profile` selects the rule set** (`reference/chapter-prose.md § The guide profile`). Absent means `narration`, which is what every book written before profiles existed is held to, so the default cannot be anything else. `"guide"` is the other value and there is no third. Write the profile the operator agreed at step 3, and note that `check-book.sh` prints it first on its summary line so a run against the wrong rule set is visible rather than silent.
+**`profile` selects the rule set** (`reference/chapter-prose.md § The guide profile`). `"guide"` is what the template carries and what a new book gets unless the operator chose otherwise at step 3 (§ 1). `"narration"` is the other value and there is no third. **Write the key explicitly either way rather than relying on its absence**: an absent key reads as `narration` to `check-book.sh`, so a guide book that omits it is checked against the wrong rule set and passes, which is the silent failure the explicit key exists to prevent. The checker prints the profile first on its summary line so a run against the wrong set is visible.
 
 **A `guide` book must also declare `overview`**, since `## In short` is required under that profile rather than opt-in. `check-book.sh` refuses a book that sets `"profile": "guide"` alongside `"overview": false`, because the two declarations contradict each other and guessing which the operator meant is not the checker's call.
 

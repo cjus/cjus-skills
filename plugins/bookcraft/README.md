@@ -171,12 +171,14 @@ The gate also shows you the **profile**, which is the rule set the whole book is
 
 | Profile | For | What it changes |
 |---|---|---|
-| `narration` (default) | A book read once, straight through. An explainer, a primer, a long argument | Nothing. These are the rules every book was written under before profiles existed |
-| `guide` | A book opened at one chapter the week it is needed. A preparation guide, a runbook, a handbook | Chapters stand alone instead of chaining; headings carry the point; four labelled callouts mark what kind of sentence you are reading; numbered procedures; reference matter moves to appendices |
+| `narration` | A book read once, straight through. An explainer, a primer, a long argument | Nothing. These are the rules every book was written under before profiles existed |
+| `guide` (default for a new book) | A book opened at one chapter the week it is needed. A preparation guide, a runbook, a handbook | Chapters stand alone instead of chaining; headings carry the point; four labelled callouts mark what kind of sentence you are reading; numbered procedures; reference matter moves to appendices |
 
 **The test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead.
 
-Set it with `"profile": "guide"` in `book.json`. Absent means `narration`, so every existing book still passes untouched, and `check-book.sh` prints the profile first on its summary line so a run against the wrong rule set is visible rather than silent.
+Set it with `"profile"` in `book.json`. **A new book gets `"guide"`**, because a book built from a set of sources is nearly always opened at the chapter somebody needs rather than read start to finish. Say so at the gate to get `"narration"` instead.
+
+**An absent key still reads as `narration`, and that is not the same default.** It is what every book written before profiles existed is held to, so those keep passing untouched: re-checking one under the guide rules would fail it on a `## In short` section nobody had asked for. `/createbook` therefore writes the key explicitly rather than leaning on its absence, and `check-book.sh` prints the profile first on its summary line so a run against the wrong rule set is visible rather than silent.
 
 ---
 

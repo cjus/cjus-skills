@@ -537,11 +537,24 @@ came from`). Everything else in that section was relaxed.
 **Why two profiles rather than one loosened set.** A single set tuned for both
 readers is slightly wrong for each, and more practically: every book written
 before this existed had to keep passing untouched. Absent has to mean
-narration, so the default could not be anything else, and `check-book.sh` reads
-the profile from `book.json` and never infers it from the chapters. Inferring
-it would turn a failure into a silent reclassification, which is the shape of
-the jq bug in `§ Phase 0` of this branch's plan: a check that got weaker and
-reported a pass.
+narration, so the checker's default could not be anything else, and
+`check-book.sh` reads the profile from `book.json` and never infers it from the
+chapters. Inferring it would turn a failure into a silent reclassification,
+which is the shape of the jq bug in `§ Phase 0` of this branch's plan: a check
+that got weaker and reported a pass.
+
+**The written default moved to `guide` on 2026-09-20, and the read default did
+not.** The sentence above holds for `check-book.sh` unchanged. What changed is
+what `/createbook` puts in a new `book.json`: the template now carries
+`"profile": "guide"`, on the operator's judgement that a book built from a set
+of sources is nearly always opened at the chapter somebody needs. The two
+defaults are now different on purpose, and the distinction is the whole reason
+the change is safe. Flipping the read default instead was measured and rejected:
+forcing the `fence/` fixture to `guide` turns a passing book into two
+`FAIL ... no "## In short" section` lines, because the guide profile sets
+`ovw_mode=required`. Every book written before this date would have failed the
+same way. Nothing about the rule sets themselves changed, and no existing
+`book.json` was touched.
 
 ### Five decisions the ticket left open
 
