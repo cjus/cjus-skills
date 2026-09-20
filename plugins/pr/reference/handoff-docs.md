@@ -1,12 +1,13 @@
 # Handoff documents
 
-Four kinds of document, each with a distinct audience and a distinct question. Conflating them is what makes each one worse.
+Six kinds of document, each with a distinct audience and a distinct question. Conflating them is what makes each one worse. The first four are per branch; the last two are repo-global and shared across every branch.
 
 | Where | Audience | Question it answers | Nature |
 |---|---|---|---|
 | `<changelogRoot>/<branch-slug>/PLAN.md` | The agent working this branch | "What am I doing, and what is left?" | Forward-looking, scope-frozen |
 | `<changelogRoot>/<branch-slug>/CHANGELOG.md` | The same | "What has this branch changed so far?" | Version-scoped, narrates the change |
 | `<changelogRoot>/<branch-slug>/pr-summary-<date>.md` | The PR reviewer | "What does this PR do and why?" | Version-scoped |
+| `<changelogRoot>/<branch-slug>/COMMITMSG.md` | Whoever reads the commit log | "What does this branch's commit say?" | Covers the uncommitted changes only |
 | `<continuityRoot>/<date>-<slug>.md` | A returning agent | "What just happened in this project?" | **Temporal, ages out** |
 | `<assertionsFile>` | An agent validating a change | "What invariants must hold?" | Atemporal |
 

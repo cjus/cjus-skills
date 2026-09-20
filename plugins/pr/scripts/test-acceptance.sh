@@ -17,6 +17,22 @@
 #
 # Requires jq, git and node. Writes only under the system temp directory.
 P="${1:?usage: acceptance.sh <plugin install path>}"
+
+# Resolve to an absolute path once, for the reason test-guard-default-branch.sh
+# does the same: every case below runs from a throwaway repo under the system temp
+# directory, and a relative $P vanishes there. The failure is not a clean one --
+# each case reports `No such file or directory` against a path that plainly exists,
+# which reads as a broken plugin rather than a mistyped argument.
+case "$P" in
+  /*) ;;
+  *)  P="$PWD/$P" ;;
+esac
+
+if [[ ! -d "$P" ]]; then
+  echo "FAIL: $P is not a directory. Pass the plugin's install path." >&2
+  exit 1
+fi
+
 S="$P/scripts/pr-lifecycle-state.mjs"
 PASS=0; FAIL=0
 
