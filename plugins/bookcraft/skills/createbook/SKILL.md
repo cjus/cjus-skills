@@ -38,9 +38,9 @@ With no first argument, ask what the book should be about and stop.
 
 Both were measured against `${CLAUDE_PLUGIN_ROOT}/skills/makebook/scripts/build-book.py`, not assumed.
 
-**Chapter numbers must be zero-padded.** `/makebook` collects chapters with `sorted(src.glob("*.md"))` (`build-book.py:398`), which is a plain lexicographic sort. Unpadded numbers misorder: `bk-1-a.md`, `bk-10-c.md`, `bk-2-b.md` is the sorted order Python actually returns. Pad to two digits, or to three if the book runs past 99 chapters.
+**Chapter numbers must be zero-padded.** `/makebook` collects chapters with `sorted(src.glob("*.md"))` (`build-book.py:load_chapters`), which is a plain lexicographic sort. Unpadded numbers misorder: `bk-1-a.md`, `bk-10-c.md`, `bk-2-b.md` is the sorted order Python actually returns. Pad to two digits, or to three if the book runs past 99 chapters.
 
-**The H1 must be the file's first line.** `/makebook` reads the chapter title from `lines[0]` and only when it starts with `# ` (`build-book.py:406`). Anything else, a blank first line or YAML frontmatter included, drops the file to a prettified filename instead (`build-book.py:410`). `prettify` strips only a *leading* number (`build-book.py:377`), so `docker-basics-03-layers.md` would title the chapter "Docker basics 03 layers" on the contents page.
+**The H1 must be the file's first line.** `/makebook` reads the chapter title from `lines[0]` and only when it starts with `# ` (`build-book.py:load_chapters`). Anything else, a blank first line or YAML frontmatter included, drops the file to a prettified filename instead. `prettify` strips only a *leading* number (`build-book.py:prettify`), so `docker-basics-03-layers.md` would title the chapter "Docker basics 03 layers" on the contents page.
 
 A chapter heads its parts with H2s and carries no level below that (`reference/chapter-prose.md § Headings`), so the H1 naming the chapter is the file's first line and its only heading of that level.
 
@@ -125,7 +125,7 @@ In a tagged book, which is the default, every paragraph opens with a tag naming 
 
 **Whichever way it goes, record it in `book.json` as `"tags": true` or `"tags": false`.** That is what lets `check-book.sh` check the book strictly without being handed a flag, and what tells a later session which kind of book it is holding. A book that declares nothing is checked in the weakest mode available, and the checker says so on its summary rather than letting the weaker run read as a pass.
 
-**The tag is not markdown, and it reaches the bound book.** `[3-14]` is a CommonMark shortcut reference link only when a matching `[3-14]: url` definition exists, and chapter prose has none, so it renders as literal text. Verified against `/makebook`'s own renderer (`build-book.py:381`) rather than a stand-in: the tag survives into the HTML, the PDF and the EPUB, and through `strip_markdown` as well. That is intended. A reader citing a paragraph from the PDF reads the same address the markdown carries.
+**The tag is not markdown, and it reaches the bound book.** `[3-14]` is a CommonMark shortcut reference link only when a matching `[3-14]: url` definition exists, and chapter prose has none, so it renders as literal text. Verified against `/makebook`'s own renderer (`build-book.py:markdown_renderer`) rather than a stand-in: the tag survives into the HTML, the PDF and the EPUB, and through `strip_markdown` as well. That is intended. A reader citing a paragraph from the PDF reads the same address the markdown carries.
 
 **The reported prose figure measures prose, so `check-book.sh` strips the tags before counting.** Left in, `wc -w` scores each tag as a word and a chapter's reported length drifts up by its paragraph count.
 
@@ -274,7 +274,7 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
 ```json
 {
   "subtitle": "...",
-  "byline": "Carlos Justiniano",
+  "byline": "Claude Opus 5",
   "description": ["One or two paragraphs for the cover."],
   "tags": true,
   "provenance": true,
@@ -290,6 +290,12 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
   }
 }
 ```
+
+**The byline is the one field not written as it stands.** Write the name of the model writing the chapters, as that model knows itself — `Claude Opus 5`, `Claude Sonnet 5` — rather than a person's name, because that is who wrote them. The template carries a name instead of a placeholder because a placeholder is a thing that gets copied onto a cover; read the value as the shape rather than as the string, and write your own. It prints under the title on the PDF cover and becomes the EPUB's author field, so it is metadata as well as cover text.
+
+**Where the operator names a byline, use theirs without asking.** The field is theirs: a book they commissioned, own and may publish is one whose cover they get to sign, and an EPUB bound for a store wants the name on the account rather than the name of the model. The model name is the default for the case where nobody said, not a rule about what a byline may be.
+
+**A later revision does not change it.** `/updatebook` reads `book.json` and never writes it, so a book revised by a different model keeps the byline of the one that wrote it. That is the honest reading of a byline and not an oversight: what the revision changes belongs in `about-this-book.md`, which is prose and can say both.
 
 **Three more keys exist and none of them is a default.** Add a key only when the sentence beside it is true of this book; JSON carries no comments, so the split is here rather than in the file.
 
@@ -326,15 +332,15 @@ The bare string form stays valid and unchanged, for every source whose key alrea
 
 **`glossary` declares that this book carries one**, which makes a missing `glossary.md` an error at bind time rather than a book that ships without the thing it promised. Drop the key for a book that wants none. See step 6.
 
-**`tags` records whether this book carries paragraph tags**, `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`build-book.py:392-402`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
+**`tags` records whether this book carries paragraph tags**, `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`build-book.py:load_config`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
 
-**`exclude` is not optional here.** `/makebook` turns every `*.md` in the folder into a chapter unless it is skipped (`build-book.py:398-400`), so `OUTLINE.md` would otherwise be bound into the book as a chapter. Any other non-chapter markdown added to the folder goes in the same list.
+**`exclude` is not optional here.** `/makebook` turns every `*.md` in the folder into a chapter unless it is skipped (`build-book.py:load_chapters`), so `OUTLINE.md` would otherwise be bound into the book as a chapter. Any other non-chapter markdown added to the folder goes in the same list.
 
 ### 5. Draft the chapters
 
 Run each chapter as its own subagent, in batches of about four, so the prose is written in parallel and stays out of this session's context. Each agent writes its own file with the Write tool and reports only the path and the word count.
 
-**Do not downgrade chapter agents to a cheaper model.** Chapter prose makes factual claims a reader will take as taught, which `CLAUDE.md § Model Delegation` keeps on the session's own tier, and its quality is not cheaply verifiable from the outside. The structural checks in step 7 catch format, never accuracy.
+**Do not downgrade chapter agents to a cheaper model.** Chapter prose makes factual claims a reader will take as taught, and work whose output a reader takes as taught stays on the session's own tier; its quality is not cheaply verifiable from the outside either. The structural checks in step 7 catch format, never accuracy.
 
 Each agent's prompt carries, in full:
 
@@ -361,7 +367,7 @@ Each agent's prompt carries, in full:
 
 - **What this book is for**, and what someone who finishes it can do. Two or three sentences.
 - **What it was built from**, the source ledger's first column in prose, each entry specific enough to open.
-- **What it fills in**, and where the sources were thin enough that a chapter is mostly the author's.
+- **What it fills in**, and where the sources were thin enough that a chapter is mostly the model's own knowledge.
 - **What it does not cover**, the honest edge, pointing at the per-chapter concept lists rather than repeating them.
 - **How to read it**, when the book has a shorter path through it worth naming.
 

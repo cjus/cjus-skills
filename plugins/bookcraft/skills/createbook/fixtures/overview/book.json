@@ -1,6 +1,6 @@
 {
   "subtitle": "Two chapters carrying the In short section",
-  "byline": "Carlos Justiniano",
+  "byline": "Claude Opus 5",
   "description": [
     "A fixture for check-book.sh. Both chapters are structurally valid and both carry `## In short` directly under the header table. Chapter 1 has no carried-in line, having nothing behind it; chapter 2 carries in one term that chapter 1 glossed.",
     "It exercises all five overview rules at once: the section is present, it is the first H2 with the header table immediately before it, it takes no paragraph tag and no provenance mark, its carried-in line is under the ceiling, and every carried term resolves to an earlier chapter in the glossary."

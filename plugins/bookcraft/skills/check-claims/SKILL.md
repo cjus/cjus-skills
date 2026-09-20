@@ -62,7 +62,7 @@ In batches of about four, matching `/createbook`'s drafting step. Each agent's p
 5. **That every pointer's `paths` are absolute and its `read` mode says how to open it**: `open` for an ordinary Read, `pages` for a PDF with the page numbers given, `inline` for a deck whose text is already in the file because the Read tool cannot open a `.pptx`.
 6. **That it reports only the path and its counts**, never the findings themselves. The findings are read off disk.
 
-**Do not downgrade these agents to a cheaper model.** They judge whether a claim a student will be taught is supported by its source, which `CLAUDE.md § Model Delegation` keeps on the session's own tier, and the output is not cheaply verifiable from outside: checking a verdict means redoing the reading that produced it. This is the same rule `/createbook` step 5 applies to chapter prose, for the same reason.
+**Do not downgrade these agents to a cheaper model.** They judge whether a claim a student will be taught is supported by its source, which keeps them on the session's own tier, and the output is not cheaply verifiable from outside: checking a verdict means redoing the reading that produced it. This is the same rule `createbook/SKILL.md § 5. Draft the chapters` applies to chapter prose, for the same reason.
 
 **An agent that stalls is resumed, not respawned.** `SendMessage` it by name and tell it to stop checking further units and write the file with what it has, saying in `notes` how far it got. A respawn discards everything it established.
 
@@ -104,9 +104,9 @@ The totals, the count of findings by verdict, and the report's path. Name the tw
 
 ## Triage of what it finds
 
-Findings are advisory, and most will not be worth acting on. Apply `CLAUDE.md § Plans`' three bins:
+Findings are advisory, and most will not be worth acting on. Sort them into three bins:
 
-- **FIX NOW** for an `unsupported` finding in material students are taught from. A wrong attribution in a teaching guide is repeated aloud, and this is the unconditional escalation that section already carves out.
+- **FIX NOW** for an `unsupported` finding in material students are taught from. A wrong attribution in a teaching guide is repeated aloud, and this is the one bin that escalates unconditionally.
 - **TICKET** for a pattern: one source that several chapters read the same wrong way, or a shorthand whose scope the book keeps overstating.
 - **DROP** for the rest, which is the default. An `unclear` verdict is not a defect; it is a unit nobody can settle cheaply.
 

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Refuse a commit that leaves a cross-reference pointing at the wrong place.
+#
+# Skill files are prompts read at runtime, so a stale reference is a fault an
+# agent acts on rather than one a reader notices. Nothing else checks them.
+#
+# Install once per clone:
+#     git config core.hooksPath .githooks
+#
+# Skip a single commit with `git commit --no-verify` when a reference and its
+# target have to move in separate commits on purpose.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+checker="$root/scripts/check-citations.py"
+[ -f "$checker" ] || exit 0          # nothing to enforce on a branch without it
+
+python3 "$checker" || {
+  echo
+  echo "Citations above do not resolve. Fix them, or commit with --no-verify."
+  exit 1
+}

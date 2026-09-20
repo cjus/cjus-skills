@@ -1,6 +1,6 @@
 {
   "subtitle": "The guide fixture's chapters with no profile declared",
-  "byline": "Carlos Justiniano",
+  "byline": "Claude Opus 5",
   "description": [
     "The same three files as `guide/`, with the `\"profile\": \"guide\"` line removed so the narration rules apply. Every guide-only construct in them is expected to fail here.",
     "This is the half that proves the profile is doing the work. A checker that had quietly stopped enforcing the narration rules would pass this folder, and running `guide/` alone would never show it."

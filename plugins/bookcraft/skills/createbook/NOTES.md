@@ -70,7 +70,7 @@ Operator decision, 2026-09-10, in two steps in one session, and the last change 
 
 Operator request, 2026-09-10, for the reference book. It is a feature of the process rather than of any one book's prompt, and the reason is mechanical rather than editorial.
 
-**A prompt cannot deliver a glossary that reaches the bound book.** Both tools treat every top-level `.md` in the folder as a chapter: `check-book.sh` collects with `find "$dir" -maxdepth 1 -name '*.md'` and `/makebook` with `sorted(src.glob("*.md"))` (`build-book.py:408`). A `glossary.md` written by an agent following a prompt either fails the filename pattern and the shape rules, or is quieted with an `exclude` entry, at which point the binder skips it too and the PDF ships without it. The second way looks like success, which is worse. So both tools now skip the glossary by name, whether or not `exclude` mentions it.
+**A prompt cannot deliver a glossary that reaches the bound book.** Both tools treat every top-level `.md` in the folder as a chapter: `check-book.sh` collects with `find "$dir" -maxdepth 1 -name '*.md'` and `/makebook` with `sorted(src.glob("*.md"))` (`build-book.py:load_chapters`). A `glossary.md` written by an agent following a prompt either fails the filename pattern and the shape rules, or is quieted with an `exclude` entry, at which point the binder skips it too and the PDF ships without it. The second way looks like success, which is worse. So both tools now skip the glossary by name, whether or not `exclude` mentions it.
 
 **The term list is the outline's ledger rather than a fresh reading.** The ledger is fixed before drafting so chapters can be written in parallel, and it already names every term and its owning chapter. Re-deriving the list from twenty finished chapters would produce a second list that disagrees with the first. The definitions come from the same-breath gloss each chapter is already required to carry (`chapter-prose.md § Every part does five things`), so a definition exists at a known address before the glossary is written; in a tagged book the paragraph tag names that address exactly.
 
@@ -339,8 +339,8 @@ the plan it had already made, so it re-derives the chapter's claim, its cuts and
 its term spending, and writes a different chapter from the one the outline
 assigned. Read the file on disk first, because that is what says where the
 stopped agent got to, and put what it holds into the resume message. The same
-rule for the same reason governs the reviewer agent at root `CLAUDE.md § Running
-the gate at /pr-close`.
+rule for the same reason governs any long-running agent whose partial work is
+already on disk.
 
 **What a stopped agent left behind was a partial file and never a corrupt one**,
 across these ten. Each writes its chapter with the Write tool, so a file was
@@ -355,7 +355,7 @@ Correction: withdrawn. Running ten agents at once rather than four changes when
 the token spend lands, not how much of it there is, so the batch size cannot on
 its own explain reaching a usage limit. No token accounting was available for
 that run and none has been taken since, so nothing measured says what a safe
-rate is, or whether the four at `SKILL.md:243` is one. That guidance stands on
+rate is, or whether the four at `SKILL.md § 5. Draft the chapters` is one. That guidance stands on
 the context-window reasoning it was written for, which this incident does not
 touch.
 
