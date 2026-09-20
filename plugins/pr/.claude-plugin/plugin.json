@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "pr",
+  "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
+  "version": "0.2.1",
+  "author": {
+    "name": "cjus"
+  },
+  "homepage": "https://github.com/cjus/cjus-skills",
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": [
+    "pr",
+    "github",
+    "issues",
+    "workflow",
+    "worktree",
+    "changelog"
+  ]
+}

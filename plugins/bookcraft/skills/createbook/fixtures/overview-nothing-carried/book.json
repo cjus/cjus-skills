@@ -1,0 +1,13 @@
+{
+  "subtitle": "A book declaring overview and a glossary where no chapter carries anything in",
+  "byline": "Carlos Justiniano",
+  "description": [
+    "A fixture for check-book.sh. One chapter, declaring both `overview` and `glossary`, whose `## In short` section has no carried-in line because there is no chapter before it to carry anything from.",
+    "It guards the empty case in the glossary cross-check. bash 3.2 treats `\"${arr[@]}\"` on an empty array as unbound under `set -u`, so before the guard this book aborted the run with `carried_records[@]: unbound variable` and printed no summary line at all. Every single-chapter book has this shape, as does any book whose chapters all reintroduce nothing."
+  ],
+  "tags": true,
+  "provenance": true,
+  "suggested_reading": true,
+  "overview": true,
+  "glossary": true
+}

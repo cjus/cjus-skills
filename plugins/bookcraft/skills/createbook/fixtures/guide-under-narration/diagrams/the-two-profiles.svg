@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200">
+  <title>How a profile is chosen</title>
+  <rect x="10" y="30" width="230" height="140" fill="#f4f4f4" stroke="#555"/>
+  <rect x="280" y="30" width="230" height="140" fill="#f4f4f4" stroke="#555"/>
+  <text x="125" y="70" font-size="16" text-anchor="middle">narration</text>
+  <text x="125" y="100" font-size="12" text-anchor="middle">read once, in order</text>
+  <text x="395" y="70" font-size="16" text-anchor="middle">guide</text>
+  <text x="395" y="100" font-size="12" text-anchor="middle">opened at one chapter</text>
+</svg>

@@ -1,0 +1,11 @@
+{
+  "subtitle": "Two chapters that differ only in one fenced block",
+  "byline": "Carlos Justiniano",
+  "description": [
+    "A fixture for check-book.sh. Both chapters are structurally valid. The second carries a fenced python block whose body holds a line opening with a hash and a line opening with three hashes, which is the shape a lab stub prints.",
+    "Before the fence-awareness fix, chapter 2 fails the H1 test and the H3 test and chapter 1 passes. After it, both pass."
+  ],
+  "tags": true,
+  "provenance": true,
+  "suggested_reading": true
+}

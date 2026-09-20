@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225">
+  <title>Week one, opening slide</title>
+  <rect x="0" y="0" width="400" height="225" fill="#fff" stroke="#888"/>
+  <text x="200" y="100" font-size="26" text-anchor="middle">Why profiles</text>
+  <text x="200" y="140" font-size="16" text-anchor="middle">one rule set per reader</text>
+</svg>

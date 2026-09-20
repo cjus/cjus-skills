@@ -1,0 +1,16 @@
+{
+  "subtitle": "A fixture for check-provenance.sh",
+  "byline": "Carlos Justiniano",
+  "description": [
+    "Two chapters whose provenance marks exercise every verdict check-provenance.sh can reach through a markdown source: a mark that resolves, a source the book never declared, a heading the source does not carry, a paragraph tag and a chapter number the book does not define, a quotation that is in the source, a quotation that is in the source under different punctuation, and a quotation that is nowhere.",
+    "Chapter 1 holds only passing marks, so a run that reports anything against it is a regression. Chapter 2 holds one of each failing shape, each named in the line above it. Expected: 6 failures and 1 review, exit 1. This sentence is the fixture's only assertion, since the repo has no CI to hold it; update it in the same edit that adds or removes a case.",
+    "The page and slide range checks are NOT covered here, because a fixture for them would mean committing a PDF and a .pptx. They are exercised against real course material instead, in a private repo."
+  ],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": false,
+  "unsourced": ["measured"],
+  "sources": {
+    "handbook": "sources/handbook.md"
+  }
+}

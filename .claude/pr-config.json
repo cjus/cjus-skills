@@ -1,0 +1,11 @@
+{
+  "$schema": "./../plugins/pr/reference/pr-config.schema.json",
+  "repo": "cjus/cjus-skills",
+  "docs": {
+    "continuityRoot": null,
+    "assertionsFile": null
+  },
+  "closeGate": {
+    "requiredArtifacts": ["pr-summary"]
+  }
+}

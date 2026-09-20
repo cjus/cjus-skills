@@ -1,0 +1,15 @@
+# The makebook venv lives outside the repo (see plugins/bookcraft/scripts/install.sh),
+# but ignore the in-tree spelling so a stray local venv can never be committed.
+# No trailing slash: a slashed pattern matches a directory but not a symlink.
+.venv
+__pycache__
+*.pyc
+.DS_Store
+
+# Local session helper, not part of the marketplace
+hdr.sh
+
+# Project instructions for Claude Code: local only, never published.
+# Holds the cross-project reference rules, which name the very projects
+# this repo must not mention.
+CLAUDE.md

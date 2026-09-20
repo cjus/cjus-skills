@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# Runs a bookcraft script under the interpreter install.sh built.
+#
+# It exists so that a command block in a SKILL.md spells one root rather than
+# two. The code ships with the plugin and moves with each version; the venv sits
+# at a stable per-user path and does not (see install.sh for why). Without this
+# wrapper every documented command would have to name both paths, and the venv
+# one would be the one people got wrong.
+#
+# Usage: bookcraft-python <script.py> [args...]
+set -euo pipefail
+
+VENV="${XDG_CACHE_HOME:-$HOME/.cache}/bookcraft/venv"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -x "$VENV/bin/python" ]]; then
+  echo "bookcraft: no interpreter at $VENV/bin/python" >&2
+  echo >&2
+  echo "Run the one-time setup first:" >&2
+  echo "    $HERE/install.sh" >&2
+  exit 1
+fi
+
+exec "$VENV/bin/python" "$@"

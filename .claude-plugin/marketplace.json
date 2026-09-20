@@ -1,0 +1,34 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cjus-skills",
+  "description": "Claude Code plugins by Carlos Justiniano",
+  "owner": {
+    "name": "cjus"
+  },
+  "plugins": [
+    {
+      "name": "bookcraft",
+      "description": "Write a book from a one-line description, bind it into a PDF and EPUB, revise it in place, and check its claims against its sources",
+      "category": "productivity",
+      "source": "./plugins/bookcraft"
+    },
+    {
+      "name": "council",
+      "description": "Fan one question out to N independent members and reconcile their answers without manufacturing consensus",
+      "category": "productivity",
+      "source": "./plugins/council"
+    },
+    {
+      "name": "explain",
+      "description": "Explain a topic for a mid-level engineer — in 250 words of prose, or as a self-contained HTML page with diagrams that opens in the browser",
+      "category": "productivity",
+      "source": "./plugins/explain"
+    },
+    {
+      "name": "pr",
+      "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
+      "category": "productivity",
+      "source": "./plugins/pr"
+    }
+  ]
+}

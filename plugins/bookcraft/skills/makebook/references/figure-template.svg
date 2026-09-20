@@ -1,0 +1,44 @@
+<!-- Starter figure for makebook. Copy, rename the xx- ids, replace the content.
+     Designed at viewBox width 640, where the type below renders at 8-11pt in a
+     6.0in book column. See diagram-style.md before changing the viewBox. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300"
+     role="img" aria-labelledby="xx-t xx-d">
+  <title id="xx-t">State the claim this figure makes, in one sentence</title>
+  <desc id="xx-d">Describe the figure for a reader who cannot see it: what the parts
+    are, how they relate, and what the figure demonstrates. This text does not print.</desc>
+
+  <style>
+    .hd   { font: 700 13px "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: .1em; }
+    .lbl  { font: 400 13px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .cd   { font: 400 13px "SF Mono", Menlo, Consolas, monospace; }
+    .note { font: italic 400 12px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .ink  { fill: #1F2937; }
+    .mid  { fill: #4B5563; }
+    .bad  { fill: #B4261E; }
+  </style>
+
+  <defs>
+    <marker id="xx-arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#6B7280"/>
+    </marker>
+  </defs>
+
+  <rect width="640" height="300" fill="#FFFFFF"/>
+
+  <!-- left panel: the expected case, tinted amber because it is the subject -->
+  <rect x="24" y="56" width="264" height="180" rx="6" fill="#F7D9A5" stroke="#C08A1E" stroke-width="2"/>
+  <text class="hd ink"  x="44" y="88">WHAT YOU EXPECT</text>
+  <text class="cd ink"  x="44" y="126">the command as written</text>
+  <text class="note mid" x="44" y="152">what it looks like it does</text>
+
+  <!-- right panel: the case that breaks it -->
+  <rect x="352" y="56" width="264" height="180" rx="6" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="2"/>
+  <text class="hd ink"  x="372" y="88">WHAT HAPPENS</text>
+  <text class="cd ink"  x="372" y="126">the same command, elsewhere</text>
+  <text class="note bad" x="372" y="152">the failure, named</text>
+
+  <!-- the arrow carries the argument from one panel to the other -->
+  <path d="M292,146 H346" stroke="#6B7280" stroke-width="2" fill="none" marker-end="url(#xx-arrow)"/>
+
+  <text class="lbl mid" x="320" y="268" text-anchor="middle">one line naming what changed between them</text>
+</svg>

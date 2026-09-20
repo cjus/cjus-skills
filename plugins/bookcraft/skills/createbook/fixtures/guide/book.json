@@ -1,0 +1,15 @@
+{
+  "subtitle": "Two chapters and an appendix under the guide profile",
+  "byline": "Carlos Justiniano",
+  "description": [
+    "A fixture for check-book.sh's guide profile. Everything in it is a construct the narration profile rejects: an H3 inside a part, all four callout labels, a numbered procedure, a chapter opening on no handoff noun, and an appendix tagged [A1-n].",
+    "`guide-under-narration/` holds the same three files with the profile declaration removed. Running both is what shows the profile is doing the work rather than the checker having gone quiet."
+  ],
+  "profile": "guide",
+  "tags": true,
+  "provenance": true,
+  "suggested_reading": true,
+  "overview": true,
+  "glossary": true,
+  "slide_figures": "diagrams/slides"
+}
