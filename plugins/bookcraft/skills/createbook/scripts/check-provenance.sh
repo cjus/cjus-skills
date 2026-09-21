@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify that a book's provenance marks point OUT at sources that hold them.
 
-    check-provenance.sh [--locators-only|--quotes-only] [--emit-worklist DIR] [--chapters N,M] <book-folder>
+    check-provenance.sh [--locators-only|--quotes-only|--ledger-only] [--emit-worklist DIR] [--chapters N,M,AN] <book-folder>
 
 `check-references.sh` runs the other direction: it verifies that citations
 pointing INTO a book resolve to chapters and paragraphs that exist. Nothing
@@ -81,12 +81,36 @@ quotes nothing. That needs a model reading both, which is a different kind of
 check from anything in this folder. It is a separate filed ticket, and `--emit-worklist` below
 is this script's half of it.
 
+## --ledger-only: checking the contract before anything inherits it
+
+`--ledger-only <book-folder>` reads `OUTLINE.md` alone and resolves the source
+ledger the outline's step 2 builds: every re-openable row names a file that is
+on disk, and every locator written into a row resolves against it. It reads no
+chapter, needs no `book.json`, and is meant to run at step 3, BEFORE the
+operator gate and before any chapter agent exists.
+
+The ordering is the whole point. The three checks above run at step 7, over
+finished chapters. The ledger is what every chapter brief is derived from, so an
+error in it is not one chapter's error: it is handed to every agent drawing on
+that row, at the same time, and each one writes prose around it. On one
+21-chapter run five errors reached the fan-out this way, three of them page
+locators off by one. They were caught only because § 5 tells each agent to open
+its sources rather than write from the brief, which turns the workers into
+independent checks on the contract they were given. That is luck, not design,
+and it costs a chapter agent's whole context each time. This check costs about a
+second and does not grow with the chapter count.
+
+It cannot read `book.json`, because step 4 has not written it yet. The ledger's
+own Source column is the map instead: a row naming a path the checker can open
+is resolved against that path, and a row marked not re-openable is web-derived
+by construction, so its locators are counted as unasserted rather than passed.
+
 ## --emit-worklist: handing the paraphrase pass what it needs
 
 `--emit-worklist DIR` writes one JSON file per chapter, holding every unit that
 rests on an external source, each with the unit's own prose and a POINTER to
 every source its mark names. A reading agent opens those sources and judges
-whether the paragraph is supported by what it finds. `--chapters N,M` scopes
+whether the paragraph is supported by what it finds. `--chapters N,M,AN` scopes
 the emission to named chapters, which is what an /updatebook run wants: it
 already knows which chapters its edit reached, so it has no reason to pay for
 the other seventeen.
@@ -890,19 +914,287 @@ def resolve_locator(src, rest, where):
 
 
 # --------------------------------------------------------------------------
+# The outline's own ledger
+# --------------------------------------------------------------------------
+
+# A ledger cell is prose, while `resolve_locator` matches its patterns against a
+# whole string. The citation has to be cut out of the sentence and handed over
+# on its own, which is what these find. They are looser than the anchored
+# patterns above on purpose: what they read was written for a person, not
+# emitted by the mark grammar.
+CITE_PAGE = re.compile(r"\bpp?\.\s*\d+(?:\s*(?:[-\u2013,]|\s+and\s+)\s*\d+)*", re.I)
+CITE_SLIDE = re.compile(r"\bslides?\s+\d+(?:\s*(?:[-\u2013,]|\s+and\s+|\s+to\s+)\s*\d+)*", re.I)
+# A colon is deliberately NOT a terminator. Headings carry one often, and while
+# `heading_hit` prefix-matching would absorb most of the difference, truncating
+# at a colon narrows what the citation asserted without saying so. The dashes
+# and the pipe are different: they separate a citation from prose that follows
+# it, so stopping there is what the citation meant.
+CITE_SECTION = re.compile(r"\u00a7\s*[^,;)|\u2013\u2014]+")
+CITE_ITEM = re.compile(r"\bQ\d+\b")
+
+# What a ledger row may name as a file this checker can open. A row naming
+# anything else is web-derived by construction, which is what Re-openable says.
+SOURCE_EXTS = {".md", ".pdf", ".pptx", ".html", ".htm", ".txt"}
+
+
+def _tables(text):
+    """Every markdown table in the file, as lists of cell lists.
+
+    Consecutive pipe-delimited lines are one table. OUTLINE.md carries more than
+    one, the chapter list among them, so the ledger is found by its columns
+    below rather than by being first.
+    """
+    tables, cur = [], []
+    for line in text.splitlines():
+        s = line.strip()
+        if len(s) > 1 and s.startswith("|") and s.endswith("|"):
+            cur.append([c.strip() for c in s[1:-1].split("|")])
+        elif cur:
+            tables.append(cur)
+            cur = []
+    if cur:
+        tables.append(cur)
+    return tables
+
+
+def _bare(cell):
+    """A header or source cell without the markdown that decorates it."""
+    return re.sub(r"[*`]", "", cell).strip()
+
+
+def _is_rule(cells):
+    """The `|---|---|` row under a table's header."""
+    return set("".join(cells)) <= set("-: ")
+
+
+def find_ledger(text):
+    """The source ledger's header and data rows, or (None, []).
+
+    Identified by naming both Source and Re-openable, which is the shape
+    `createbook/SKILL.md` § 2 fixes. Matching on the columns rather than on
+    position means a book that grew another table above the ledger still checks.
+    """
+    for tbl in _tables(text):
+        if len(tbl) < 2:
+            continue
+        head = [_bare(c).lower() for c in tbl[0]]
+        flat = [h.replace("-", "").replace(" ", "") for h in head]
+        if "source" in head and "reopenable" in flat:
+            return head, [r for r in tbl[1:] if not _is_rule(r)]
+    return None, []
+
+
+def _paths_in(cell):
+    """Every path-shaped token in a ledger cell, backticked or bare.
+
+    Backticks first and alone when they are there: a row reading
+    ``docs/handbook.md`, the Join Algorithms section` has one path, and
+    scanning bare tokens too would take "section" apart looking for more.
+    """
+    found = [m.group(1).strip() for m in re.finditer(r"`([^`]+)`", cell)
+             if pathlib.PurePath(m.group(1).strip()).suffix.lower() in SOURCE_EXTS]
+    if found:
+        return found
+    return [tok for tok in (w.strip(".,;:()[]") for w in cell.split())
+            if pathlib.PurePath(tok).suffix.lower() in SOURCE_EXTS]
+
+
+def _lower_lead(cite):
+    """Lowercase a citation's opening word, and nothing else.
+
+    `CITE_PAGE` and `CITE_SLIDE` carry `re.I`, because a ledger cell is prose and
+    may open a sentence with "Slides 4-9". `PAGES` and `SLIDES` are anchored and
+    lowercase, so the citation was extracted, counted, and then matched by
+    neither: it reported REVIEW as though the locator were the wrong kind for
+    its source. Only the leading run is folded, so a heading keeps the case
+    `heading_hit` may compare on.
+    """
+    return re.sub(r"^[A-Za-z]+", lambda m: m.group(0).lower(), cite)
+
+
+def _cites_in(text):
+    """Every locator a ledger row writes, in the order the patterns are tried."""
+    out = []
+    for pat in (CITE_PAGE, CITE_SLIDE, CITE_SECTION, CITE_ITEM):
+        out += [m.group(0).strip() for m in pat.finditer(text)]
+    return out
+
+
+def check_ledger(book):
+    """Resolve the outline's source ledger, before any chapter exists.
+
+    Returns the process exit code. Failures are counted through `problem()` the
+    way every other check here is, so a ledger failure reads the same as a mark
+    failure and exits the same way.
+    """
+    outline = book / "OUTLINE.md"
+    if not outline.exists():
+        print(f"error: no {outline}. The ledger is written at step 2 and this "
+              f"check runs at step 3.", file=sys.stderr)
+        return 2
+
+    head, rows = find_ledger(outline.read_text(errors="replace"))
+    if head is None:
+        print(f"error: {outline} carries no source ledger: no table whose header "
+              f"names both Source and Re-openable.", file=sys.stderr)
+        return 2
+    if not rows:
+        print(f"error: {outline}'s source ledger has a header and no rows.",
+              file=sys.stderr)
+        return 2
+
+    i_src = head.index("source")
+    i_reop = next(i for i, h in enumerate(head)
+                  if h.replace("-", "").replace(" ", "") == "reopenable")
+
+    opened = 0
+    n_cites = 0
+    unasserted = 0
+
+    for n, cells in enumerate(rows, 1):
+        if len(cells) <= max(i_src, i_reop):
+            problem(f"OUTLINE.md ledger row {n} has {len(cells)} column(s); the "
+                    f"ledger header declares {len(head)}")
+            continue
+
+        src_cell = cells[i_src]
+        name = _bare(src_cell) or f"row {n}"
+        label = name if len(name) <= 60 else name[:57] + "..."
+        where = f"OUTLINE.md ledger row {n} ({label})"
+
+        reop = _bare(cells[i_reop]).lower()
+        # Every column but Re-openable, because a locator is as likely to sit in
+        # "What the book owes it" as beside the path itself. Scanned one cell at
+        # a time rather than over the joined row: `\u00a7 Heading` runs to a delimiter,
+        # and a joined row offers none at the cell boundary, so a section
+        # citation would swallow the columns after it and resolve as one long
+        # heading nothing carries.
+        cites = []
+        for j, c in enumerate(cells):
+            if j != i_reop:
+                cites += _cites_in(c)
+        n_cites += len(cites)
+        paths = _paths_in(src_cell)
+
+        if not reop.startswith("yes"):
+            if not reop.startswith("no"):
+                problem(f"{where}: Re-openable reads {cells[i_reop]!r}; it is "
+                        f"yes or no")
+                continue
+            if paths:
+                # One of the two is wrong, and which one cannot be settled here.
+                flag(f"{where}: Re-openable says no, but the row names a file "
+                     f"this checker could open", "; ".join(paths))
+            unasserted += len(cites)
+            continue
+
+        if not paths:
+            problem(f"{where}: Re-openable says yes, but the row names no file "
+                    f"with a readable extension",
+                    f"looked for {', '.join(sorted(SOURCE_EXTS))}")
+            continue
+
+        # Named by its path rather than by the cell, which also holds the
+        # locator: "handbook.md \u00a7 Nothing carries no heading matching \u00a7 Nothing"
+        # names the citation twice and reads as though the path were at fault.
+        src = Source(", ".join(paths), [book / q for q in paths])
+        if src.missing:
+            problem(f"{where}: names a path that does not exist",
+                    "; ".join(str(q) for q in src.missing))
+            continue
+        opened += 1
+
+        for cite in cites:
+            verdict, _ = resolve_locator(src, _lower_lead(cite), where)
+            if verdict == "review":
+                # Not a failure and not a pass. The common shape is a locator of
+                # the wrong kind for its source, which is how an anchor comes to
+                # be attributed to the wrong document: `§ Something` written against
+                # a PDF asserts nothing, and reads exactly like one that resolved.
+                flag(f"{where}: nothing asserted {cite!r} against {src.name}, "
+                     f"which is a {src.kind} source")
+
+    print()
+    print(f"ledger  {len(rows)} row(s); {opened} re-openable source(s) opened; "
+          f"{n_cites} locator(s) read out of the rows.")
+    if unasserted:
+        print(f"        {unasserted} of those sit on rows marked not re-openable "
+              f"and were not asserted against anything.")
+
+    if fail:
+        print()
+        print(f"{fail} failure(s) in the ledger. Fix them here: every chapter brief "
+              f"is derived from")
+        print("these rows, so each one is inherited by every chapter that draws on it.")
+        return 1
+
+    if review:
+        print(f"OK*   nothing failed, and {review} REVIEW item(s) above are still "
+              f"unread.")
+        print("      This is not an all-clear until someone has been through them.")
+        return 0
+
+    print("OK    every re-openable ledger row names a file on disk, and every "
+          "locator")
+    print("      in the ledger resolves against the source its row names.")
+    print("      The ledger only. No chapter was read; nothing here checks prose.")
+    return 0
+
+
+# --------------------------------------------------------------------------
 # Emitting the worklist
 # --------------------------------------------------------------------------
 
-def chapter_number(name):
-    """The chapter number in a filename, by the book format's own rule.
+# `<book-slug>-appendix-N-<slug>.md`, the one chapter-kind filename that does
+# not carry a chapter number (`check-book.sh`, `reference/chapter-prose.md
+# § Appendices`). Tried before the chapter rule, exactly as check-book.sh tries
+# it, because the chapter rule would match the N and be wrong.
+APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
 
-    `createbook/SKILL.md` fixes the chapter number as the filename's first digit
-    run and forbids a digit in the book slug for exactly this reason, so there
-    is one candidate rather than two. Returns None when the filename carries no
-    digit at all, which `--chapters` then reports rather than silently skipping.
+
+def chapter_id(name):
+    """This file's kind and its number within that kind.
+
+    Two kinds, and an appendix numbers in its own sequence, so the pair is the
+    identifier rather than the number alone. Taking the filename's first digit
+    run for everything, which is the chapter rule `createbook/SKILL.md`
+    § Filenames fixes, reads appendix 1 as chapter 1: the two then collide, and
+    a book carrying an appendix could not be rendered at all.
+
+    For a chapter the rule is unchanged, and the book slug may still not carry a
+    digit, because that is what leaves one candidate rather than two.
+
+    Returns (None, None) when the filename carries no digit at all, which
+    `--chapters` then reports rather than silently skipping.
     """
+    m = APPENDIX_FILE.search(name)
+    if m:
+        return "appendix", int(m.group(1))
     m = re.search(r"\d+", name)
-    return int(m.group(0)) if m else None
+    return ("chapter", int(m.group(0))) if m else (None, None)
+
+
+def id_label(kind, number):
+    """How a report row, and an error about one, names a chapter-kind file."""
+    return f"appendix {number}" if kind == "appendix" else f"ch. {number}"
+
+
+def id_token(kind, number):
+    """How `--chapters` spells one. `A2` matches the appendix's own tag half."""
+    return f"A{number}" if kind == "appendix" else str(number)
+
+
+def parse_id_token(tok):
+    """One `--chapters` token: `13` is a chapter, `A2` an appendix.
+
+    Returns (kind, number), or None when the token is neither, which the caller
+    reports rather than dropping.
+    """
+    tok = tok.strip()
+    m = re.fullmatch(r"[Aa](\d+)", tok)
+    if m:
+        return "appendix", int(m.group(1))
+    return ("chapter", int(tok)) if tok.isdecimal() else None
 
 
 def _slides_for(src, slide):
@@ -1040,16 +1332,18 @@ def write_worklist(emit_dir, book, by_chapter, scoped):
     today = datetime.date.today().isoformat()
     index = []
     for path, units, used in by_chapter:
+        kind, number = chapter_id(path.name)
         out = d / (path.stem + ".json")
         out.write_text(json.dumps({
             "book": str(book.resolve()),
-            "chapter": {"number": chapter_number(path.name), "file": path.name},
+            "chapter": {"kind": kind, "number": number, "file": path.name},
             "generated": today,
             "sources": used,
             "units": units,
         }, indent=2, ensure_ascii=False) + "\n")
         index.append({
-            "number": chapter_number(path.name),
+            "kind": kind,
+            "number": number,
             "file": path.name,
             "worklist": str(out.resolve()),
             "units": len(units),
@@ -1080,6 +1374,8 @@ def main(argv):
             mode = "locators"
         elif a == "--quotes-only":
             mode = "quotes"
+        elif a == "--ledger-only":
+            mode = "ledger"
         elif a in ("--emit-worklist", "--chapters"):
             # Both take a value. A missing one would otherwise swallow the book
             # folder and report "no such folder", which sends the reader
@@ -1091,14 +1387,24 @@ def main(argv):
             if a == "--emit-worklist":
                 emit_dir = args[i]
             else:
-                try:
-                    want_chapters = {int(x) for x in args[i].split(",") if x.strip()}
-                except ValueError:
-                    print(f"error: --chapters wants numbers, got: {args[i]}",
-                          file=sys.stderr)
-                    return 2
+                want_chapters = set()
+                for x in args[i].split(","):
+                    if not x.strip():
+                        continue
+                    got = parse_id_token(x)
+                    if got is None:
+                        # Named rather than dropped. A token this cannot read
+                        # would otherwise scope the run to everything else and
+                        # emit a smaller worklist that looks exactly right.
+                        print(f"error: --chapters cannot read {x.strip()!r}; a "
+                              f"chapter is its number and an appendix is A "
+                              f"followed by its number, as in 2,13,A1",
+                              file=sys.stderr)
+                        return 2
+                    want_chapters.add(got)
                 if not want_chapters:
-                    print("error: --chapters was given no numbers", file=sys.stderr)
+                    print("error: --chapters was given nothing to scope to",
+                          file=sys.stderr)
                     return 2
         elif a.startswith("-"):
             print(f"error: unknown option: {a}", file=sys.stderr)
@@ -1117,6 +1423,11 @@ def main(argv):
     if not book.is_dir():
         print(f"error: no such folder: {book}", file=sys.stderr)
         return 2
+
+    # Before book.json is read, deliberately: this mode runs at step 3 and step
+    # 4 is what writes that file.
+    if mode == "ledger":
+        return check_ledger(book)
 
     conf = {}
     cf = book / "book.json"
@@ -1201,20 +1512,26 @@ def main(argv):
 
     scan = chapters
     if want_chapters is not None:
-        by_number = {}
+        by_id = {}
         for p in chapters:
-            by_number.setdefault(chapter_number(p.name), []).append(p)
-        missing = sorted(n for n in want_chapters if n not in by_number)
+            by_id.setdefault(chapter_id(p.name), []).append(p)
+        # Keyed on (kind, number), which is what keeps `--chapters 2` off
+        # appendix 2. Under the old number-only key the two shared a slot, so a
+        # scoped re-check after an /updatebook edit quietly folded in a file the
+        # edit never touched.
+        missing = sorted(k for k in want_chapters if k not in by_id)
         if missing:
             # Refused rather than skipped: a typo'd number would otherwise emit
             # a smaller worklist that looks exactly like a correct one.
-            print(f"error: {book} has no chapter "
-                  f"{', '.join(str(n) for n in missing)}", file=sys.stderr)
+            print(f"error: {book} has no "
+                  f"{', '.join(id_label(*k) for k in missing)}; --chapters "
+                  f"spells those {', '.join(id_token(*k) for k in missing)}",
+                  file=sys.stderr)
             return 2
-        scan = [p for p in chapters if chapter_number(p.name) in want_chapters]
-        print(f"note: scoped to chapter(s) "
-              f"{', '.join(str(n) for n in sorted(want_chapters))} of "
-              f"{n_chapters}; every figure below describes those chapters only.")
+        scan = [p for p in chapters if chapter_id(p.name) in want_chapters]
+        print(f"note: scoped to "
+              f"{', '.join(id_label(*k) for k in sorted(want_chapters))} of "
+              f"{n_chapters}; every figure below describes those only.")
         print()
 
     census = collections.Counter()

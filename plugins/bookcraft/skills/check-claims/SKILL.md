@@ -1,7 +1,7 @@
 ---
 name: check-claims
 description: Check a book's paraphrased claims against the sources its provenance marks name, with one agent per chapter reading the real source. Catches the failure no script can: a mark that resolves perfectly, quotes nothing, and sits beside a sentence its source does not support. Takes a book folder and optionally a chapter scope. Use when asked to verify a book's attributions, check whether its sources say what it says they say, or after a regeneration or an /updatebook run.
-argument-hint: <book-folder> [--chapters N,M]
+argument-hint: <book-folder> [--chapters N,M,AN]
 ---
 
 # /check-claims
@@ -19,7 +19,7 @@ The cost of getting it wrong is why it exists. The reference book is what an ins
 | Argument | Meaning |
 |---|---|
 | First (required) | The book folder. `books/reference-guide` |
-| `--chapters N,M` | Check only these chapters. What an `/updatebook` run passes, since it already knows which chapters its edit reached |
+| `--chapters N,M` | Check only these. A chapter is its number, an appendix is `A` and its number: `--chapters 2,13,A1`. What an `/updatebook` run passes, since it already knows which files its edit reached |
 
 With no folder, ask for one and stop.
 
@@ -47,7 +47,9 @@ A book whose `book.json` does not declare `"provenance": true`, or declares it w
 
 ### 2. Read the index, and only the index
 
-`$WL/index.json` carries one row per chapter: its number, its file, the path to its worklist, and how many units and pointers it holds. It carries no prose, deliberately.
+`$WL/index.json` carries one row per chapter-kind file: its `kind`, its `number`, its file, the path to its worklist, and how many units and pointers it holds. It carries no prose, deliberately.
+
+**`kind` and `number` together are the identifier, never the number alone.** An appendix numbers in its own sequence, so appendix 1 and chapter 1 are different files sharing a number. Pass both to the agent and have it copy both back: a report row then reads `appendix 1` rather than colliding with `ch. 1`, and `--chapters 2` scopes to chapter 2 without quietly also taking appendix 2. That leak is the one that matters most, because `--chapters` is what `/updatebook` passes after an edit, so a scoped re-check would read a file the edit never touched.
 
 **Do not read the chapter worklists yourself.** They hold the book's whole prose, which is 49,509 words for the reference book, and pulling them into this session is the thing the per-chapter split exists to prevent.
 
@@ -56,7 +58,7 @@ A book whose `book.json` does not declare `"provenance": true`, or declares it w
 In batches of about four, matching `/createbook`'s drafting step. Each agent's prompt carries, in full:
 
 1. **Read `${CLAUDE_PLUGIN_ROOT}/skills/check-claims/reference/judgement.md` and apply it exactly.** That file is the authority on what a verdict means, what is in scope, the mapping rule, the evidence bar and the output shape. Do not restate its rules in the prompt; a prompt that restates them risks stating them differently, and the whole point of one spec is that chapter 3 and chapter 17 are judged the same way.
-2. **The path to this chapter's worklist**, from `index.json`.
+2. **The path to this chapter's worklist**, from `index.json`, **and the `kind` and `number` on that same row**, to be copied into the findings file unchanged. An agent left to read them off the filename gets an appendix wrong, and a findings file naming a kind and number the run did not emit is thrown away whole.
 3. **The path to write its findings JSON to**, `$WL/findings-<chapter file stem>.json`.
 4. **The book folder**, so it can see a chapter in context if a paragraph's claim needs the surrounding prose to read fairly.
 5. **That every pointer's `paths` are absolute and its `read` mode says how to open it**: `open` for an ordinary Read, `pages` for a PDF with the page numbers given, `inline` for a deck whose text is already in the file because the Read tool cannot open a `.pptx`.
