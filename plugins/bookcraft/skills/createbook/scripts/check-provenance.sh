@@ -924,7 +924,7 @@ def resolve_locator(src, rest, where):
 # emitted by the mark grammar.
 CITE_PAGE = re.compile(r"\bpp?\.\s*\d+(?:\s*(?:[-\u2013,]|\s+and\s+)\s*\d+)*", re.I)
 CITE_SLIDE = re.compile(r"\bslides?\s+\d+(?:\s*(?:[-\u2013,]|\s+and\s+|\s+to\s+)\s*\d+)*", re.I)
-CITE_SECTION = re.compile(r"\u00a7\s*[^,;)]+")
+CITE_SECTION = re.compile(r"\u00a7\s*[^,;)|\u2013\u2014]+")
 CITE_ITEM = re.compile(r"\bQ\d+\b")
 
 # What a ledger row may name as a file this checker can open. A row naming
@@ -992,6 +992,19 @@ def _paths_in(cell):
         return found
     return [tok for tok in (w.strip(".,;:()[]") for w in cell.split())
             if pathlib.PurePath(tok).suffix.lower() in SOURCE_EXTS]
+
+
+def _lower_lead(cite):
+    """Lowercase a citation's opening word, and nothing else.
+
+    `CITE_PAGE` and `CITE_SLIDE` carry `re.I`, because a ledger cell is prose and
+    may open a sentence with "Slides 4-9". `PAGES` and `SLIDES` are anchored and
+    lowercase, so the citation was extracted, counted, and then matched by
+    neither: it reported REVIEW as though the locator were the wrong kind for
+    its source. Only the leading run is folded, so a heading keeps the case
+    `heading_hit` may compare on.
+    """
+    return re.sub(r"^[A-Za-z]+", lambda m: m.group(0).lower(), cite)
 
 
 def _cites_in(text):
@@ -1087,7 +1100,7 @@ def check_ledger(book):
         opened += 1
 
         for cite in cites:
-            verdict, _ = resolve_locator(src, cite, where)
+            verdict, _ = resolve_locator(src, _lower_lead(cite), where)
             if verdict == "review":
                 # Not a failure and not a pass. The common shape is a locator of
                 # the wrong kind for its source, which is how an anchor comes to
@@ -1131,7 +1144,7 @@ def check_ledger(book):
 # not carry a chapter number (`check-book.sh`, `reference/chapter-prose.md
 # § Appendices`). Tried before the chapter rule, exactly as check-book.sh tries
 # it, because the chapter rule would match the N and be wrong.
-APPENDIX_FILE = re.compile(r"-appendix-(\d+)-", re.I)
+APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
 
 
 def chapter_id(name):
@@ -1176,7 +1189,7 @@ def parse_id_token(tok):
     m = re.fullmatch(r"[Aa](\d+)", tok)
     if m:
         return "appendix", int(m.group(1))
-    return ("chapter", int(tok)) if tok.isdigit() else None
+    return ("chapter", int(tok)) if tok.isdecimal() else None
 
 
 def _slides_for(src, slide):
@@ -1506,7 +1519,9 @@ def main(argv):
             # Refused rather than skipped: a typo'd number would otherwise emit
             # a smaller worklist that looks exactly like a correct one.
             print(f"error: {book} has no "
-                  f"{', '.join(id_label(*k) for k in missing)}", file=sys.stderr)
+                  f"{', '.join(id_label(*k) for k in missing)}; --chapters "
+                  f"spells those {', '.join(id_token(*k) for k in missing)}",
+                  file=sys.stderr)
             return 2
         scan = [p for p in chapters if chapter_id(p.name) in want_chapters]
         print(f"note: scoped to "

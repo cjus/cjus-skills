@@ -88,6 +88,53 @@ rm -rf "$empty"
 printf '%s\n' "$out" | grep -q "no .*OUTLINE.md"
 report $? "no OUTLINE.md: says which file is missing"
 
+# ---------------------------------------------------------------------------
+# Half four: a section citation ends where the prose resumes, and a citation
+# that opens a sentence is still asserted rather than merely counted.
+#
+# Both are regressions found by review. CITE_SECTION used to run to the end of
+# the cell through an em dash, so a correct heading failed as a missing one.
+# CITE_PAGE and CITE_SLIDE carry re.I while PAGES and SLIDES are anchored
+# lowercase, so "Slides 4-9" was extracted, counted, and matched by neither.
+# ---------------------------------------------------------------------------
+mkdir -p "$tmp/prose/sources"
+cp "$here/sources/handbook.md" "$tmp/prose/sources/handbook.md"
+cat > "$tmp/prose/OUTLINE.md" <<'EOF'
+# Prose ledger
+
+| Source | Re-openable | What the book owes it | Paid by |
+|---|---|---|---|
+| `sources/handbook.md` § What The Grain Is — the definition the book opens on | Yes | The grain | 1 |
+| `sources/handbook.md` § Appendix 1: A Colon Belongs To A Heading | No | Nothing on disk | 1 |
+EOF
+out=$(python3 "$checker" --ledger-only "$tmp/prose" 2>&1); rc=$?
+! printf '%s
+' "$out" | grep -q "carries no heading matching"
+report $? "section citation: trailing prose after an em dash is not read as the heading"
+[ "$rc" -eq 0 ]; report $? "section citation: the row passes (got $rc)"
+if [ "$rc" -ne 0 ]; then printf '%s
+' "$out" | sed 's/^/      | /'; fi
+
+# The case fold is checked at the unit level: asserting it end to end would mean
+# committing a PDF or a .pptx, which fixtures/provenance already declines to do.
+cp "$checker" "$tmp/probe.py"
+cp "$here/../../scripts/check-references.sh" "$tmp/check-references.sh"
+python3 - "$tmp" <<'PROBE'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+bad = []
+for s in ("Slides 4-9", "PP. 3-5", "P. 12"):
+    n = m._lower_lead(s)
+    if not (m.SLIDES.match(n) or m.PAGES.match(n)):
+        bad.append(s)
+# a heading keeps its own casing
+if m._lower_lead("§ What The Grain Is") != "§ What The Grain Is":
+    bad.append("heading case was folded")
+sys.exit(1 if bad else 0)
+PROBE
+report $? "case fold: a capitalised locator reaches its resolver, a heading keeps its case"
+
 echo
 if [ "$fails" -eq 0 ]; then
   echo "OK    --ledger-only holds"

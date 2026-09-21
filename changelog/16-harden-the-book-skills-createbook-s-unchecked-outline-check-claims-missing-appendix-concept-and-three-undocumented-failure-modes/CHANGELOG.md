@@ -43,4 +43,14 @@ on at all.
   this branch: neither the fixture nor `check-book.sh` is touched here.
 - An appendix is a guide-profile kind, and `check-book.sh` rejects the filename under narration on
   purpose. The new fixture declares `"profile": "guide"` for that reason.
+- **Review pass.** Four defects in the new code, each reproduced before being acted on: a section
+  citation that ran through trailing prose and failed as a missing heading; a capitalised locator
+  that was counted and then asserted against nothing, because the extractors carry `re.I` and the
+  resolvers do not; a `--chapters` token that tracebacked and exited 1 where the contract says 2;
+  and an unanchored `APPENDIX_FILE` that read `guide-07-the-appendix-2-problem.md` as appendix 2,
+  reopening the collision this branch closes. All fixed with regression assertions; the two suites
+  go from 26 to 32. See `pr-review-2026-09-21.md`.
+- **Housekeeping.** `plugins/bookcraft/.claude-plugin/plugin.json` bumped 1.4.1 to 1.5.0, which the
+  first commit missed: installed copies do not refresh without it, and the repo bumps minor for a
+  behavior change.
 

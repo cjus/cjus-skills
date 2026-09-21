@@ -101,8 +101,17 @@ print(' '.join('%s-%s'%(c['kind'],c['number']) for c in d['chapters']))
 got=$(scope 1);  [ "$got" = "chapter-1" ];  report $? "--chapters 1: chapter only (got '$got')"
 got=$(scope A1); [ "$got" = "appendix-1" ]; report $? "--chapters A1: appendix only (got '$got')"
 
-python3 "$prov" --chapters B2 "$here" >/dev/null 2>&1
-[ $? -eq 2 ]; report $? "--chapters B2: refused rather than silently dropped"
+out=$(python3 "$prov" --chapters B2 "$here" 2>&1); rc=$?
+[ "$rc" -eq 2 ]; report $? "--chapters B2: exits 2 (got $rc)"
+printf '%s\n' "$out" | grep -q "cannot read 'B2'"
+report $? "--chapters B2: refused by name rather than silently dropped"
+
+# isdigit() accepts a superscript that int() then rejects; main no longer wraps
+# the parse in a ValueError guard, so this used to traceback and exit 1.
+out=$(python3 "$prov" --chapters "\u00b2" "$here" 2>&1); rc=$?
+[ "$rc" -eq 2 ]; report $? "--chapters superscript: exits 2, not a traceback (got $rc)"
+! printf '%s\n' "$out" | grep -q "Traceback"
+report $? "--chapters superscript: no traceback"
 
 # ---------------------------------------------------------------------------
 # Four: the old shape is refused by name, and the rest of the run still renders.
@@ -117,8 +126,8 @@ cat > "$tmp/wl/findings-claimfix-appendix-1-the-labels.json" <<'EOF'
 EOF
 out=$(python3 "$render" "$tmp/wl" "$here" 2>&1); rc=$?
 [ "$rc" -eq 1 ]; report $? "old shape: exits 1 (got $rc)"
-printf '%s\n' "$out" | grep -q "NOT USED.*appendix"
-report $? "old shape: names the file it could not use"
+printf '%s\n' "$out" | grep -q "NOT USED.*names kind None and number None"
+report $? "old shape: names the file it could not use, and why"
 ls "$here/claim-checks/"*.md >/dev/null 2>&1
 report $? "old shape: the report is still written for the chapter that was fine"
 

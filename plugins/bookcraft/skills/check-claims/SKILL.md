@@ -1,7 +1,7 @@
 ---
 name: check-claims
 description: Check a book's paraphrased claims against the sources its provenance marks name, with one agent per chapter reading the real source. Catches the failure no script can: a mark that resolves perfectly, quotes nothing, and sits beside a sentence its source does not support. Takes a book folder and optionally a chapter scope. Use when asked to verify a book's attributions, check whether its sources say what it says they say, or after a regeneration or an /updatebook run.
-argument-hint: <book-folder> [--chapters N,M]
+argument-hint: <book-folder> [--chapters N,M,AN]
 ---
 
 # /check-claims

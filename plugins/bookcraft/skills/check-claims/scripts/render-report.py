@@ -85,7 +85,7 @@ def tally(chapters):
     n_ch = len(chapters) - n_ap
     out = f"{n_ch} chapter" + ("s" if n_ch != 1 else "")
     if n_ap:
-        out += f", {n_ap} appendix" + ("es" if n_ap != 1 else "")
+        out += f", {n_ap} " + ("appendices" if n_ap != 1 else "appendix")
     return out
 
 
@@ -449,7 +449,7 @@ def main(argv):
         print(f"NOT USED  {name}: {why}")
     partial = sum(1 for d in chapters if d.get("partial_of"))
     if partial:
-        print(f"PARTIAL   {partial} chapter(s) examined fewer units than the "
+        print(f"PARTIAL   {partial} file(s) examined fewer units than the "
               f"worklist gave them; their findings are kept and the run is not "
               f"complete")
     return (1 if broken or partial or (expected and len(chapters) != expected)

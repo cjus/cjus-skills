@@ -4,6 +4,10 @@ Start date: 2026-09-20 19:32:45 MDT
 
 Ticket: #16 (status:todo -> status:in-progress)
 
+Status (2026-09-21): all five phases delivered in 6b497e6, pushed. Draft PR #17 open. The repo
+carries no CI workflows, so the branch's checks are the three fixture suites and the citation
+checker, all green. Awaiting hands-on testing.
+
 ## Overview
 
 `/createbook` hands one outline to every chapter agent and never checks that contract before the
