@@ -105,7 +105,7 @@ cat > "$tmp/prose/OUTLINE.md" <<'EOF'
 | Source | Re-openable | What the book owes it | Paid by |
 |---|---|---|---|
 | `sources/handbook.md` § What The Grain Is — the definition the book opens on | Yes | The grain | 1 |
-| `sources/handbook.md` § Appendix 1: A Colon Belongs To A Heading | No | Nothing on disk | 1 |
+| `sources/handbook.md` § Indexes: When To Skip One | Yes | A heading carrying a colon | 2 |
 EOF
 out=$(python3 "$checker" --ledger-only "$tmp/prose" 2>&1); rc=$?
 ! printf '%s

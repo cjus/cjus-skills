@@ -924,6 +924,11 @@ def resolve_locator(src, rest, where):
 # emitted by the mark grammar.
 CITE_PAGE = re.compile(r"\bpp?\.\s*\d+(?:\s*(?:[-\u2013,]|\s+and\s+)\s*\d+)*", re.I)
 CITE_SLIDE = re.compile(r"\bslides?\s+\d+(?:\s*(?:[-\u2013,]|\s+and\s+|\s+to\s+)\s*\d+)*", re.I)
+# A colon is deliberately NOT a terminator. Headings carry one often, and while
+# `heading_hit` prefix-matching would absorb most of the difference, truncating
+# at a colon narrows what the citation asserted without saying so. The dashes
+# and the pipe are different: they separate a citation from prose that follows
+# it, so stopping there is what the citation meant.
 CITE_SECTION = re.compile(r"\u00a7\s*[^,;)|\u2013\u2014]+")
 CITE_ITEM = re.compile(r"\bQ\d+\b")
 

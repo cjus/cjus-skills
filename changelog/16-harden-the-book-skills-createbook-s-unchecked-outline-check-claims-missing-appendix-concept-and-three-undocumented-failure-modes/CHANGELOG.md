@@ -53,4 +53,14 @@ on at all.
 - **Housekeeping.** `plugins/bookcraft/.claude-plugin/plugin.json` bumped 1.4.1 to 1.5.0, which the
   first commit missed: installed copies do not refresh without it, and the repo bumps minor for a
   behavior change.
+- **Close review round.** A second review at the close gate returned APPROVE and found that two of
+  the regression assertions added in `0648cc2` could not fail. The superscript case passed the
+  literal six characters `\u00b2`, which bash does not interpret, so both the old and the new rule
+  refused it identically; it now builds the real character with `printf '\302\262'`. The anchored
+  `APPENDIX_FILE` fix had shipped with no assertion at all, contradicting its own commit message.
+  Both are fixed and each was proved by reverting the fix and watching the assertion fail. A third
+  assertion added during this round was itself vacuous and was removed rather than kept: no
+  assertion can distinguish a colon terminator, because `heading_hit` matches on a prefix. The PR
+  summary's testing section was rewritten to separate what is asserted from what was only
+  exercised by hand.
 

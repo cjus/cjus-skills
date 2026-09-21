@@ -108,7 +108,8 @@ report $? "--chapters B2: refused by name rather than silently dropped"
 
 # isdigit() accepts a superscript that int() then rejects; main no longer wraps
 # the parse in a ValueError guard, so this used to traceback and exit 1.
-out=$(python3 "$prov" --chapters "\u00b2" "$here" 2>&1); rc=$?
+sup=$(printf '\302\262')
+out=$(python3 "$prov" --chapters "$sup" "$here" 2>&1); rc=$?
 [ "$rc" -eq 2 ]; report $? "--chapters superscript: exits 2, not a traceback (got $rc)"
 ! printf '%s\n' "$out" | grep -q "Traceback"
 report $? "--chapters superscript: no traceback"
@@ -130,6 +131,40 @@ printf '%s\n' "$out" | grep -q "NOT USED.*names kind None and number None"
 report $? "old shape: names the file it could not use, and why"
 ls "$here/claim-checks/"*.md >/dev/null 2>&1
 report $? "old shape: the report is still written for the chapter that was fine"
+
+# ---------------------------------------------------------------------------
+# Five: the appendix filename rule is anchored, so a CHAPTER whose slug happens
+# to contain "appendix-N-" is still a chapter.
+#
+# An unanchored pattern reopened the very collision this fixture exists to close:
+# guide-07-the-appendix-2-problem.md returned ('appendix', 2). check-book.sh:291
+# is the authority on the filename shape and anchors it, so chapter_id must
+# agree with it. No book folder can carry that file as a fixture, since
+# check-book.sh rejects the name, so the rule is checked at the unit level.
+# ---------------------------------------------------------------------------
+cp "$prov" "$tmp/probe.py"
+cp "$here/../../../createbook/scripts/check-references.sh" "$tmp/check-references.sh"
+python3 - "$tmp" <<'PROBE'
+import sys, importlib.util, pathlib
+spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+cases = {
+    # a chapter whose SLUG contains the word, which must stay a chapter
+    "guide-07-the-appendix-2-problem.md": ("chapter", 7),
+    "book-11-appendix-3-conventions.md": ("chapter", 11),
+    # real appendices
+    "claimfix-appendix-1-the-labels.md": ("appendix", 1),
+    "guide-fixture-appendix-12-late.md": ("appendix", 12),
+    # ordinary chapters
+    "book-03-normal.md": ("chapter", 3),
+}
+bad = [f"{n}: got {m.chapter_id(n)}, want {w}"
+       for n, w in cases.items() if m.chapter_id(n) != w]
+for b in bad:
+    print("   ", b, file=sys.stderr)
+sys.exit(1 if bad else 0)
+PROBE
+report $? "appendix filename: anchored, so a chapter's slug cannot make it an appendix"
 
 echo
 if [ "$fails" -eq 0 ]; then
