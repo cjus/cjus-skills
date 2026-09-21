@@ -1,0 +1,17 @@
+{
+  "subtitle": "One chapter and one appendix, both numbered 1",
+  "byline": "Claude Opus 5",
+  "description": [
+    "A fixture for the claim-check path's appendix concept. The smallest book that reproduces the collision: chapter 1 and appendix 1 in one folder, both carrying provenance marks, so --emit-worklist has to tell them apart. Under the guide profile, since an appendix is a guide-profile kind and check-book.sh rejects the filename under narration.",
+    "Before an appendix was carried through as its own kind, it took its number from the filename's first digit run, emitted as chapter 1, and render-report.py refused the whole run with `index.json lists chapter number 1 more than once`, exiting 2 and writing nothing. `--chapters 1` also silently emitted the appendix, which is what made a scoped /updatebook re-check read a file the edit never touched.",
+    "Expected: check-book.sh exits 0; --emit-worklist exits 0 and writes one chapter entry and one appendix entry; render-report.py exits 0 and renders a row reading `appendix 1`. run.sh asserts all of it, including that a findings file in the old `\"chapter\": N` shape is named and skipped rather than counted. This is the fixture's only assertion beyond run.sh; update both in the same edit."
+  ],
+  "profile": "guide",
+  "tags": false,
+  "overview": true,
+  "provenance": true,
+  "suggested_reading": false,
+  "sources": {
+    "handbook": "sources/handbook.md"
+  }
+}

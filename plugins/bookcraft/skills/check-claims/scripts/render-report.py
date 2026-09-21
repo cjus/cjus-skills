@@ -54,6 +54,52 @@ HEADLINE = {
 }
 
 
+KINDS = ("chapter", "appendix")
+
+
+def file_id(d):
+    """The (kind, number) a findings file names, or None when it names neither.
+
+    The pair is the identifier because an appendix numbers in its own sequence:
+    appendix 1 and chapter 1 are different files and the number alone cannot
+    tell them apart. `check-provenance.sh` writes both into the worklist and
+    into `index.json`, and `reference/judgement.md` asks the agent for both.
+    """
+    kind, number = d.get("kind"), d.get("number")
+    if kind not in KINDS:
+        return None
+    if not isinstance(number, int) or isinstance(number, bool):
+        return None
+    return kind, number
+
+
+def label(key):
+    """How a report row names one file. `ch. 5`, or `appendix 2`."""
+    kind, number = key
+    return f"appendix {number}" if kind == "appendix" else f"ch. {number}"
+
+
+def tally(chapters):
+    """The totals row's label: "18 chapters", or "18 chapters, 3 appendices"."""
+    n_ap = sum(1 for d in chapters if d["_id"][0] == "appendix")
+    n_ch = len(chapters) - n_ap
+    out = f"{n_ch} chapter" + ("s" if n_ch != 1 else "")
+    if n_ap:
+        out += f", {n_ap} appendix" + ("es" if n_ap != 1 else "")
+    return out
+
+
+def order(d):
+    """Sort key: chapters in number order, then appendices in theirs.
+
+    A file whose identifier did not survive validation cannot reach these sorts,
+    but the renderer also sorts `broken` entries nowhere, so the fallback keeps
+    a malformed dict from raising inside a comparison.
+    """
+    key = file_id(d)
+    return (KINDS.index(key[0]), key[1]) if key else (len(KINDS), 0)
+
+
 def load(findings_dir, want):
     """Every findings file, plus the ones that were not usable and why.
 
@@ -80,23 +126,24 @@ def load(findings_dir, want):
             broken.append((path.name, f"could not be read: {e}"))
             continue
         # Typed before it is used as a dict key. `in` on an unhashable value
-        # raises rather than answering False, and the chapter worklist writes
-        # `"chapter": {"number": 7, "file": "..."}` while `judgement.md`'s output
-        # example writes `"chapter": 5`, so the two shapes sit on either side of
-        # one agent. An uncaught TypeError here also exits 1, which is the code
+        # raises rather than answering False, and an agent writing a shape of
+        # its own invention is the measured case: of three appendix agents on
+        # one run, one wrote `"chapter": "appendix-1"`. An uncaught TypeError
+        # here also exits 1, which is the code
         # the docstring promises for "some chapters were unusable, the report was
         # written" — so the one input that drops all eighteen chapters would
         # report itself as the ordinary partial-success case.
-        ch = d.get("chapter")
-        if not isinstance(ch, int) or isinstance(ch, bool):
+        ch = file_id(d)
+        if ch is None:
             broken.append((path.name,
-                           f"names chapter {ch!r}, which is not a chapter "
-                           f"number; `chapter` is the number alone, not the "
-                           f"worklist's {{number, file}} object"))
+                           f"names kind {d.get('kind')!r} and number "
+                           f"{d.get('number')!r}; `kind` is \"chapter\" or "
+                           f"\"appendix\" and `number` is that file's number "
+                           f"within its own kind"))
             continue
         if ch not in want:
             broken.append((path.name,
-                           f"names chapter {ch}, which this run's index.json "
+                           f"names {label(ch)}, which this run's index.json "
                            f"does not list, so it is left over from an earlier "
                            f"run"))
             continue
@@ -106,7 +153,7 @@ def load(findings_dir, want):
             broken.append((path.name,
                            f"reports units_checked {checked_n!r}, which is not a "
                            f"count between 0 and the {want[ch]} unit(s) the "
-                           f"worklist gave chapter {ch}"))
+                           f"worklist gave {label(ch)}"))
             continue
         counts = d.get("counts") or {}
         unknown = [k for k in counts if k not in ALL_VERDICTS]
@@ -146,6 +193,7 @@ def load(findings_dir, want):
         # complete, which was the point of checking against the index.
         if checked_n < want[ch]:
             d["partial_of"] = want[ch]
+        d["_id"] = ch
         chapters.append(d)
     return chapters, broken
 
@@ -178,19 +226,19 @@ def render(chapters, broken, book, command, expected):
 
     out.append("## Counts")
     out.append("")
-    out.append("| Chapter | Units | " + " | ".join(ALL_VERDICTS) + " |")
+    out.append("| Chapter/appendix | Units | " + " | ".join(ALL_VERDICTS) + " |")
     out.append("|---:|---:|" + "---:|" * len(ALL_VERDICTS))
-    for d in sorted(chapters, key=lambda x: x.get("chapter") or 0):
+    for d in sorted(chapters, key=order):
         c = d.get("counts") or {}
         units = (f"{d.get('units_checked')} of {d['partial_of']}"
                  if d.get("partial_of") else str(d.get("units_checked")))
-        out.append(f"| {d.get('chapter')} | {units} | "
+        out.append(f"| {label(d['_id'])} | {units} | "
                    + " | ".join(str(c.get(v, 0)) for v in ALL_VERDICTS) + " |")
-    out.append(f"| **{len(chapters)} chapters** | **{checked}** | "
+    out.append(f"| **{tally(chapters)}** | **{checked}** | "
                + " | ".join(f"**{totals[v]}**" for v in ALL_VERDICTS) + " |")
     out.append("")
     if expected and len(chapters) != expected:
-        out.append(f"**{len(chapters)} of {expected} chapters are in this table.** "
+        out.append(f"**{len(chapters)} of {expected} file(s) are in this table.** "
                    f"The rest are under *What was not reached*; the totals above "
                    f"describe only the chapters listed.")
         out.append("")
@@ -202,7 +250,7 @@ def render(chapters, broken, book, command, expected):
         out.append("None. Every unit checked was `supported`.")
         out.append("")
     for verdict in ORDER:
-        items = [(d, f) for d in sorted(chapters, key=lambda x: x.get("chapter") or 0)
+        items = [(d, f) for d in sorted(chapters, key=order)
                  for f in d.get("findings", []) if f.get("verdict") == verdict]
         if not items:
             continue
@@ -212,7 +260,7 @@ def render(chapters, broken, book, command, expected):
         out.append("")
         for d, f in items:
             tag = f.get("tag") or f"line {f.get('line')}"
-            out.append(f"### ch. {d.get('chapter')} {tag} against `{f.get('source')}`")
+            out.append(f"### {label(d['_id'])} {tag} against `{f.get('source')}`")
             out.append("")
             out.append("The book says:")
             out.append("")
@@ -232,7 +280,7 @@ def render(chapters, broken, book, command, expected):
             out.append(f"`{d.get('file')}:{f.get('line')}`")
             out.append("")
 
-    notes = [(d.get("chapter"), n) for d in sorted(chapters, key=lambda x: x.get("chapter") or 0)
+    notes = [(d["_id"], n) for d in sorted(chapters, key=order)
              for n in (d.get("notes") or [])]
     if notes:
         out.append("## Chapter notes")
@@ -242,14 +290,14 @@ def render(chapters, broken, book, command, expected):
                    "not open, a pattern seen repeatedly.")
         out.append("")
         for ch, n in notes:
-            out.append(f"- **ch. {ch}.** {n.strip()}")
+            out.append(f"- **{label(ch)}.** {n.strip()}")
         out.append("")
 
     out.append("## What was not reached")
     out.append("")
     partials = [d for d in chapters if d.get("partial_of")]
-    for d in sorted(partials, key=lambda x: x.get("chapter") or 0):
-        out.append(f"- **ch. {d['chapter']} is partial**: {d['units_checked']} of "
+    for d in sorted(partials, key=order):
+        out.append(f"- **{label(d['_id'])} is partial**: {d['units_checked']} of "
                    f"{d['partial_of']} units examined. Its findings are in this "
                    f"report; the units it did not reach were not checked by "
                    f"anything.")
@@ -257,11 +305,12 @@ def render(chapters, broken, book, command, expected):
         for name, why in broken:
             out.append(f"- `{name}`: {why}")
     if expected and len(chapters) + len(broken) < expected:
-        out.append(f"- {expected - len(chapters) - len(broken)} chapter(s) produced "
+        out.append(f"- {expected - len(chapters) - len(broken)} file(s) produced "
                    f"no findings file at all.")
     if not broken and not partials and (not expected or len(chapters) == expected):
-        out.append("Every chapter produced a well-formed findings file, and each "
-                   "chapter's verdict counts sum to the units it was given.")
+        out.append("Every chapter and appendix produced a well-formed findings "
+                   "file, and each one's verdict counts sum to the units it was "
+                   "given.")
     out.append("")
     out.append("A `supported` verdict is bounded by what the agent read, which "
                "each finding records in its **Read** line. A claim against a "
@@ -350,17 +399,21 @@ def main(argv):
     # file refuses.
     want = {}
     for c in index["chapters"]:
-        n, u = c.get("number"), c.get("units")
-        if not isinstance(n, int) or isinstance(n, bool) or n in want:
-            print(f"error: {index_path} lists chapter number {n!r} "
-                  f"{'more than once' if n in want else 'which is not a number'}",
+        # Keyed on (kind, number), not on the number: appendix 1 and chapter 1
+        # are different files, and under a number-only key the second one read
+        # as a duplicate and stopped the whole run before a row was written.
+        key, u = file_id(c), c.get("units")
+        if key is None or key in want:
+            print(f"error: {index_path} lists "
+                  f"{('kind %r number %r' % (c.get('kind'), c.get('number'))) if key is None else label(key)} "
+                  f"{'more than once' if key in want else 'which is not a kind and number'}",
                   file=sys.stderr)
             return 2
         if not isinstance(u, int) or isinstance(u, bool) or u < 0:
-            print(f"error: {index_path} gives chapter {n} a unit count of {u!r}",
+            print(f"error: {index_path} gives {label(key)} a unit count of {u!r}",
                   file=sys.stderr)
             return 2
-        want[n] = u
+        want[key] = u
     if not want:
         print(f"error: {index_path} lists no chapters", file=sys.stderr)
         return 2
@@ -388,8 +441,8 @@ def main(argv):
         for v in ALL_VERDICTS:
             totals[v] += (d.get("counts") or {}).get(v, 0)
     print(f"wrote {out}")
-    print(f"chapters {len(chapters)}"
-          + (f" of {expected}" if expected else "")
+    print(f"{tally(chapters)}"
+          + (f", {expected} in the index" if expected else "")
           + f"   units {sum(d.get('units_checked', 0) for d in chapters)}")
     print("   ".join(f"{v} {totals[v]}" for v in ALL_VERDICTS))
     for name, why in broken:

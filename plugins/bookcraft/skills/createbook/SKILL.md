@@ -140,7 +140,7 @@ In a tagged book, which is the default, every paragraph opens with a tag naming 
 - `<chapter-slug>` is the chapter title through the same slug rule.
 - Dashes only. No spaces, no underscores, no capitals.
 
-**The book slug may not contain a digit, and the checker enforces it.** The chapter number is found by taking the filename's first digit run, so `docker-101-guide-01-layers.md` offers two candidates and the read is ambiguous. The chapter slug may still hold digits (`...-07-normalization-from-1nf-to-bcnf.md`), because everything after the number is unambiguous.
+**The book slug may not contain a digit, and the checker enforces it.** The chapter number is found by taking the filename's first digit run, so `docker-101-guide-01-layers.md` offers two candidates and the read is ambiguous. The chapter slug may still hold digits (`...-07-normalization-from-1nf-to-bcnf.md`), because everything after the number is unambiguous. **An appendix is the exception, and is read before this rule is tried:** `<book-slug>-appendix-N-<slug>.md` numbers in its own sequence, so its N is an appendix number rather than a chapter one. Every tool that reads a number out of a filename branches on that first, which is what keeps appendix 1 from colliding with chapter 1.
 
 This is a hard rule rather than a preference, and it is why a course book about DB300 is titled "Teaching DB300 Data Modeling" and slugged `teaching-data-modeling`. Shorten the slug; the title keeps the number.
 
@@ -255,7 +255,21 @@ The term and anchor ledgers exist because the budgets are per chapter and none o
 
 ### 3. Confirm the outline with the operator
 
-Show the source ledger, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
+**Resolve the ledger before showing it.**
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh --ledger-only books/<book-slug>
+```
+
+It reads `OUTLINE.md` alone: every row marked re-openable names a file that is on disk, and every locator written into a row resolves against the source that row names. It needs no `book.json`, which step 4 has not written yet, and it reads no chapter, because none exists.
+
+**Run it here rather than at step 7, because the ledger is the contract every chapter brief is derived from.** An error in a row is not one chapter's error. It is handed to every agent drawing on that row, at the same time, and each writes prose around it. Five reached the fan-out on one 21-chapter run: three page locators off by one, an anchor attributed to the wrong document, and a ledger row contradicting a prose note two lines below it. They were caught only because § 5 tells each agent to open its sources instead of writing from the brief, which turns the drafting agents into independent checks on the contract. That is luck rather than design, and it costs a chapter agent's whole context each time. This check costs about a second and does not grow with the chapter count.
+
+**Fix what it reports before the gate, not after.** A locator corrected here is corrected once; the same locator corrected at step 7 is corrected in every chapter that copied it, and in `OUTLINE.md` and `book.json` besides.
+
+**What it does not reach:** a row whose prose is wrong about a source it correctly names, and a row that contradicts a note elsewhere in `OUTLINE.md`. Both need a reader. Resolving the ledger narrows what the gate has to be read for; it does not replace reading it.
+
+Then show the source ledger, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
 
 **Lead with the ledger, not the chapter list.** The chapter list is what the operator expects to review and the ledger is what they can actually correct: a source you were not given, a source you read wrongly, a gap you propose to fill that they would rather you left open. A wrong chapter list costs twenty chapters, and a wrong ledger costs the same twenty plus every claim inside them.
 
@@ -344,7 +358,7 @@ The bare string form stays valid and unchanged, for every source whose key alrea
 
 ### 5. Draft the chapters
 
-Run each chapter as its own subagent, in batches of about four, so the prose is written in parallel and stays out of this session's context. Each agent writes its own file with the Write tool and reports only the path and the word count.
+Run each chapter as its own subagent, in batches of about four, so the prose is written in parallel and stays out of this session's context. Each agent writes its own file with the Write tool, writes anything it found wrong with the outline to a findings file of its own, and reports only those two paths and the word count.
 
 **Do not downgrade chapter agents to a cheaper model.** Chapter prose makes factual claims a reader will take as taught, and work whose output a reader takes as taught stays on the session's own tier; its quality is not cheaply verifiable from the outside either. The structural checks in step 7 catch format, never accuracy.
 
@@ -360,10 +374,17 @@ Each agent's prompt carries, in full:
 8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since the second kind is filled-in tier however confident it feels.
 9. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
 10. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
+11. **The findings path, `<book>/outline-findings/<chapter file stem>.md`, and the instruction to write anything wrong with the outline there rather than in the reply.** Say that nothing to report means no file. An agent told to report a problem and given nowhere to put it will put it in the return, which is where it is lost.
+
+**Findings go to a file, never into the return message.** An agent that opens its sources will sometimes find the outline wrong: a ledger row that contradicts the source, a page locator off by one, an anchor attributed to the wrong document. Those are worth more than the chapter that found them, because one bad ledger row is paid by every chapter drawing on it. They must not travel in the reply. A return carrying prose can exceed the harness's return cap, and a truncated return arrives empty rather than short, so the findings are lost with nothing saying they ever existed. Three agents' findings went that way on the reference book, had to be chased afterwards, and some were never recovered. Give each agent a path of its own, `<book>/outline-findings/<chapter file stem>.md`, and say that an agent with nothing to report writes no file. One path per agent rather than one shared file, because the batch drafts in parallel and four agents appending to one file interleave. The folder is invisible to everything that reads the book: `check-book.sh`, `check-provenance.sh` and `/makebook` each glob the book folder one level deep, which is why `claim-checks/` can already sit there.
+
+**Read that folder when the batches finish, before step 6.** Most of what would otherwise land there is already gone, because § 3 resolved the ledger before the gate; what reaches this folder is what only a reader could have found. A ledger row that is wrong is wrong in `OUTLINE.md` and in `book.json` too, so fixing it only in the chapter that noticed leaves it in place for every later run and for `/updatebook`.
 
 **Every claim in a chapter is written from the source, not from the prompt.** The agent opens what it was given. A brief is a plan for a chapter, and a chapter that rests on the brief rather than on the material is a chapter of confident paraphrase with nothing behind it. This is why chapter agents get paths.
 
 **The chapter agent writes a plan before any prose (`reference/chapter-prose.md § The plan`), and the outline has already made half of it.** The spec says so itself, and the prompt should say it again with the specifics, or a chapter agent will re-derive decisions the outline fixed and quietly break the parallel drafting that depends on them. The outline row supplies the chapter's opening and closing noun, its term budget and its anchors; the agent must take those as given rather than choosing its own. What the agent still owes is the rest of the plan at chapter scale: the one claim this chapter lands, the concepts inside it in dependency order, the cuts, and where the wrong model sits. A chapter whose claim cannot be stated in one sentence is a chapter the outline split wrongly, and that is worth reporting back rather than writing around.
+
+**No chapter is ever briefed to read another chapter of this book.** What an agent is given about a sibling is that sibling's outline row, never its file. Batches draft in parallel, so a prompt saying "read the finished chapter 4 so you do not repeat it" races the agent writing chapter 4, and when the two sit in one batch the file is usually still absent when the reader looks. The agent then finds nothing, writes as though the chapter did not exist, and produces exactly the repetition the instruction was meant to prevent, with nothing in the run saying it happened. Everything a chapter needs to know about its neighbours is already in the prompt and was fixed at step 2: the handoff nouns at item 3, the terms already glossed at item 4, and the anchors and numbers already spent at item 5. Those cost nothing to read and do not move while the batch runs.
 
 **Nothing in the prompt needs to describe how a chapter differs from a standalone piece.** Those differences used to travel as a delta table against `/ne`; they are now written into the spec itself, at `chapter-prose.md § What the reader arrives with` for what the reader arrives with, `chapter-prose.md § Open` for the opening, `chapter-prose.md § Close` for the close, `chapter-prose.md § Every part does five things` and `chapter-prose.md § Spend these deliberately` for glossing only the assigned terms, and `chapter-prose.md § Paragraph tags` for the tags. A prompt that restates them risks stating them differently, which is the failure the fork was meant to end.
 
@@ -457,6 +478,8 @@ It resolves every component of every mark through `book.json`'s `sources` map an
 
 **Read the last three census lines, not the exit code.** They report how many components were `fill`, how many locators went unparsed, and how many quotations could not be searched at all. A source with no text layer is the case that matters: the reference book's syllabus, Canvas setup guide and CSC220 syllabus are images of text, so 28 of its quotations are unverifiable by any tool and the run names the number rather than passing them. An absence found in a document nothing can read is not evidence. **A quotation counts as unverifiable when *any* source its mark names is unreadable, not only when all of them are** — 12 of those 28 name a readable source too, and a search that could not open one of the named sources cannot tell "not there" from "not readable".
 
+**A page locator that resolves is not a page locator that is right.** The assertion is that the number falls inside the PDF's page count, which is the most a script can settle without reading the page. Where a PDF's printed page numbers differ from its page index, and one cover page is enough to cause that, a citation to the wrong page resolves clean. Three did on the reference book, each landing the reader a page early: the mark reads `p. 6`, the checker counts to the PDF's sixth page, and the page printed `6` is the seventh. Nothing in the folder records which of the two a mark meant, so the check cannot be tightened. Open the source when writing the mark, and prefer a locator the file carries in its own text, such as a heading or a numbered item, wherever the source offers one.
+
 **What it does not reach is a paraphrase.** A mark can resolve perfectly, quote nothing, and sit beside a sentence the named section does not support. Only a model reading both can settle that, and `--emit-worklist` is what hands it the work:
 
 ```bash
@@ -464,7 +487,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh \
   --emit-worklist <dir> [--chapters 7,8] books/<book-slug>
 ```
 
-It writes one JSON file per chapter, each holding that chapter's units and a pointer to every source their marks name, plus an `index.json` carrying counts and no prose. **One file per chapter is the point**: a reading pass gives each agent one chapter, so the book's prose never lands in a single context. Against the reference book that is 551 units and 49,509 words. `--chapters` scopes the emission, which is what an `/updatebook` run wants, since it already knows which chapters its edit reached.
+It writes one JSON file per chapter, each holding that chapter's units and a pointer to every source their marks name, plus an `index.json` carrying counts and no prose. **One file per chapter is the point**: a reading pass gives each agent one chapter, so the book's prose never lands in a single context. Against the reference book that is 551 units and 49,509 words. `--chapters` scopes the emission, which is what an `/updatebook` run wants, since it already knows which chapters its edit reached. A chapter is named by its number and an appendix by `A` and its number, as in `--chapters 2,13,A1`: the two number in separate sequences, so `2` alone means chapter 2 and never appendix 2.
 
 **It emits pointers, not excerpts, and the reading agent opens the source itself.** The line is what the Read tool can open: markdown and PDF directly, an image-only PDF through its `pages` parameter, which renders the page visually. A `.pptx` it cannot open, so a deck citation is the one kind carrying its text inline. The script's own docstring records why an excerpt is not on offer: none of its three source readers keeps text at a locator, and slicing one would mean trusting a page boundary the quotation check already refuses to trust.
 

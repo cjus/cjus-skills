@@ -94,7 +94,8 @@ One JSON object. Write it to the path the prompt gives you; return only the path
 
 ```json
 {
-  "chapter": 5,
+  "kind": "chapter",
+  "number": 5,
   "file": "data-modeling-teaching-guide-05-the-engine-on-their-laptop.md",
   "units_checked": 15,
   "counts": {"supported": 12, "overstated": 1, "misstated": 0, "unsupported": 1, "unclear": 1, "unreadable": 0},
@@ -114,6 +115,7 @@ One JSON object. Write it to the path the prompt gives you; return only the path
 }
 ```
 
+- **`kind` and `number` are copied from the worklist's `chapter` object, never worked out from the filename.** `kind` is `"chapter"` or `"appendix"` and nothing else. `number` is this file's number within its own kind, so an appendix named `<book-slug>-appendix-2-<slug>.md` is `{"kind": "appendix", "number": 2}` and not chapter 2. The pair is the identifier because the two sequences run in parallel: appendix 1 and chapter 1 are different files and the number alone cannot tell them apart. Writing anything else, `"appendix-1"` or `"A1"` or the worklist's whole `{kind, number, file}` object, gets the file reported under "What was not reached" and its reading pass thrown away.
 - **`units_checked` must equal the worklist's unit count**, and the counts must sum to it. A run that examined fewer units than it was given says nothing about the rest, so say which you skipped and why in `notes` rather than letting the totals disagree quietly.
 - **`findings` holds every unit whose verdict is not `supported`**, and nothing else. A `supported` unit contributes to `counts` and no more.
 - **`tag` is the paragraph tag** where the unit has one, taken from the head of the unit's text. Omit it for a table or list that carries none.

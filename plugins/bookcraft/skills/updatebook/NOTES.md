@@ -24,7 +24,7 @@ All 30 external tag citations resolve to a paragraph the book actually has, chec
 
 **Two figures in sibling files are stale, and `SKILL.md` deliberately does not repeat either.**
 
-`createbook/NOTES.md` and `check-book.sh` both say the guide's tags "alone are cited fifty-six times outside the book". The 56 is real but it is a different measurement: `OUTLINE.md:42-43` records it as the *superseded* seventeen-chapter guide's chapter numbers, cited across the six assessment files before the 2026-09-09 remap. It was widened from chapter numbers to paragraph tags somewhere between those files. The tag count is 30 and the current chapter-number count is 74.
+`createbook/NOTES.md` and `check-book.sh` both say the guide's tags "alone are cited fifty-six times outside the book". The 56 is real but it is a different measurement: it was recorded against the *superseded* seventeen-chapter guide's chapter numbers, cited across the six assessment files before the 2026-09-09 remap. It was widened from chapter numbers to paragraph tags somewhere between those files. The tag count is 30 and the current chapter-number count is 74.
 
 Neither sibling's argument depends on the digit, which is why this is recorded rather than fixed here: both files are making the point that a tag is an address worth protecting, and 30 makes it as well as 56 does. Correcting the two lines belongs to whoever next edits them.
 
