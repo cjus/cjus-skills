@@ -84,11 +84,10 @@ Eight folders carry a `book.json`:
 
 ## Open Questions
 
-- **Open, and only the operator can answer.** Does "every existing book folder" mean only the
-  in-repo fixtures above, or are there books outside this repo that were also checked under the
-  broken binary? Only the in-repo folders are verifiable from here; anything outside is out of
-  scope for this branch unless pointed at. Everything in this repo is now re-validated, so an
-  answer of "in-repo only" closes the ticket as it stands.
+- ~~Does "every existing book folder" mean only the in-repo fixtures above, or are there books
+  outside this repo that were also checked under the broken binary?~~ **Resolved 2026-09-23 by the
+  operator: no outside books need checking.** Scope is the in-repo folders, all of which are
+  re-validated, so the ticket's question is fully answered and #7 closes on merge.
 - ~~Two folders are expected to fail for reasons already known and separately ticketed.~~
   **Resolved 2026-09-22.** Both are pre-existing. #18 is open and its title names exactly the
   failure observed, `body has 1 part headings; a chapter's shape is two or three parts`, so its

@@ -90,9 +90,10 @@ All four phases completed as planned, and both remaining ticket action items are
    inference. The operator's sentence is **left as written**, with the correction recorded beside it
    rather than edited into their record of an earlier branch.
 
-**Open question carried to the operator, unresolved.** Whether "every existing book folder" extends
-beyond this repo. Everything in-repo is re-validated; books written outside it are not verifiable
-from here. An answer of "in-repo only" closes #7 as it stands.
+**The one open question is resolved.** Whether "every existing book folder" extended beyond this
+repo was the single thing only the operator could answer, since books written outside it are not
+verifiable from here. Answered 2026-09-23: no outside books need checking. Scope is the in-repo
+folders, every one of which is re-validated, so nothing is left outstanding on #7.
 
 ## Testing
 
