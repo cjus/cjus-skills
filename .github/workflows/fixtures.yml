@@ -1,0 +1,87 @@
+# The repo's first CI. It runs the bookcraft fixture folders, which are the only
+# verification the book checkers have and which until now ran only when someone
+# remembered to run them.
+#
+# macOS is blocking because it is the only platform the plugins are developed and
+# tested on (README § Platform support). Linux runs alongside it to produce the
+# first recorded Linux run rather than to gate on one.
+#
+# What continue-on-error on the Linux leg does and does not do, measured rather
+# than assumed: a Linux-only failure leaves the WORKFLOW RUN's conclusion
+# `success`, so it does not fail the run. It does NOT make the failure invisible
+# -- the job and its check run both report `failure`, so the PR shows a red check
+# and `gh pr checks` reports that leg as failing. Anything reading check runs,
+# including the pr plugin's close gate, will see it and should. Advisory means
+# "does not fail the run", not "is hidden".
+name: fixtures
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only, and stated rather than inherited. This is the repo's first workflow,
+# so it sets the default that later ones get compared against, and nothing here
+# needs to write to the repository, open a check run or mint a token.
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    name: fixtures (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.blocking == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            blocking: true
+          - os: ubuntu-latest
+            blocking: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # check-provenance.sh is Python despite the .sh extension, and both
+      # checkers are invoked through their shebangs, so the bit has to survive
+      # the checkout. It does today; this says so if that ever changes.
+      - name: Check the checkers are executable
+        run: |
+          for f in plugins/bookcraft/skills/createbook/scripts/check-book.sh \
+                   plugins/bookcraft/skills/createbook/scripts/check-provenance.sh \
+                   plugins/bookcraft/scripts/test-fixtures.sh; do
+            test -x "$f" || { echo "not executable: $f"; exit 1; }
+          done
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            case "${{ runner.os }}" in
+              macOS) brew install jq ;;
+              Linux) sudo apt-get update -qq && sudo apt-get install -y -qq jq ;;
+            esac
+          fi
+
+      # Assert rather than assume, and assert that it RUNS rather than that it
+      # exists. A jq that is on PATH and will not execute makes every book.json
+      # declaration read as absent, and the fixtures would then be graded in the
+      # weakest mode while still exiting 0 -- a green run proving nothing the
+      # declared mode covers. That is the failure the jq-unrunnable fixture
+      # exists for, and it is not one CI should be able to ship past.
+      - name: Assert jq runs
+        run: |
+          command -v jq || { echo "jq is not on PATH"; exit 1; }
+          printf '{}' | jq -e . >/dev/null || {
+            echo "jq is on PATH at $(command -v jq) but will not run"; exit 1; }
+          jq --version
+
+      # --strict turns a skipped check into a failure. A skip is reasonable on a
+      # laptop that is missing an optional tool; in CI it is a silent hole, and
+      # the run would otherwise report success for having checked less.
+      - name: Run the fixture suite
+        run: plugins/bookcraft/scripts/test-fixtures.sh --strict

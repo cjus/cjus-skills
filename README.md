@@ -112,6 +112,36 @@ to move a reference and its target apart:
 python3 scripts/check-citations.py
 ```
 
+### The fixture suite, and CI
+
+bookcraft's book checkers are verified by fixture folders — small books built to
+fail, or to pass, in one specific way. Until they had a runner, nothing executed
+them but a person remembering to, and three defects in one ticket reached review
+because of it.
+
+```bash
+plugins/bookcraft/scripts/test-fixtures.sh
+```
+
+`.github/workflows/fixtures.yml` runs that on every push and pull request, on
+macOS blocking and on Linux alongside it. This repo records macOS as the only
+platform it is developed and tested on, so the Linux job is here to produce the
+first Linux run rather than to gate on one.
+
+**"Advisory" there means the Linux leg does not fail the workflow run — not that
+a Linux failure is hidden.** Measured: with a Linux-only failure the run's
+conclusion stays `success`, while the job and its check run both report
+`failure`. So the PR shows a red check, `gh pr checks` reports that leg as
+failing, and anything reading check runs will stop on it. Treat a red Linux leg
+as something to explain, not something to wave through.
+
+**The workflow asserts that `jq` runs rather than that it exists.** A `jq` on
+`PATH` that will not execute makes every `book.json` declaration read as absent,
+and the fixtures would then be graded in the weakest mode while still exiting 0 —
+a green run proving nothing the declared mode covers. Absent `jq` is a supported
+configuration and a different one, with different right answers, and it has its
+own coverage in `skills/createbook/fixtures/jq-unrunnable/run.sh`.
+
 ## Releasing
 
 Each plugin releases on its own, and the procedure is the same for all four. `plugins/<plugin>/.claude-plugin/plugin.json` carries that plugin's version and is the source of truth for it. To cut a release, raise `version` there, commit, then:
