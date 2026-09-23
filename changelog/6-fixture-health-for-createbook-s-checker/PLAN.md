@@ -83,12 +83,14 @@ Related theme, not a duplicate: #5 covers `guard-default-branch.sh` under-matchi
       pull request and manual dispatch. macOS blocking, Linux alongside and non-blocking. It
       asserts `jq` runs rather than that it exists, and checks the executable bits the shebang
       dispatch depends on.
-- [x] Phase 5: Verify. **Locally done 2026-09-23; the CI half needs a push.** Four
+- [x] Phase 5: Verify. **Done 2026-09-23, both halves measured on PR #23.** Four
       deliberately introduced regressions, each caught and each reverted: a silenced H3 rule in
       `check-book.sh` (the folder still exited 1, so only the required-substring assertion
       caught it), a dropped case in the provenance fixture (6 failures became 5), a new fixture
-      folder asserted by nothing, and a cleared executable bit. Confirming CI *reports* it
-      requires the branch to be pushed.
+      folder asserted by nothing, and a cleared executable bit. CI then reported the first of
+      those on both platforms, naming the missing message rather than a bare non-zero exit. A
+      third run confirmed a Linux-only failure leaves the run conclusion `success`, so the
+      non-blocking claim holds.
 
 ## Action Items
 

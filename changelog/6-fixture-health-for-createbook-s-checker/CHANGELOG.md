@@ -119,7 +119,33 @@ reverted:
 
 The first is the one that matters: exit code unchanged, defect still caught.
 
-Confirming CI *reports* a regression needs the branch pushed, which has not been done.
+**The CI half, measured on PR #23.** Three runs, on two platforms:
+
+| pushed state | macOS job | Linux job | run conclusion |
+|---|---|---|---|
+| the branch as it stands | success | success | success |
+| H3 rule silenced in `check-book.sh` | failure | failure | failure |
+| a Linux-only failing step | success | failure | **success** |
+
+The second run is the one that closes Phase 5. Both platforms printed the exact diagnosis —
+`exit 1 is right and the output is not` / `missing from the output: body carries an H3 or
+deeper` — so CI names the silenced rule rather than reporting a bare non-zero exit.
+
+The third settles the claim that Linux does not gate the branch, which was asserted in three
+places before it was checked. `continue-on-error` behaves as intended: the ubuntu job's own
+conclusion is `failure` and the workflow run's is `success`, so a Linux-only failure shows as
+a red job without blocking the merge.
+
+All eleven checks ran on both platforms with nothing skipped, under `jq` 1.8.2 on macOS and
+1.7 on Linux. The absent-`jq` symlink farm works on Linux too, which was the specific risk
+the one-`ln`-per-directory rewrite had to clear: `jq` sits in `/usr/bin` there beside `awk`
+and `sed`, so pruning directories would have removed the tools the checker needs.
+
+**This is the repository's first recorded Linux run.** The README had said Linux should work
+with two edits and that no run had been recorded; there is one now, and it passed.
+
+The two commits that carried those probes were labelled TEMPORARY, existed only to measure
+CI, and were dropped from the branch afterwards.
 
 **Measured.** The first absent-jq implementation forked a `$(basename)` subshell per entry on
 `PATH` and took 32 seconds. One `ln -s` per directory, letting `ln` refuse to clobber so
