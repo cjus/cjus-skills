@@ -327,7 +327,7 @@ All of them live under `${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/`, excep
 
 ### Fixtures
 
-`skills/createbook/fixtures/` holds small books that exercise the checkers, and they are the fastest way to see what a failure looks like:
+`skills/createbook/fixtures/` holds small books that exercise the checkers, and `skills/check-claims/fixtures/` holds one more. They are the fastest way to see what a failure looks like, and the paths in the table below are relative to `skills/`:
 
 ```bash
 cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
@@ -338,6 +338,23 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
 ./fixtures/jq-unrunnable/run.sh                           # exits 0, the jq guard still fires
 ```
+
+**Every book folder and what `check-book.sh` should exit.** Each folder is graded in the mode its `book.json` declares, so the exit code is only meaningful alongside the declaration. Re-validated 2026-09-22.
+
+| Folder | Declares | Exits | Why |
+|---|---|---|---|
+| `check-claims/fixtures/appendix` | guide profile, overview, provenance; tags and suggested reading off | 0 | |
+| `createbook/fixtures/fence` | tags, provenance, suggested reading | 0 | |
+| `createbook/fixtures/guide` | guide profile, and all five | 0 | |
+| `createbook/fixtures/guide-under-narration` | all five, no profile | **1** | Five failures by design. The narration rules reject the guide-only constructs, and one filename is rejected before its content is read |
+| `createbook/fixtures/jq-unrunnable` | all five | 0 | Also reachable through its own `run.sh`, which is what asserts the guard |
+| `createbook/fixtures/overview` | all five | 0 | |
+| `createbook/fixtures/overview-nothing-carried` | all five | 0 | |
+| `createbook/fixtures/provenance` | provenance only | **1** | Both chapters carry one part heading where the shape wants two or three. A known fixture defect, tracked separately; the provenance marks it exists for are clean |
+
+A run that disagrees with this table is either a regression or a fixture edit, and it is worth knowing which before changing anything. **Read the mode line, not only the exit code:** a folder graded in a weaker mode than it declares can still exit 0 while checking almost nothing, which is exactly the failure the jq guard now catches.
+
+`fixtures/ledger` is not in the table because it is not a book. It holds an outline and its sources and no chapter files, so `check-book.sh` exits 2 on it; its own `run.sh` is what drives it.
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.
 
@@ -392,6 +409,7 @@ skills/
     SKILL.md
     reference/judgement.md          what a verdict means and what is in scope
     scripts/render-report.py        turns per-chapter findings into one report
+    fixtures/                       the appendix-versus-chapter collision, and its runner
 ```
 
 `NOTES.md` files are not loaded at runtime. They record which numbers in a spec were measured and which were asserted, so anyone tightening a rule knows which kind they are touching. Read the relevant one before changing a ceiling.
