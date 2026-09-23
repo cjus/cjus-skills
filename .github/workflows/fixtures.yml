@@ -3,10 +3,16 @@
 # remembered to run them.
 #
 # macOS is blocking because it is the only platform the plugins are developed and
-# tested on (README § Platform support). Linux runs alongside it and cannot fail
-# the branch: the README records Linux as expected-to-work with no run behind
-# that claim, so this job is here to produce the first such run rather than to
-# gate on one.
+# tested on (README § Platform support). Linux runs alongside it to produce the
+# first recorded Linux run rather than to gate on one.
+#
+# What continue-on-error on the Linux leg does and does not do, measured rather
+# than assumed: a Linux-only failure leaves the WORKFLOW RUN's conclusion
+# `success`, so it does not fail the run. It does NOT make the failure invisible
+# -- the job and its check run both report `failure`, so the PR shows a red check
+# and `gh pr checks` reports that leg as failing. Anything reading check runs,
+# including the pr plugin's close gate, will see it and should. Advisory means
+# "does not fail the run", not "is hidden".
 name: fixtures
 
 on:
@@ -14,6 +20,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+# Read-only, and stated rather than inherited. This is the repo's first workflow,
+# so it sets the default that later ones get compared against, and nothing here
+# needs to write to the repository, open a check run or mint a token.
+permissions:
+  contents: read
 
 jobs:
   fixtures:

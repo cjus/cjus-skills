@@ -124,9 +124,16 @@ plugins/bookcraft/scripts/test-fixtures.sh
 ```
 
 `.github/workflows/fixtures.yml` runs that on every push and pull request, on
-macOS blocking and on Linux alongside it. Linux cannot fail the branch: this repo
-records macOS as the only platform it is developed and tested on, so that job is
-here to produce the first Linux run rather than to gate on one.
+macOS blocking and on Linux alongside it. This repo records macOS as the only
+platform it is developed and tested on, so the Linux job is here to produce the
+first Linux run rather than to gate on one.
+
+**"Advisory" there means the Linux leg does not fail the workflow run — not that
+a Linux failure is hidden.** Measured: with a Linux-only failure the run's
+conclusion stays `success`, while the job and its check run both report
+`failure`. So the PR shows a red check, `gh pr checks` reports that leg as
+failing, and anything reading check runs will stop on it. Treat a red Linux leg
+as something to explain, not something to wave through.
 
 **The workflow asserts that `jq` runs rather than that it exists.** A `jq` on
 `PATH` that will not execute makes every `book.json` declaration read as absent,

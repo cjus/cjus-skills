@@ -134,4 +134,20 @@ Related theme, not a duplicate: #5 covers `guard-default-branch.sh` under-matchi
 
 ## Deferred
 
-- (none yet)
+Found during the close review, 2026-09-23. Triaged at `/pr:close`: the first two were
+ticketed as **#24**, the last two dropped.
+
+- **`command -v -a jq` is not valid bash**, so the working-jq probe in
+  `fixtures/jq-unrunnable/run.sh` never actually consults `PATH` and falls through to its three
+  hardcoded candidates. Pre-existing, in half one, not in the half this branch added. It still
+  finds a working jq on both CI platforms and on this machine, so nothing is failing because of
+  it. *Theme: jq probe robustness.*
+- **`check-references.sh` has no fixture coverage at all.** It is the third checker in
+  `createbook/scripts/`, and no fixture folder and no manifest row exercises it. The runner
+  cannot report a gap it was never pointed at. *Theme: checker coverage.*
+- **A pre-existing bare cross-repo ticket citation on `main`.** Out of scope here and untouched
+  by this branch. *Theme: cross-repo citation scrub.*
+- **`#26` and its neighbours dangle.** The repo was rebuilt from a scrubbed tree and GitHub's
+  numbering restarted, so the ticket numbers quoted throughout `changelog/**` — including this
+  plan's own About Ticket section — no longer resolve. Consistent with every other folder under
+  `changelog/`, so it is left as found. *Theme: cross-repo citation scrub.*

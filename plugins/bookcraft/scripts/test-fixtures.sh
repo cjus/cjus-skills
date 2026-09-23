@@ -89,7 +89,8 @@ if command -v jq >/dev/null 2>&1 && printf '{}' | jq -e . >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# folder | checker | expected exit | strings the output must carry (~ separated)
+# folder | checker | expected exit | strings the output must carry (~ separated,
+#                                        a leading ! means must NOT carry)
 # ---------------------------------------------------------------------------
 MANIFEST=$(cat <<'ROWS'
 createbook/fence|check-book|0|structure is sound
@@ -99,7 +100,7 @@ createbook/jq-unrunnable|check-book|0|structure is sound~provenance: required
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
-createbook/provenance|check-provenance|1|6 failure(s)
+createbook/provenance|check-provenance|1|6 failure(s)~REVIEW provenance-fixture-02~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01
 ROWS
 )
 
@@ -120,6 +121,13 @@ else
       fail "$rel: the manifest names a fixture folder that does not exist"
       continue
     fi
+    # A row with an empty fourth field asserts the exit code and nothing else,
+    # which is precisely the weakness this runner exists to remove. Rather than
+    # let it degrade quietly, refuse the row.
+    if [ -z "$must" ]; then
+      fail "$rel under $checker: the manifest row names no required output; an exit code alone is not an assertion"
+      continue
+    fi
     out=$("$cmd" "$folder" 2>&1 </dev/null); rc=$?
     label="$rel under $checker"
     if [ "$rc" -ne "$want" ]; then
@@ -127,11 +135,25 @@ else
       printf '%s\n' "$out" | sed 's/^/      | /'
       continue
     fi
+    # A leading ! inverts the term. Some expectations are about what the output
+    # must NOT say: the provenance fixture documents that a run reporting
+    # anything against its chapter 1 is a regression, and only an absence
+    # assertion can hold that.
     missing=""
     saved=$IFS; IFS='~'
     for s in $must; do
-      printf '%s\n' "$out" | grep -qF -- "$s" || missing="$missing
+      case "$s" in
+        '!'*)
+          if printf '%s\n' "$out" | grep -qF -- "${s#!}"; then
+            missing="$missing
+      the output must not mention: ${s#!}"
+          fi
+          ;;
+        *)
+          printf '%s\n' "$out" | grep -qF -- "$s" || missing="$missing
       missing from the output: $s"
+          ;;
+      esac
     done
     IFS=$saved
     if [ -n "$missing" ]; then
