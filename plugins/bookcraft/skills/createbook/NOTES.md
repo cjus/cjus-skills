@@ -649,3 +649,49 @@ Scope discipline in the Never section earned its place: an earlier version twice
 ## Copies
 
 Unlike the skill it forked from, nothing here is synced to another repo. `/ne` ships byte-identical in three separate repos, and a change to one is a three-repo port. This folder has no such obligation: `createbook/` and `makebook/` are self-contained and ship together in this plugin, so an install carries the pair.
+
+## The fixture suite, 2026-09-23
+
+Ticket #6. The fixture folders were the only verification these checkers had, and
+nothing ran them but a person remembering to. This adds
+`bookcraft/scripts/test-fixtures.sh` and the repo's first CI workflow.
+
+**Measured, and the reason the suite is not exit-code-only.**
+`fixtures/provenance/` exited 1 under `check-book.sh` from the day it was written.
+The cause was neither a provenance defect nor an intentional negative case: both
+chapters carried one part heading, and a chapter's shape is two or three, so the
+folder failed a structural rule neither chapter was written to exercise. The
+provenance signal was never in that exit code at all. A suite asserting only
+`provenance=1` would have passed it indefinitely while reporting nothing. Both
+chapters were split into two parts; the folder now exits 0 under `check-book.sh`
+and still exits 1 under `check-provenance.sh` with the same 6 failures and 1
+review its `book.json` has always asserted, all seven against chapter 2.
+
+So every expectation in the manifest names a string the output must carry.
+Verified by silencing the H3 rule in `check-book.sh`: `guide-under-narration/`
+still exited 1, on its remaining four failures, and only the missing
+`body carries an H3 or deeper` caught it.
+
+**Measured: the fixture count in the ticket was wrong, and that is the drift the
+completeness check exists to stop.** The ticket named four folders. There were
+eight under `createbook/fixtures/` when it was written, seven of them older than
+the ticket, plus one under `check-claims/`. A folder covered by neither a manifest
+row nor a `run.sh` now fails the run, so a fixture added without an assertion
+cannot go quiet the way these did.
+
+**Asserted, not measured: that the manifest's expected codes hold without `jq`.**
+They do not, and the suite refuses to grade them in that configuration rather than
+guessing. `fixtures/guide/` passes only because its profile declaration is read;
+with no `jq` the declaration is invisible, the narration rules apply, and the
+folder correctly fails. The absent-`jq` path is covered in
+`fixtures/jq-unrunnable/run.sh` instead, as a third half beside the working-`jq`
+and unrunnable-`jq` ones.
+
+**Measured while writing that third half.** Hiding `jq` means a `PATH` with no
+`jq` on it, and pruning whole directories will not do: on a stock Linux `jq` sits
+in `/usr/bin` beside `awk`, `sed` and `grep`, so pruning that directory removes
+the tools the checker needs. Building a symlink farm of everything on `PATH`
+except `jq` is what works. The first version ran a `$(basename)` subshell per
+entry and took 32 seconds; one `ln -s` per directory, letting `ln` refuse to
+clobber so `PATH` precedence survives, takes 1.5. The whole suite runs in under
+six seconds.
