@@ -407,6 +407,7 @@ skills/
     SKILL.md
     reference/judgement.md          what a verdict means and what is in scope
     scripts/render-report.py        turns per-chapter findings into one report
+    fixtures/                       the appendix-versus-chapter collision, and its runner
 ```
 
 `NOTES.md` files are not loaded at runtime. They record which numbers in a spec were measured and which were asserted, so anyone tightening a rule knows which kind they are touching. Read the relevant one before changing a ceiling.
