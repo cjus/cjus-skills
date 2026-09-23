@@ -57,7 +57,8 @@ written as though every checker were suspect.
 
 ### The jq guard is now fully exercisable for the first time
 
-`fixtures/jq-unrunnable/run.sh` passes all nine assertions. Its first half needs a working `jq`
+`fixtures/jq-unrunnable/run.sh` passed all nine assertions on 2026-09-22. Its first half needs a
+working `jq`
 to mean anything, and on this machine it had never had one. It does not trust `PATH` — it hunts
 for a working `jq` itself and synthesizes the broken one for the second half — so the machine
 fix neither invalidates it nor is required by it.
@@ -81,15 +82,51 @@ paragraphs below where the text claimed otherwise. The warning now sorts the sil
 loud one. A list is an implicit claim that its members behave alike, so naming what is skipped was
 only half the fix.
 
-### Recorded so this cannot silently rot again
+### 2026-09-23 — #23 merged first and superseded the record half of this branch
 
-`plugins/bookcraft/README.md § Fixtures` gains a table of every book folder, what it declares
-and what `check-book.sh` should exit, with the warning that matters: read the mode line, not
-only the exit code, because a narration book graded below its declaration still exits 0 with the
-provenance sweep, the suggested-reading requirement and the overview and glossary cross-checks
-all off. A guide book fails the opposite way, loudly, which is why the warning sorts the two
-rather than listing them together. It names what is skipped instead of rounding it to "almost
-nothing", so a reader who tests it finds it accurate and keeps heeding it.
-`createbook/fixtures/ledger` is named as the folder that is deliberately not a book — no chapter
-files, so the checker exits 2 — and the shipped-files tree gains the `check-claims/fixtures/`
-entry it was missing.
+`main` gained `3467d2c`, which closed #6 by giving the fixture folders `test-fixtures.sh` and the
+repo its first CI. It conflicted with this branch in `plugins/bookcraft/README.md § Fixtures`,
+because both had rewritten that section.
+
+**Resolved in `main`'s favour, dropping this branch's table entirely.** The table existed so that
+"a later runner has an accurate table to assert against", and #23 *is* that runner — one that
+asserts the folders directly, pairs every expected exit code with a string the output has to
+carry, and fails any folder covered by neither a manifest row nor a `run.sh`. A prose table is
+strictly worse than that, and #23's README makes the argument in general terms: "An expected exit
+code is not an assertion on its own."
+
+It also made one row of the table wrong. `fixtures/provenance` had exited 1 under `check-book.sh`
+since it was written; #23 split both its chapters into two parts and it exits 0 now. So the table
+would have shipped a stale assertion within a day of being written, which is the failure mode the
+first deferred item predicted — just faster, and resolved by the same commit that predicted it.
+
+What survives from this branch in shipped files is one line: `check-claims/fixtures/` in the
+README's shipped-files tree, which `main` still lacked. The re-validation answer that #7 actually
+asked for is unaffected and lives here and in `PLAN.md`.
+
+Two consequences worth recording. **#18 is now stale** — it tracks `fixtures/provenance` failing
+`check-book.sh` on its part-heading count, and #23 fixed exactly that, so its premise no longer
+holds although it is still open. And **both of this branch's deferred items are closed**, one done
+by #23 and one made moot by dropping the table.
+
+### Written to stop this rotting, then superseded
+
+This is kept as the record of what the branch wrote before #23 landed, because the reasoning is
+still the reasoning, and only the medium changed.
+
+`plugins/bookcraft/README.md § Fixtures` gained a table of every book folder, what it declares and
+what `check-book.sh` should exit, with the warning that mattered: read the mode line, not only the
+exit code, because a narration book graded below its declaration still exits 0 with the provenance
+sweep, the suggested-reading requirement and the overview and glossary cross-checks all off. A
+guide book fails the opposite way, loudly, which is why the warning sorted the two rather than
+listing them together. It named what is skipped instead of rounding it to "almost nothing", so a
+reader who tested it would find it accurate and keep heeding it. `createbook/fixtures/ledger` was
+named as the folder that is deliberately not a book, and the shipped-files tree gained the
+`check-claims/fixtures/` entry it was missing.
+
+**Of that, only the shipped-files-tree line survives the merge.** `test-fixtures.sh` now carries
+the assertions the table carried, and carries them executably; `ledger` is covered by its own
+`run.sh` in #23's manifest; and #23's `jq-unrunnable/run.sh` gained a third case exercising the
+no-`jq` fallback directly — the same degraded path this branch reproduced by hand to measure.
+The warning's substance is worth re-proposing against #23's section as its own change if it is
+wanted, rather than smuggled through this branch.

@@ -1,12 +1,14 @@
 # Everything Resolves
 
-## The passing shapes
+## The quotations that resolve
 
 The grain is what one row of the fact table means, and the handbook is blunt about the cost of getting it wrong: "One row of the fact table means one line item on one sale".
 <!-- src: handbook § What The Grain Is -->
 
 The same sentence quoted through this book's own punctuation rules, with the em dash the handbook uses rewritten as a comma: "one line item on one sale, get the grain wrong and the model is wrong". This is the case `words()` exists for, and a run that reports it is a regression.
 <!-- src: handbook § What The Grain Is -->
+
+## The locators that resolve
 
 A mark may name the source whole, with no locator at all, and nothing is asserted beyond the source existing.
 <!-- src: handbook -->

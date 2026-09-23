@@ -9,11 +9,12 @@
 # weakest mode available and the run still ends "OK  structure is sound". Found
 # on an arm64 Mac carrying a stale x86_64 jq at /usr/local/bin/jq.
 #
-# Two halves, because either alone can pass for the wrong reason. The book in
-# this folder is valid and fully declared, so:
+# Three halves, because no one of them can pass for the right reason alone. The
+# book in this folder is valid and fully declared, so:
 #
 #   with a working jq   the run exits 0 and reports the three modes as required
 #   with a broken jq    the run exits non-zero and names the jq it found
+#   with no jq at all   the run exits 0, grades in the weakest mode, and says so
 #
 # Without the first half, a checker that rejected every book would pass the
 # second. Without the second, the guard could be deleted and nothing would say
@@ -89,6 +90,45 @@ printf '%s\n' "$out" | grep -q "will not run"; report $? "broken jq: says the jq
 ! printf '%s\n' "$out" | grep -q "structure is sound"; report $? "broken jq: does not report the structure sound"
 ! printf '%s\n' "$out" | grep -q "(inferred)"; report $? "broken jq: does not fall back to inferred mode"
 if [ "$rc" -eq 0 ]; then printf '%s\n' "$out" | sed 's/^/      | /'; fi
+
+# ---------------------------------------------------------------------------
+# Half three: no jq at all is a SUPPORTED configuration, and a different one.
+#
+# The guard above is about a jq that is present and will not run. Absent jq is
+# the documented fallback: no declaration in book.json is read, the book is
+# graded in the weakest mode, and check-book.sh says so rather than implying it.
+# Nothing tested that path, which matters because it is the one a CI runner
+# without jq would silently take -- every folder here would still exit 0 while
+# proving nothing the declared mode covers.
+#
+# Hiding jq means a PATH with no jq on it, and pruning whole directories will
+# not do: on a stock Linux jq sits in /usr/bin beside awk, sed and grep. So this
+# builds a symlink farm of everything on PATH except jq, preserving precedence.
+# ---------------------------------------------------------------------------
+# One ln per directory rather than one per file: a $(basename) subshell per
+# entry costs about thirty seconds across a populated PATH, which is too slow to
+# run on every commit. Links from earlier directories win, because ln refuses to
+# clobber, so PATH precedence survives. Then jq goes, wherever it came from.
+mkdir -p "$tmp/nojq"
+saved_ifs=$IFS
+IFS=:
+for d in $PATH; do
+  [ -d "$d" ] || continue
+  ln -s "$d"/* "$tmp/nojq/" 2>/dev/null
+done
+IFS=$saved_ifs
+rm -f "$tmp/nojq/jq"
+
+if PATH="$tmp/nojq" command -v jq >/dev/null 2>&1; then
+  echo "skip  could not build a jq-free PATH; the absent-jq half cannot run"
+else
+  out=$(PATH="$tmp/nojq" bash "$checker" "$here" 2>&1); rc=$?
+  [ "$rc" -eq 0 ]; report $? "absent jq: exits 0, since the book is valid in any mode (got $rc)"
+  printf '%s\n' "$out" | grep -q "book.json is present and jq is not"; report $? "absent jq: says no declaration was read"
+  printf '%s\n' "$out" | grep -q "(inferred)"; report $? "absent jq: tag mode fell back to inferred"
+  ! printf '%s\n' "$out" | grep -q "will not run"; report $? "absent jq: does not confuse absent with unrunnable"
+  if [ "$rc" -ne 0 ]; then printf '%s\n' "$out" | sed 's/^/      | /'; fi
+fi
 
 echo
 if [ "$fails" -eq 0 ]; then echo "OK    the jq guard holds"; else echo "FAIL  the jq guard has regressed"; fi

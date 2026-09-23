@@ -1,12 +1,14 @@
 # One Of Each Failure
 
-## The failing shapes
+## The sources and headings that fail
 
 FAIL, check 1: the mark names a source book.json does not declare, which is what a typo or an invented source looks like.
 <!-- src: field guide § Anything -->
 
 FAIL, check 2: the source is declared and real, and carries no such heading.
 <!-- src: handbook § How To Pick A Sharding Key -->
+
+## The locators and quotations that fail
 
 FAIL, check 2: the mark cites a paragraph tag this book does not define.
 <!-- src: handbook; [9-9] -->

@@ -327,40 +327,36 @@ All of them live under `${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/`, excep
 
 ### Fixtures
 
-`skills/createbook/fixtures/` holds small books that exercise the checkers, and `skills/check-claims/fixtures/` holds one more. They are the fastest way to see what a failure looks like, and the paths in the table below are relative to `skills/`:
+`skills/createbook/fixtures/` holds small books that exercise the checkers. One command runs every folder and asserts what each is supposed to report:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/test-fixtures.sh            # every folder, every assertion
+${CLAUDE_PLUGIN_ROOT}/scripts/test-fixtures.sh --strict   # a skipped check is a failure
+```
+
+That is what CI runs on every push and pull request. Give it a plugin path to grade an installed copy rather than the source tree, which is how a packaging defect is caught — a lost executable bit, or a file that did not ship at all.
+
+The folders are also the fastest way to see what a single failure looks like:
 
 ```bash
 cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-book.sh fixtures/fence                    # exits 0
 ./scripts/check-book.sh fixtures/guide                    # exits 0, the guide profile
 ./scripts/check-book.sh fixtures/guide-under-narration    # exits 1, five failures by design
+./scripts/check-book.sh fixtures/provenance               # exits 0
 ./scripts/check-provenance.sh fixtures/provenance         # exits 1, six failures by design
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
 ./fixtures/jq-unrunnable/run.sh                           # exits 0, the jq guard still fires
+./fixtures/ledger/run.sh                                  # exits 0, --ledger-only still fires
 ```
-
-**Every book folder and what `check-book.sh` should exit.** Each folder is graded in the mode its `book.json` declares, so the exit code is only meaningful alongside the declaration. Re-validated 2026-09-22.
-
-| Folder | Declares | Exits | Why |
-|---|---|---|---|
-| `check-claims/fixtures/appendix` | guide profile, overview, provenance; tags and suggested reading off | 0 | |
-| `createbook/fixtures/fence` | tags, provenance, suggested reading | 0 | |
-| `createbook/fixtures/guide` | guide profile, and all five | 0 | |
-| `createbook/fixtures/guide-under-narration` | all five, no profile | **1** | Five failures by design. The narration rules reject the guide-only constructs, and one filename is rejected before its content is read |
-| `createbook/fixtures/jq-unrunnable` | all five | 0 | Also reachable through its own `run.sh`, which is what asserts the guard |
-| `createbook/fixtures/overview` | all five | 0 | |
-| `createbook/fixtures/overview-nothing-carried` | all five | 0 | |
-| `createbook/fixtures/provenance` | provenance only | **1** | Both chapters carry one part heading where the shape wants two or three. A known fixture defect, tracked separately. The provenance behaviour it exists for is unchanged: `check-provenance.sh` reports its six by-design failures, and `--chapters 1` exits 0 |
-
-A run that disagrees with this table is either a regression or a fixture edit, and it is worth knowing which before changing anything. **Read the mode line, not only the exit code.** A narration book graded in a weaker mode than it declares still exits 0, with the provenance sweep, the suggested-reading requirement and the overview and glossary cross-checks all off, and tags inferred rather than required. The filename, ordering, heading and prose sweeps run either way, which is what makes that downgrade easy to miss. A guide book fails the opposite way, loudly: the narration rules apply in place of its declared profile and reject every construct the profile exists to allow. A `jq` that is present and will not run is the case the guard catches; a `jq` that is simply absent downgrades the same way by design, and says so in a note.
-
-`createbook/fixtures/ledger` is not in the table because it is not a book. It holds an outline and its sources and no chapter files, so `check-book.sh` exits 2 on it; its own `run.sh` is what drives it.
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.
 
 **`guide` and `guide-under-narration` are the same chapters under different profiles.** The first declares `"profile": "guide"` and passes; the second declares nothing, so the narration rules apply and every guide-only construct in it fails. Running both is what shows the profile is doing the work rather than the checker having gone quiet.
 
-**`jq-unrunnable/run.sh` is the one fixture that is a script rather than a folder to check.** It needs to manipulate `PATH`, which a book folder cannot express. It runs `check-book.sh` twice against its own fully-declared book: once with a working `jq`, expecting the three modes to read `required`, and once with a `jq` that exits 126, expecting the run to stop. Without the second half the guard could be deleted and nothing would say so; without the first, a checker that rejected every book would pass.
+**An expected exit code is not an assertion on its own.** `fixtures/provenance/` exited 1 under `check-book.sh` for a year, for a structural reason unrelated to provenance, and an exit-code-only suite would have passed it the whole time while reporting nothing about what the folder exists to check. So `test-fixtures.sh` pairs every expectation with a string the output has to carry, and a folder covered by neither a manifest row nor a `run.sh` fails the run rather than going quiet.
+
+**Three fixtures are scripts rather than folders to check.** A book folder cannot express a `PATH` to manipulate or a mutated copy to compare against, so those carry a `run.sh` beside them and the suite runs it. `jq-unrunnable/run.sh` runs `check-book.sh` three times against its own fully-declared book: with a working `jq`, expecting the three modes to read `required`; with a `jq` that exits 126, expecting the run to stop; and with no `jq` on `PATH` at all, expecting the documented fallback, which grades in the weakest mode and says so. No one of the three passes for the right reason alone — without the second the guard could be deleted and nothing would say so, without the first a checker that rejected every book would pass, and without the third a CI runner with no `jq` would grade every folder in the weakest mode while still reporting success. `ledger/run.sh` covers `check-provenance.sh --ledger-only`, and `check-claims/fixtures/appendix/run.sh` covers the appendix rules.
 
 ---
 
@@ -387,6 +383,7 @@ Chapter 1 of the provenance fixture holds only passing marks, so a run reporting
 .claude-plugin/plugin.json          name, version, metadata
 scripts/install.sh                  one-time venv setup, with the Python 3.12 gate
 scripts/bookcraft-python            runs a bookcraft script under that venv
+scripts/test-fixtures.sh            runs every fixture folder and asserts what it reports
 skills/
   createbook/
     SKILL.md                        the procedure
@@ -395,7 +392,8 @@ skills/
     scripts/check-book.sh           structure
     scripts/check-provenance.sh     marks pointing out
     scripts/check-references.sh     citations pointing in
-    fixtures/                       books that exercise the checkers, and the jq-guard runner
+    fixtures/                       books that exercise the checkers, plus the run.sh
+                                    fixtures for what a book folder cannot express
   makebook/
     SKILL.md                        the procedure
     requirements.txt                playwright, markdown-it-py, mdit-py-plugins, EbookLib

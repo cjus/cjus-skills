@@ -64,8 +64,17 @@ satisfy neither, because those declarations were never enforced on this machine.
       to apply.** No book and no declaration disagreed once `jq` could read them. #18's fix
       stays with #18 per the note in Open Questions.
 - [x] Phase 4: Record the resolved per-folder expected exit codes, so a later runner has an
-      accurate table to assert against. Written into `plugins/bookcraft/README.md § Fixtures`
-      as a table of folder, declaration and expected exit code.
+      accurate table to assert against. Originally written into `plugins/bookcraft/README.md
+      § Fixtures` as a table of folder, declaration and expected exit code. **Superseded before
+      this branch merged.** #23 landed `plugins/bookcraft/scripts/test-fixtures.sh`, which is the
+      later runner this phase was writing the table for, and it asserts every folder directly —
+      pairing each expected exit code with a string the output must carry, and failing any folder
+      covered by neither a manifest row nor a `run.sh`. The table was dropped when `main` merged
+      in; an executable assertion is strictly better than a prose one, and #23's own README argues
+      the point: "An expected exit code is not an assertion on its own."
+
+      One row of the dropped table had also gone stale: it recorded `createbook/fixtures/provenance`
+      as exiting 1, which #23 fixed by splitting both chapters into two parts. It exits 0 now.
 
 ## Book folders in scope
 
@@ -89,16 +98,20 @@ Eight folders carry a `book.json`:
   operator: no outside books need checking.** Scope is the in-repo folders, all of which are
   re-validated, so the ticket's question is fully answered and #7 closes on merge.
 - ~~Two folders are expected to fail for reasons already known and separately ticketed.~~
-  **Resolved 2026-09-22.** Both are pre-existing. #18 is open and its title names exactly the
-  failure observed, `body has 1 part headings; a chapter's shape is two or three parts`, so its
-  fix stays with #18. `guide-under-narration` fails on five lines, which is what
+  **Resolved 2026-09-22, and since overtaken by #23.** Both were pre-existing. #18 named the
+  observed failure exactly, `body has 1 part headings; a chapter's shape is two or three parts`,
+  and the fix was left with #18 — but #23 fixed it first, splitting both chapters into two parts.
+  `fixtures/provenance` exits 0 under `check-book.sh` as of `3467d2c`, so **#18 is stale and its
+  premise no longer holds**, though it is still open. `guide-under-narration` fails on five lines,
+  which is what
   `plugins/bookcraft/README.md § Fixtures` already documented. One correction to the phrasing
   here: its `book.json` declares no exit code, it declares all five features `true`. What makes
   it fail is the absent `"profile": "guide"` line, not a declaration of failure.
 - ~~Confirm the working `jq` does not invalidate `fixtures/jq-unrunnable`.~~ **Resolved
   2026-09-22: it does the opposite.** `run.sh` finds a working `jq` itself rather than trusting
   `PATH`, and synthesizes the broken one for its second half. A working system `jq` is what
-  makes its first half meaningful. It now passes all nine of its assertions.
+  makes its first half meaningful. It passed all nine of its assertions on 2026-09-22; #23 has
+  since added a no-`jq` third case, taking it to 13, all passing.
 
 ## What the baseline found
 
@@ -122,16 +135,19 @@ declaration-gated checks lapsed, not every check.
 Raised by the code review on 2026-09-23. Both are follow-up work, not this branch's scope.
 
 **Triaged at close, 2026-09-23: both consolidated onto issue #6, "Fixture health for createbook's
-checker", which already tracks the missing fixture runner. No new issue was filed.** The same
-comment corrects #6's now-stale "Expected exit codes today" line, which named four folders against
-the nine this branch re-validated.
+checker", which already tracked the missing fixture runner. No new issue was filed.**
 
-- **Nothing executable asserts the new table** (`plugins/bookcraft/README.md § Fixtures`). The
+**Both then resolved the same day, before this branch merged.** #23 closed #6 by landing
+`plugins/bookcraft/scripts/test-fixtures.sh` and `.github/workflows/fixtures.yml`, which is the
+runner the first item asked for. The second item is moot as a consequence: it existed because the
+README table was a third site asserting the appendix fixture, and merging `main` dropped that
+table, leaving the two sites `appendix/book.json` already names. Nothing is carried forward.
+
+- ~~**Nothing executable asserts the new table** (`plugins/bookcraft/README.md § Fixtures`). The
   repo has no CI, and every other fixture carries its own `run.sh`, so this table is the one
-  record with no runner behind it and will drift the next time a fixture is edited. Occasion:
-  next fixture added, or next change to `check-book.sh`'s grading. Theme: fixture assertion
-  harness.
-- **`check-claims/fixtures/appendix/book.json` now under-counts its own assertion sites.** It
+  record with no runner behind it and will drift the next time a fixture is edited.~~ **Done by
+  #23:** `test-fixtures.sh` asserts every folder and CI runs it on every push and pull request.
+- ~~**`check-claims/fixtures/appendix/book.json` now under-counts its own assertion sites.** It
   says "This is the fixture's only assertion beyond `run.sh`; update both in the same edit",
-  and the README table is now a third site. An editor following that instruction updates two of
-  three. Occasion: same edit as the item above. Theme: fixture assertion harness.
+  and the README table is now a third site.~~ **Moot:** the table is gone, so the file's count of
+  two is correct again.

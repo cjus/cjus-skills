@@ -11,54 +11,40 @@ line distinguished that from a book declaring nothing. The machine fix landed be
 opened. This branch answers the question the ticket actually asked: now that `jq` runs, does every
 book in the repo satisfy what its `book.json` declares?
 
-**It does. Six of eight folders exit 0, two exit 1, and no book disagrees with its own
+**It does. Every folder satisfies what it declares, and no book disagrees with its own
 declaration**, so there was nothing to correct. That is a result rather than an absence of one: the
 bug degraded the *grading mode*, not the verdict, so the books were always sound while the
-declaration-gated checks were not being enforced. The branch's deliverable is therefore the record —
-a per-folder table of declaration and expected exit code, in the place a later runner will look —
-plus two findings that bound the damage more tightly than the ticket assumed.
+declaration-gated checks were not being enforced.
+
+**The record half of this branch was superseded before it merged.** It originally wrote a
+per-folder table of declaration and expected exit code into the README, explicitly so that "a later
+runner has an accurate table to assert against". #23 then landed that runner —
+`plugins/bookcraft/scripts/test-fixtures.sh` plus the repo's first CI — and it asserts every folder
+directly. The table was dropped when `main` merged in, since an executable assertion beats a prose
+one. What remains shipped is a single line; what remains *useful* is the answer to #7 and two
+findings that bound the damage more tightly than the ticket assumed.
 
 ## Key changes
 
 | File | Change |
 |---|---|
-| `plugins/bookcraft/README.md` | `§ Fixtures` gains a table of all eight book folders, what each declares, and what `check-book.sh` should exit; a paragraph naming exactly what a downgraded mode stops checking; `createbook/fixtures/ledger` named as deliberately not a book; `check-claims/fixtures/` added to the shipped-files tree |
-| `changelog/7-.../PLAN.md` | Status refreshed through all four phases, three open questions resolved, two review findings recorded under `## Deferred` |
-| `changelog/7-.../CHANGELOG.md` | The baseline result, the measured evidence behind it, and the two bounding findings |
+| `plugins/bookcraft/README.md` | One line: `check-claims/fixtures/` added to the shipped-files tree, which `main` still lacked. The `§ Fixtures` table this branch wrote was dropped when `main` merged in — see Plan alignment |
+| `changelog/7-.../PLAN.md` | Status through all four phases, all three open questions resolved, the deferred items recorded and then closed |
+| `changelog/7-.../CHANGELOG.md` | The baseline result, the measured evidence behind it, the two bounding findings, and the record of what #23 superseded |
 
 No executable code changed. The diff is documentation.
 
 ## Code examples
 
-The table, which is the branch's deliverable — `plugins/bookcraft/README.md § Fixtures`:
+The whole of what this branch changes in shipped files:
 
-```markdown
-| Folder | Declares | Exits | Why |
-|---|---|---|---|
-| `check-claims/fixtures/appendix` | guide profile, overview, provenance; tags and suggested reading off | 0 | |
-| `createbook/fixtures/fence` | tags, provenance, suggested reading | 0 | |
-| `createbook/fixtures/guide-under-narration` | all five, no profile | **1** | Five failures by design ... |
-| `createbook/fixtures/provenance` | provenance only | **1** | Both chapters carry one part heading ... |
+```diff
+     reference/judgement.md          what a verdict means and what is in scope
+     scripts/render-report.py        turns per-chapter findings into one report
++    fixtures/                       the appendix-versus-chapter collision, and its runner
 ```
 
-The warning that carries it, rewritten during review from "checking almost nothing" to something a
-reader can test:
-
-```markdown
-A narration book graded in a weaker mode than it declares still exits 0, with the provenance
-sweep, the suggested-reading requirement and the overview and glossary cross-checks all off, and
-tags inferred rather than required. The filename, ordering, heading and prose sweeps run either
-way, which is what makes that downgrade easy to miss. A guide book fails the opposite way,
-loudly: the narration rules apply in place of its declared profile and reject every construct
-the profile exists to allow.
-```
-
-The split between the silent case and the loud one came from the second review pass. The first
-rewrite listed the profile substitution alongside the four silent degradations, which reads as a
-claim that a downgraded guide book also slips through quietly. It does not —
-`guide-under-narration` is exactly that case and exits 1 on five lines.
-
-The evidence behind the sentence, reproduced by running `fixtures/fence` with `jq` removed from
+The measurement the branch turns on, reproduced by running `fixtures/fence` with `jq` removed from
 `PATH` — the same `declared_*=""` state the broken binary produced. Five fields of the eleven the
 mode line prints, quoted out of their printed order:
 
@@ -66,20 +52,30 @@ mode line prints, quoted out of their printed order:
 tagged: 2/2 (inferred)   provenance: off   suggested reading: off   prose: 570   structure: 298
 ```
 
+That is what establishes the bug's actual shape: two declarations unenforced, the third fallen back
+to inference rather than off, and the filename, ordering, heading and prose sweeps running
+throughout. #23's `jq-unrunnable/run.sh` now exercises this same fallback as a third case, so the
+path is asserted in CI rather than only measured here once.
+
 ## Plan alignment
 
 All four phases completed as planned, and both remaining ticket action items are checked.
 
 - **Phase 1, baseline** — `check-book.sh` run against all eight folders carrying a `book.json`.
-  Six exit 0, two exit 1. Every folder is now graded in the mode it declares.
+  **As measured on 2026-09-22: six exit 0, two exit 1.** Every folder is graded in the mode it
+  declares. (`fixtures/provenance` has since moved to 0, fixed by #23.)
 - **Phase 2, classify** — two failures, neither new and neither a declaration error.
-  `guide-under-narration` fails on five lines by construction; `fixtures/provenance` fails on the
-  part-heading count that is issue #18.
+  `guide-under-narration` fails on five lines by construction; `fixtures/provenance` failed on the
+  part-heading count that was issue #18, which #23 has since fixed.
 - **Phase 3, apply resolutions** — **nothing to apply.** No book and no declaration disagreed once
-  `jq` could read them. #18's fix stays with #18, per the plan's own instruction.
-- **Phase 4, record** — the table, in `plugins/bookcraft/README.md § Fixtures`.
+  `jq` could read them. #18's fix was left with #18, per the plan's own instruction; #23 made it
+  first.
+- **Phase 4, record** — written as a table in `plugins/bookcraft/README.md § Fixtures`, then
+  **superseded before merge.** The phase existed so "a later runner has an accurate table to assert
+  against"; #23 landed that runner and it asserts the folders directly. The table was dropped when
+  `main` merged in. The phase's goal is met, by better means than it specified.
 
-**Deviations.** Two, both additive and neither touching the objective:
+**Deviations.** Three. The third is consequential and is the reason the shipped diff is one line:
 
 1. The plan scoped Phase 1 to "all eight book folders carrying a `book.json`". A ninth folder,
    `createbook/fixtures/ledger`, was checked as well to establish that it is deliberately not a book
@@ -89,6 +85,12 @@ All four phases completed as planned, and both remaining ticket action items are
    stale binary. Reproducing the degraded state shows two of three off and the third fallen back to
    inference. The operator's sentence is **left as written**, with the correction recorded beside it
    rather than edited into their record of an earlier branch.
+3. **#23 merged into `main` first and superseded this branch's README work.** It closed #6 by
+   giving the fixture folders `test-fixtures.sh` and the repo its first CI, rewriting the same
+   `§ Fixtures` section. The conflict was resolved wholly in `main`'s favour: the table is gone,
+   and only the `check-claims/fixtures/` shipped-files-tree line — which `main` still lacked —
+   survives. #23 also fixed `fixtures/provenance`, which now exits 0 under `check-book.sh` where
+   the dropped table recorded 1, so the table had gone stale within a day of being written.
 
 **The one open question is resolved.** Whether "every existing book folder" extended beyond this
 repo was the single thing only the operator could answer, since books written outside it are not
@@ -97,50 +99,51 @@ folders, every one of which is re-validated, so nothing is left outstanding on #
 
 ## Testing
 
-No automated tests were added — see the first deferred item, which is precisely that gap.
-
-Verify by hand from the repo root:
+Verify from the repo root. Since #23 this is one command, and it is what CI runs:
 
 ```bash
-# The table, row by row. Every one of these should match the README.
-CHK=plugins/bookcraft/skills/createbook/scripts/check-book.sh
-for f in check-claims/fixtures/appendix createbook/fixtures/fence createbook/fixtures/guide \
-         createbook/fixtures/guide-under-narration createbook/fixtures/jq-unrunnable \
-         createbook/fixtures/overview createbook/fixtures/overview-nothing-carried \
-         createbook/fixtures/provenance createbook/fixtures/ledger; do
-  bash "$CHK" "plugins/bookcraft/skills/$f" >/dev/null 2>&1
-  echo "$f = $?"
-done
-# expect: 0 0 0 1 0 0 0 1 2
-
-# The regression runners, all three green
-bash plugins/bookcraft/skills/check-claims/fixtures/appendix/run.sh
-bash plugins/bookcraft/skills/createbook/fixtures/jq-unrunnable/run.sh
-bash plugins/bookcraft/skills/createbook/fixtures/ledger/run.sh
-
-# The pre-commit hook's checker
-python3 scripts/check-citations.py
+plugins/bookcraft/scripts/test-fixtures.sh          # every folder, every assertion
+plugins/bookcraft/scripts/test-fixtures.sh --strict # a skipped check is a failure
+python3 scripts/check-citations.py                  # the pre-commit hook's checker
 ```
 
-**Edge cases considered.** The degraded path was reproduced directly rather than inferred, by
-building a `PATH` that shadows every system directory except `jq` and re-running `fixtures/fence`.
-That is what established that tags fall back to *inferred* rather than off, and that the structural
-and prose sweeps keep running — the distinction between absent-`jq` (which prints a note) and
-broken-`jq` (which printed nothing, and is the actual bug).
+**Results on the merged tree:** `test-fixtures.sh` reports `passed 11   failed 0   skipped 0` and
+exits 0; `check-citations.py` reports 125 citations resolving.
 
-**Verification results at close:** all nine exit codes match, all three runners exit 0, and
-`check-citations.py` reports 125 citations resolving.
+To reproduce the finding this branch rests on, which no suite asserts because it is a statement
+about a *past* state rather than current behaviour:
+
+```bash
+# Build a PATH that shadows every system dir except jq, then re-run fence.
+d=$(mktemp -d); mkdir -p "$d/bin"
+for dir in /usr/bin /bin /usr/sbin /sbin; do
+  for f in "$dir"/*; do n=$(basename "$f"); [ "$n" = jq ] && continue
+    [ -e "$d/bin/$n" ] || ln -sf "$f" "$d/bin/$n" 2>/dev/null; done; done
+PATH="$d/bin" bash plugins/bookcraft/skills/createbook/scripts/check-book.sh \
+  plugins/bookcraft/skills/createbook/fixtures/fence
+```
+
+**Edge cases considered.** The degraded path was reproduced directly rather than inferred. That is
+what established that tags fall back to *inferred* rather than off, and that the structural and
+prose sweeps keep running — plus the distinction that matters most: absent `jq` prints a note
+saying no declaration was read, while broken `jq` printed nothing, which is why the failure was
+silent and is the actual bug.
+
+**No automated tests were added by this branch.** The gap it identified is closed by #23's
+`test-fixtures.sh` rather than by anything here.
 
 ## Impact assessment
 
-- **Files changed:** 3 — one shipped document, two branch artifacts.
-- **Lines:** +224 / −1 across those three files at the time of writing, plus the branch artifacts
-  this close adds: this summary, `pr-review-2026-09-23.md` and `COMMITMSG.md`.
+- **Files changed vs `main`:** 1 shipped document (one added line), plus this branch's own
+  artifacts under `changelog/7-.../`.
 - **Dependencies:** none added or changed.
 - **Breaking changes:** none. No executable code was modified, so no skill, script or fixture
   behaves differently than it did before this branch.
-- **CI:** this repo has **no CI** — there is no `.github/workflows/` on this branch or on `main`.
-  Verification is the pre-commit citation hook and the per-fixture `run.sh` scripts, run by hand.
+- **Merge:** `origin/main` was merged in to resolve a conflict in
+  `plugins/bookcraft/README.md § Fixtures`, where #23 had rewritten the same section. Resolved
+  wholly in `main`'s favour; see Plan alignment.
+- **CI:** the repo gained its first CI in #23, `.github/workflows/fixtures.yml`, which runs
+  `test-fixtures.sh` on every push and pull request. This branch is green under it.
 
 ## Two findings beyond the objective
 
@@ -150,24 +153,29 @@ downgrade could only ever reach `check-book.sh` and the declarations in a `book.
 provenance or reference result recorded on this machine was affected. The ticket was written as
 though every checker were suspect.
 
-**The jq guard is fully exercisable for the first time.** `fixtures/jq-unrunnable/run.sh` passes all
-nine assertions. Its first half needs a working `jq` to mean anything, and on this machine it had
-never had one. It does not trust `PATH` — it hunts for a working `jq` itself and synthesizes the
-broken one for its second half — so the machine fix neither invalidates it nor is required by it.
+**The jq guard is fully exercisable for the first time.** `fixtures/jq-unrunnable/run.sh` passed all
+nine of its assertions on 2026-09-22. Its working-`jq` half needs a working `jq` to mean anything,
+and on this machine it had never had one. It does not trust `PATH` — it hunts for a working `jq`
+itself and synthesizes the broken one — so the machine fix neither invalidates it nor is required
+by it. #23 has since added a third case covering the no-`jq` fallback, taking it to 13 assertions,
+all passing on the merged tree.
 
 ## Deferred work
 
-Both raised by the close-time code review, both follow-up rather than this branch's scope, and both
-on the same theme of a fixture assertion harness.
+Both items were raised by the close-time review, triaged onto issue #6, and then **closed the same
+day** — so nothing is carried forward.
 
-- **Nothing executable asserts the new table.** The repo has no CI, and every other fixture carries
-  its own `run.sh`, so this table is the one record in the repo with no runner behind it. It will
-  drift the next time a fixture is edited. The occasion that would pick it up: the next fixture
-  added, or the next change to `check-book.sh`'s grading.
-- **`check-claims/fixtures/appendix/book.json` now under-counts its own assertion sites.** It
-  instructs an editor that "this is the fixture's only assertion beyond `run.sh`; update both in the
-  same edit", and the README table is now a third site. An editor following that instruction updates
-  two of three. Same occasion as above.
+- **Nothing executable asserts the new table.** Done by #23: `test-fixtures.sh` asserts every
+  folder, pairing each expected exit code with a string the output must carry, and failing any
+  folder covered by neither a manifest row nor a `run.sh`. CI runs it on every push and pull
+  request. Issue #6 is closed.
+- **`check-claims/fixtures/appendix/book.json` under-counts its own assertion sites.** Moot. The
+  item existed because the README table was a third site; dropping the table returns the count to
+  the two the file already names.
+
+**One thing this branch surfaces that is not its own work:** #18 is now stale. It tracks
+`fixtures/provenance` failing `check-book.sh` on its part-heading count, and #23 fixed exactly
+that — the folder exits 0 now. The issue is still open and its premise no longer holds.
 
 ## Assertion audit
 
