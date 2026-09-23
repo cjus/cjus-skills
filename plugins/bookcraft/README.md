@@ -350,11 +350,11 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 | `createbook/fixtures/jq-unrunnable` | all five | 0 | Also reachable through its own `run.sh`, which is what asserts the guard |
 | `createbook/fixtures/overview` | all five | 0 | |
 | `createbook/fixtures/overview-nothing-carried` | all five | 0 | |
-| `createbook/fixtures/provenance` | provenance only | **1** | Both chapters carry one part heading where the shape wants two or three. A known fixture defect, tracked separately; the provenance marks it exists for are clean |
+| `createbook/fixtures/provenance` | provenance only | **1** | Both chapters carry one part heading where the shape wants two or three. A known fixture defect, tracked separately. The provenance behaviour it exists for is unchanged: `check-provenance.sh` reports its six by-design failures, and `--chapters 1` exits 0 |
 
-A run that disagrees with this table is either a regression or a fixture edit, and it is worth knowing which before changing anything. **Read the mode line, not only the exit code:** a folder graded in a weaker mode than it declares can still exit 0 while checking almost nothing, which is exactly the failure the jq guard now catches.
+A run that disagrees with this table is either a regression or a fixture edit, and it is worth knowing which before changing anything. **Read the mode line, not only the exit code.** A narration book graded in a weaker mode than it declares still exits 0, with the provenance sweep, the suggested-reading requirement and the overview and glossary cross-checks all off, and tags inferred rather than required. The filename, ordering, heading and prose sweeps run either way, which is what makes that downgrade easy to miss. A guide book fails the opposite way, loudly: the narration rules apply in place of its declared profile and reject every construct the profile exists to allow. A `jq` that is present and will not run is the case the guard catches; a `jq` that is simply absent downgrades the same way by design, and says so in a note.
 
-`fixtures/ledger` is not in the table because it is not a book. It holds an outline and its sources and no chapter files, so `check-book.sh` exits 2 on it; its own `run.sh` is what drives it.
+`createbook/fixtures/ledger` is not in the table because it is not a book. It holds an outline and its sources and no chapter files, so `check-book.sh` exits 2 on it; its own `run.sh` is what drives it.
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.
 

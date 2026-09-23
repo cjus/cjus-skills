@@ -17,11 +17,26 @@ eight exit 0, two exit 1, and no book disagrees with its own `book.json`.** The 
 comes back clean: there was nothing to correct.
 
 That is a real result rather than an empty one. The bug downgraded the *grading mode*, not the
-verdict, so a folder checked under the broken binary passed in the weakest mode available while
-declaring much more. `fixtures/fence` is the clearest case — it declares `tags`, `provenance`
-and `suggested_reading`, reported all three as off under the stale binary, and now reports all
-three as `required` and still passes. The books were always sound; the checks were not being
-run.
+verdict, so a folder checked under the broken binary passed in a weaker mode than it declared.
+`fixtures/fence` is the clearest case. It declares `tags`, `provenance` and `suggested_reading`;
+under the degraded path it reported `provenance: off`, `suggested reading: off` and
+`tagged: 2/2 (inferred)`, and it now reports all three as `required` and still passes. The books
+were always sound; the declaration-gated checks were not being run.
+
+**Measured, not inferred.** Re-running `fixtures/fence` with `jq` removed from `PATH` reproduces
+the `declared_*=""` state the broken binary produced. Its mode line reads, in part,
+`tagged: 2/2 (inferred)`, `provenance: off`, `suggested reading: off`, `prose: 570` and
+`structure: 298` — five fields of the eleven it prints, quoted here out of their printed order.
+Two of the three declarations were genuinely unenforced. The third fell back to inference, which
+is weaker but not absent: a book whose second chapter dropped its tags would still have failed.
+The filename, ordering, heading and prose sweeps ran throughout. Worth stating precisely, because
+this record is what a later reader will use to decide how far to distrust historical results, and
+"every check was off" would widen that doubt past what the evidence supports.
+
+The absent-`jq` path is not quite the broken-`jq` path, and the difference is the whole bug. With
+`jq` absent the checker prints a note saying no declaration was read. With `jq` present and
+unrunnable, `command -v jq` succeeded, that note never fired, and the summary line was
+indistinguishable from a book that declared nothing. That silence is what the guard now ends.
 
 The two failures are both pre-existing and both already understood:
 
@@ -47,11 +62,34 @@ to mean anything, and on this machine it had never had one. It does not trust `P
 for a working `jq` itself and synthesizes the broken one for the second half — so the machine
 fix neither invalidates it nor is required by it.
 
+### 2026-09-23 — two review rounds sharpened the record, and caught two errors in it
+
+The baseline result did not change. What changed is how precisely it is stated, and both
+corrections came from review rather than from the original pass.
+
+The first: this changelog said `fixtures/fence` "reported all three as off" and that "the checks
+were not being run". Reproducing the degraded path shows two of three off and the third fallen
+back to inference, with the filename, ordering, heading and prose sweeps still running. Rounding
+that to "everything was off" would have widened the doubt cast on historical results past what
+the evidence supports, in the one document written to bound it.
+
+The second was introduced by the fix for the first. Naming what a downgraded mode skips, the
+README listed the profile substitution alongside four silent degradations — but a guide book
+graded under the narration rules does not slip through quietly, it fails on every construct the
+profile exists to allow. `guide-under-narration` is that case and exits 1 on five lines, two
+paragraphs below where the text claimed otherwise. The warning now sorts the silent case from the
+loud one. A list is an implicit claim that its members behave alike, so naming what is skipped was
+only half the fix.
+
 ### Recorded so this cannot silently rot again
 
 `plugins/bookcraft/README.md § Fixtures` gains a table of every book folder, what it declares
 and what `check-book.sh` should exit, with the warning that matters: read the mode line, not
-only the exit code, because a folder graded below its declaration still exits 0 while checking
-almost nothing. `fixtures/ledger` is named as the folder that is deliberately not a book — no
-chapter files, so the checker exits 2 — and the shipped-files tree gains the
-`check-claims/fixtures/` entry it was missing.
+only the exit code, because a narration book graded below its declaration still exits 0 with the
+provenance sweep, the suggested-reading requirement and the overview and glossary cross-checks
+all off. A guide book fails the opposite way, loudly, which is why the warning sorts the two
+rather than listing them together. It names what is skipped instead of rounding it to "almost
+nothing", so a reader who tests it finds it accurate and keeps heeding it.
+`createbook/fixtures/ledger` is named as the folder that is deliberately not a book — no chapter
+files, so the checker exits 2 — and the shipped-files tree gains the `check-claims/fixtures/`
+entry it was missing.

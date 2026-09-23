@@ -107,6 +107,32 @@ Eight folders carry a `book.json`:
 was confined to `check-book.sh` and to what a `book.json` declares. That bounds the damage: no
 provenance or reference result recorded on this machine was affected.
 
+**One correction to the ticket narrative above, left in place rather than edited.** The About
+Ticket section records that `fixtures/fence` "reported all three as off" under the stale binary.
+Reproducing the degraded state — `fixtures/fence` with `jq` removed from `PATH`, which is the
+same `declared_*=""` the broken binary produced — gives a mode line reading, in part,
+`tagged: 2/2 (inferred)`, `provenance: off`, `suggested reading: off`, `prose: 570` and
+`structure: 298`.
+Two of the three were off; tags fell back to inference, which still catches a book whose second
+chapter dropped its tags. The structural and prose sweeps ran throughout. The ticket's conclusion
+is unaffected and its sentence is left as the operator wrote it, but the sharper version is: the
+declaration-gated checks lapsed, not every check.
+
 ## Deferred
 
-- (none yet)
+Raised by the code review on 2026-09-23. Both are follow-up work, not this branch's scope.
+
+**Triaged at close, 2026-09-23: both consolidated onto issue #6, "Fixture health for createbook's
+checker", which already tracks the missing fixture runner. No new issue was filed.** The same
+comment corrects #6's now-stale "Expected exit codes today" line, which named four folders against
+the nine this branch re-validated.
+
+- **Nothing executable asserts the new table** (`plugins/bookcraft/README.md § Fixtures`). The
+  repo has no CI, and every other fixture carries its own `run.sh`, so this table is the one
+  record with no runner behind it and will drift the next time a fixture is edited. Occasion:
+  next fixture added, or next change to `check-book.sh`'s grading. Theme: fixture assertion
+  harness.
+- **`check-claims/fixtures/appendix/book.json` now under-counts its own assertion sites.** It
+  says "This is the fixture's only assertion beyond `run.sh`; update both in the same edit",
+  and the README table is now a third site. An editor following that instruction updates two of
+  three. Occasion: same edit as the item above. Theme: fixture assertion harness.
