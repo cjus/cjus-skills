@@ -48,7 +48,8 @@ because they miss every folder in a repo that sets `ticketPrefix` (`changelog/ab
   - a nested `owner/6-…` slug and a prefixed `abc-6-…` slug: the issue's anchored forms miss
     the prefixed one.
 - [x] Phase 2: Step 0 (`SKILL.md:34-46`) matches each branch name, listed with the worktree it is
-  checked out in, against `^([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-`, case-insensitively,
+  checked out in, against `^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-`
+  (the `(<branchPrefix>)?` group added after the pre-test review), case-insensitively,
   never treating the main checkout as a workspace, and sets
   `BRANCH` and `SLUG` from the match. The by-name fallback uses the same pattern. Rewrite the
   cross-reference sentence at `:41`.
@@ -59,6 +60,9 @@ because they miss every folder in a repo that sets `ticketPrefix` (`changelog/ab
   prefixed folders found; ticket 6 with only `16-…` checked out reports no workspace. Record the
   cases and results in `CHANGELOG.md`.
 - [x] Phase 5: Bump the `pr` plugin from 0.2.3 to 0.2.4 so installed copies refresh.
+
+Status 2026-09-24: all phases complete and pushed (`b27bc4b`, `e0ffa9b`). Pre-test review
+findings addressed; close review APPROVE; CI green on PR #26.
 
 ## Open Questions
 
@@ -74,6 +78,9 @@ None open.
   The repro is recorded in `CHANGELOG.md` instead.
 
 ## Deferred
+
+Triaged at close 2026-09-24: the abort/sync item and the worktrees-off item became #29;
+the `gh pr view --repo` item became #30.
 
 - `plugins/pr/skills/abort/SKILL.md:54` and `plugins/pr/skills/sync/SKILL.md:53` use the same
   "contains the ticket segment including its trailing hyphen" rule to resolve a worktree, with
