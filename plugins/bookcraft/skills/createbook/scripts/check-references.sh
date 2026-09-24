@@ -56,10 +56,57 @@ REF = re.compile(r"\bch(?:apter|\.)\s*(\d+)\b", re.I)
 
 # A citation anywhere in a line, and a definition at the head of one. The
 # anchored form matches check-book.sh's own tag counter, which also refuses a tag
-# with leading
-# whitespace, so the two tools agree on what counts as a definition.
-TAG = re.compile(r"\[(\d+)-(\d+)\]")
-TAGDEF = re.compile(r"^\[(\d+)-(\d+)\] ")
+# with leading whitespace, so the two tools agree on what counts as a definition.
+#
+# Both halves are kept as strings. The chapter half is `3` for a chapter and
+# `A2` for an appendix (createbook/reference/guide.md § Appendices), and the
+# paragraph half is `4`, or `4a` for a paragraph a revision added after [N-4]
+# without renumbering (createbook/reference/chapter-prose.md § Paragraph tags).
+# Until 2026-09-24 both were integers and the pattern had no `A`, so a citation
+# of an appendix paragraph was not seen at all: `[A1-99]` against a book with
+# one appendix passed, uncounted.
+TAG = re.compile(r"\[(A?\d+)-(\d+[a-z]?)\]")
+TAGDEF = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\] ")
+
+
+def tag_key(unit, para):
+    """A tag's two halves with leading zeros dropped, so `[03-7]` is `[3-7]`.
+
+    The book spells a tag one way and check-book.sh enforces it, but a referring
+    file sits outside the book, and while the halves were integers a citation
+    written `[03-7]` resolved. Keeping the halves as strings must not quietly
+    start failing it.
+    """
+    m = re.match(r"(A?)0*(\d+)$", unit)
+    p = re.match(r"0*(\d+)([a-z]?)$", para)
+    return (m.group(1) + m.group(2), p.group(1) + p.group(2))
+# Anchored the way check-book.sh and check-provenance.sh anchor it, so a
+# chapter slug that happens to hold the word, `sql-02-appendix-1-of-the-standard.md`,
+# stays chapter 2 in all three tools.
+APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
+CHAPTER_FILE = re.compile(r"-(\d{2,})-")
+
+
+def unit_of(name):
+    """The tag's chapter half for a file: `3` for a chapter, `A2` for an
+    appendix, or None. The appendix test runs first, because an appendix's own
+    number could otherwise be read as a chapter's."""
+    m = APPENDIX_FILE.search(name)
+    if m:
+        return f"A{int(m.group(1))}"
+    m = CHAPTER_FILE.search(name)
+    return str(int(m.group(1))) if m else None
+
+
+def para_order(para):
+    """Sort key for a paragraph half: 4 < 4a < 4b < 5."""
+    m = re.match(r"(\d+)([a-z]?)$", para)
+    return (int(m.group(1)), m.group(2))
+
+
+def unit_label(unit):
+    return f"appendix {unit[1:]}" if unit.startswith("A") else f"chapter {unit}"
+
 
 # An opener is a quote mark NOT preceded by a letter, a digit or closing
 # punctuation, because pairing is positional and a bare character class cannot
@@ -284,9 +331,14 @@ def tag_paragraphs(text):
         if m:
             if key:
                 out[key] = norm(" ".join(buf))
-            key, buf = (int(m.group(1)), int(m.group(2))), [ln[m.end():]]
+            key, buf = tag_key(m.group(1), m.group(2)), [ln[m.end():]]
         elif key is not None:
-            if ln.strip() == "":
+            # A provenance mark ends the paragraph the way a blank line does,
+            # as it does in check-book.sh's unit sweep. A mark is not prose: a
+            # book that writes it on the line under its paragraph, with no blank
+            # between, would otherwise report every re-sourced mark as drift in
+            # the paragraph above it.
+            if ln.strip() == "" or ln.lstrip().startswith("<!--"):
                 out[key], key, buf = norm(" ".join(buf)), None, []
             else:
                 buf.append(ln)
@@ -298,8 +350,8 @@ def tag_paragraphs(text):
 def tag_citations(lines):
     """Yield (lineno, chapter, paragraph) for every [N-M] outside a code fence.
 
-    The fence rule is not tidiness. `skills/updatebook/SKILL.md:185`
-    carries `[0-9]` inside a bash block: a regex character class that this
+    The fence rule is not tidiness. The grep in `skills/updatebook/SKILL.md
+    § Cutting prose` carries `[0-9]` inside a bash block: a regex character class that this
     pattern matches exactly, because `0`, `-`, `9` is a digit run, a hyphen and
     a digit run. Reading a fence as prose reports a grep command as a broken
     citation into a book, and one confident false positive costs more of a
@@ -325,10 +377,10 @@ def tag_citations(lines):
         if infence:
             continue
         for m in TAG.finditer(ln):
-            yield i, int(m.group(1)), int(m.group(2))
+            yield (i, *tag_key(m.group(1), m.group(2)))
 
 
-def baseline_paragraphs(book, chapters, excluded, ref):
+def baseline_paragraphs(book, units, excluded, ref):
     """Read every chapter at `ref` and return its tag map, plus a status note.
 
     Returns (paragraphs, note). A None map means there is no baseline and check
@@ -375,12 +427,12 @@ def baseline_paragraphs(book, chapters, excluded, ref):
         leaf = name.rsplit("/", 1)[-1]
         if not leaf.endswith(".md") or leaf in excluded:
             continue
-        m = re.search(r"-(\d{2,})-", leaf)
-        if m:
-            base_paths[int(m.group(1))] = name
+        u = unit_of(leaf)
+        if u:
+            base_paths[u] = name
 
     out, missing, renamed = {}, [], []
-    for n in sorted(chapters):
+    for n in sorted(units, key=lambda u: (u.startswith("A"), int(u.lstrip("A")))):
         if n not in base_paths:
             # A chapter genuinely added since the baseline has no earlier text,
             # so every citation into it is new and cannot have drifted. That is
@@ -393,21 +445,19 @@ def baseline_paragraphs(book, chapters, excluded, ref):
         if r.returncode != 0:
             missing.append(n)
             continue
-        if base_paths[n].rsplit("/", 1)[-1] != chapters[n].name:
+        if base_paths[n].rsplit("/", 1)[-1] != units[n].name:
             renamed.append(n)
         out.update(tag_paragraphs(r.stdout))
 
     notes = []
     if missing:
         one = len(missing) == 1
-        notes.append(("chapter " if one else "chapters ") +
-                     ", ".join(str(n) for n in missing) +
+        notes.append(", ".join(unit_label(n) for n in missing) +
                      f" did not exist at {ref}, so citations into " +
                      ("it were" if one else "them were") + " not drift-checked")
     if renamed:
         one = len(renamed) == 1
-        notes.append(("chapter " if one else "chapters ") +
-                     ", ".join(str(n) for n in renamed) +
+        notes.append(", ".join(unit_label(n) for n in renamed) +
                      (" was" if one else " were") + " renamed since " + ref +
                      ", and compared by chapter number")
     return out, "; ".join(notes), set(renamed)
@@ -468,13 +518,20 @@ def main(argv):
         if "tags" in cfg:
             tags_declared = bool(cfg["tags"])
 
-    chapters = {}
+    # Chapters by number, for the chapter references and quotations of checks 1
+    # and 2; and every tagged file by its tag's chapter half, appendices
+    # included, for checks 3 and 4. An appendix is tested for first, so its own
+    # number is never read as a chapter's.
+    chapters, units = {}, {}
     for p in sorted(book.glob("*.md")):
         if p.name in excluded:
             continue
-        m = re.search(r"-(\d{2,})-", p.name)
-        if m:
-            chapters[int(m.group(1))] = p
+        u = unit_of(p.name)
+        if u is None:
+            continue
+        units[u] = p
+        if not u.startswith("A"):
+            chapters[int(u)] = p
     if not chapters:
         print(f"error: no numbered chapters in {book}", file=sys.stderr)
         return 2
@@ -497,7 +554,7 @@ def main(argv):
     # a time, and the two sides have to agree on the definition set or check 4
     # compares different books.
     paras = {}
-    for p in chapters.values():
+    for p in units.values():
         paras.update(tag_paragraphs(p.read_text(encoding="utf-8")))
     # A declaration the chapters contradict is a finding, not a state to resolve
     # toward the quieter answer. "tags": true with nothing parsing means the tags
@@ -521,7 +578,7 @@ def main(argv):
 
     base, base_note, renamed = (None, "disabled with --no-baseline", set())
     if check_tags and ref is not None:
-        base, base_note, renamed = baseline_paragraphs(book, chapters, excluded, ref)
+        base, base_note, renamed = baseline_paragraphs(book, units, excluded, ref)
         # A baseline the caller ASKED for and did not get is a usage error, not
         # a degraded run. Reporting the reason and then exiting 0 hands back a
         # green result for a check that never happened, which is the whole
@@ -534,10 +591,17 @@ def main(argv):
     # Which chapters changed length since the baseline. This is what separates a
     # tag that slid from a paragraph that was reworded where it stood, and it is
     # computed once here rather than per citation.
+    #
+    # Only plain tags are counted. A paragraph added with a lettered tag, [5-3a],
+    # lengthens the chapter and slides nothing, so counting it would turn a
+    # rewording elsewhere in that chapter into a false "the tags slid". A
+    # renumber, which is what absorbs lettered tags at a chapter rewrite, still
+    # changes the plain count and is still caught.
     def counts(m):
         out = {}
-        for c, _ in (m or {}):
-            out[c] = out.get(c, 0) + 1
+        for c, para in (m or {}):
+            if para.isdigit():
+                out[c] = out.get(c, 0) + 1
         return out
     cur_count, base_count = counts(paras), counts(base)
     # Two signals that a tag slid rather than a paragraph being reworded. A
@@ -550,6 +614,24 @@ def main(argv):
     renamed_reason = {c: "was renamed" for c in renamed}
     for c in shifted:
         renamed_reason[c] = f"went from {base_count[c]} paragraphs to {cur_count[c]}"
+    # Lettered tags slide too, without moving the plain count. Letters run with
+    # no gap, so cutting [5-12a] reletters [5-12b] as [5-12a], and a citation
+    # of [5-12a] now names what was [5-12b]. Adding a letter at the end of a run
+    # slides nothing, so a run is only suspect when what it held at the
+    # baseline is no longer the start of what it holds now.
+    def letter_runs(m):
+        out = {}
+        for c, para in (m or {}):
+            num, let = para_order(para)
+            if let:
+                out.setdefault((c, num), []).append(let)
+        return {k: sorted(v) for k, v in out.items()}
+    cur_runs, base_runs = letter_runs(paras), letter_runs(base)
+    for (c, num), was in base_runs.items():
+        if cur_runs.get((c, num), [])[:len(was)] != was and c not in shifted:
+            shifted.add(c)
+            renamed_reason[c] = (f"lost or relettered a paragraph added after "
+                                 f"[{c}-{num}]")
     shifted |= renamed
 
     # The book's own chapter filenames. A block that names one of these before a
@@ -613,12 +695,12 @@ def main(argv):
                 if (ch, para) not in paras:
                     n_unresolved += 1
                     fail = 1
-                    held = sorted(p for c, p in paras if c == ch)
+                    held = sorted((p for c, p in paras if c == ch), key=para_order)
                     if not held:
-                        why = f"the book has no chapter {ch}" if ch not in chapters \
-                              else f"chapter {ch} carries no paragraph tags"
+                        why = f"the book has no {unit_label(ch)}" if ch not in units \
+                              else f"{unit_label(ch)} carries no paragraph tags"
                     else:
-                        why = f"chapter {ch} ends at paragraph {held[-1]}"
+                        why = f"{unit_label(ch)} ends at paragraph {held[-1]}"
                     print(f"FAIL  {f.name}:{lineno}: cites [{ch}-{para}]; {why}")
                     continue
                 # A citation that resolves is not a citation that still means
@@ -645,7 +727,7 @@ def main(argv):
                     n_shift += 1
                     fail = 1
                     print(f"FAIL  {f.name}:{lineno}: [{ch}-{para}] names different prose than at "
-                          f"{ref}, and chapter {ch} {renamed_reason[ch]}, so the tags slid")
+                          f"{ref}, and {unit_label(ch)} {renamed_reason[ch]}, so the tags slid")
                 else:
                     # Report the evidence, not the conclusion. An equal count
                     # makes a rewording likely and does not prove one: inserting
@@ -656,7 +738,7 @@ def main(argv):
                     # report that can be false.
                     n_review += 1
                     print(f"REVIEW  {f.name}:{lineno}: [{ch}-{para}] names different prose than "
-                          f"at {ref}; chapter {ch} has {cur_count[ch]} paragraphs at both, so "
+                          f"at {ref}; {unit_label(ch)} has {cur_count.get(ch, 0)} numbered paragraphs at both, so "
                           f"this is more likely a rewording in place than a tag that slid. "
                           f"Confirm which.")
                 for label, s in (("was", base[(ch, para)]), ("now", paras[(ch, para)])):

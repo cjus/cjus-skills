@@ -1,0 +1,16 @@
+{
+  "subtitle": "A chapter and an appendix revised without renumbering",
+  "byline": "Claude Opus 5",
+  "description": [
+    "A fixture for lettered paragraph tags. A revision adds a paragraph after [1-2] as [1-2a], then [1-2b], and after [A1-1] as [A1-1a], so no existing tag moves and no citation needs repointing.",
+    "run.sh checks all three checkers: check-book.sh accepts the sequence and reports it, and fails three broken ones; check-references.sh resolves citations of lettered tags and fails a missing one; check-provenance.sh resolves a mark that cites one."
+  ],
+  "profile": "guide",
+  "tags": true,
+  "provenance": true,
+  "overview": true,
+  "exclude": ["notes.md"],
+  "sources": {
+    "notes": "notes.md"
+  }
+}

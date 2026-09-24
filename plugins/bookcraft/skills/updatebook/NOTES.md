@@ -28,14 +28,21 @@ All 30 external tag citations resolve to a paragraph the book actually has, chec
 
 Neither sibling's argument depends on the digit, which is why this is recorded rather than fixed here: both files are making the point that a tag is an address worth protecting, and 30 makes it as well as 56 does. Correcting the two lines belongs to whoever next edits them.
 
-## There is no free way to add a paragraph to a tagged chapter
+## Adding a paragraph without renumbering, 2026-09-24
 
-Derived rather than asserted, from two rules that were each written for another reason:
+**Until this date there was no free way to add a paragraph to a tagged chapter.** Two rules closed every escape. `check-book.sh` required the paragraph half of every tag to count 1, 2, 3 with no gap, so `[5-12a]` was refused and an insert at 12 shifted every later tag. And the close is the last paragraph (`narration.md § Close`, `guide.md § Close`), so appending after it made a chapter with two closes. `SKILL.md` then ranked three ways out, cheapest first: grow an existing paragraph up to the 90-word stop, move a sentence across a boundary, or insert and repoint.
 
-- `check-book.sh` requires the paragraph half of every tag to count 1, 2, 3 with no gap, no repeat and no padding. So a paragraph cannot be inserted as `[5-12a]`, and inserting at 12 shifts every later tag in that chapter by one.
-- `chapter-prose.md § Close` makes the last paragraph the close, which is one paragraph carrying the verdict and the noun the chapter hands forward. So appending after it produces a chapter with two closes.
+**The first way out was the one taken, and nothing checked its stop.** Ticket #28 measured the reference guide after many revisions: 46 of its 576 paragraphs past 90 words, 13 of them past 120, 28 of the 46 in chapters 1 to 4, which are among the most revised. One paragraph went from 81 words at first bind to 207 in a single revision. Callouts, which take no tag, were the other free place to add text, and chapter 1's pass-off `Warning.` came to hold a definition, a points split, a no-make-up rule, a scheduling gap, a named contact and a note on the teaching model.
 
-Together those close the obvious escape. `SKILL.md § Adding prose` states the consequence and ranks the three ways out: grow an existing paragraph inside the 90-word stop, move a sentence across a paragraph boundary, or insert and repoint. The ranking is a judgment about cost, not a measurement.
+**Now a revision adds a paragraph with a lettered tag.** `[5-12a]` follows `[5-12]`, then `[5-12b]`; `[5-13]` never moves. Letters were chosen over a decimal `[5-12.1]`, which reads like a section or version number, and over always renumbering, which is the cost that pushed revisions into growing paragraphs. The operator settled the format on 2026-09-24. `SKILL.md § Adding prose` now puts the lettered paragraph first, lets a paragraph grow only while it stays at 90 words, and bars new text from callouts, tables and lists.
+
+**What renumbers them is a chapter rewrite**, the middle of the three levels in `SKILL.md § When to stop editing in place`. A lettered tag is a patch, and `check-book.sh` reports every chapter carrying one so the patches stay visible.
+
+**Five programs read a tag, and all five accept the form.** `check-book.sh` checks the sequence: a plain tag counts on from the last plain one, and a lettered one repeats the number of the paragraph it follows with the next letter from `a`. `check-references.sh` and `check-provenance.sh` parse `[A2-4]` and `[5-12a]` and keep both halves as strings. `/check-claims` takes a unit's tag from its text, as written. `build-book.py`'s `PARA_TAG_RE` strips a lettered tag from the reading edition, where an unmatched one would have printed. `createbook/fixtures/lettered-tags/run.sh` asserts all of it, and the checkers as they stood before the change fail that fixture on every lettered tag.
+
+**Two faults were found and fixed on the way.** `check-references.sh` accepted no appendix tag at all, so `[A1-99]` cited against a book with one appendix passed uncounted; accepting `[A2-4a]` meant accepting `[A2-4]`. And its check 4 read a provenance mark written on the line under a paragraph as part of that paragraph, so re-sourcing a mark reported the paragraph as drifted; a mark now ends the paragraph, as it does in `check-book.sh`. Its FAIL-versus-REVIEW split now counts only plain tags, because a lettered insert lengthens a chapter without sliding anything.
+
+**Asserted, not measured:** where lettering stops paying and a rewrite starts. `SKILL.md` calls it "several" and says it is a judgement.
 
 ## One fact lives in more places than the chapter that owns it
 
@@ -75,7 +82,7 @@ The 8 `REVIEW` items in that run are check 2 firing on `OUTLINE.md` and `diagram
 
 ## What check 4 is worth, measured
 
-The insert-and-renumber path was run against the real book on 2026-09-10 to see what each check catches. Chapter 6 went from 24 paragraphs to 25 by an insert at position 2, which is the cheapest possible version of the failure `SKILL.md § Adding prose` warns about, and `readiness-checklist.md`'s 25 citations were left untouched.
+The insert-and-renumber path was run against the real book on 2026-09-10 to see what each check catches. Chapter 6 went from 24 paragraphs to 25 by an insert at position 2, which is the cheapest possible version of the failure `SKILL.md § Cutting prose` warns about, and `readiness-checklist.md`'s 25 citations were left untouched.
 
 | Run | Result |
 |---|---|
@@ -90,8 +97,8 @@ The glossary's 61 terms match the outline's term ledger exactly, summed row by r
 
 ## What is asserted rather than measured
 
-- **The order of the three ways to add prose.** Cheapest-first is a judgment about what an edit costs, not a finding.
-- **The change taxonomy in step 2.** Seven kinds chosen to cover what the ticket named and what the reference book would plausibly need. Nothing shows the list is complete.
+- **The order of the ways to add prose.** Lettered paragraph first, then growing a paragraph inside its stop, then moving a sentence. It is a judgement about what reads best and costs least, not a finding.
+- **The change taxonomy in step 2.** Nine kinds chosen to cover what the tickets named and what the reference book would plausibly need; ticket #28 split adding from cutting and added the premise row. Nothing shows the list is complete.
 - **The instruction not to delegate the prose edit.** It follows the rule at `createbook/SKILL.md § 5. Draft the chapters` on work whose output a reader takes as taught, and it has not been tried both ways here.
 - **Reading `OUTLINE.md` first as the targeting step.** It is the cheapest index the book has, and no alternative was measured against it.
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Regression test for check-book.sh's jq guard (check-book.sh:112).
+# Regression test for check-book.sh's jq guard, the `jq -e` probe above its
+# book.json block.
 #
 # The bug this pins down: `command -v jq` succeeds for a jq that is on PATH and
 # cannot execute, every `jq ... 2>/dev/null` below it then returns the empty

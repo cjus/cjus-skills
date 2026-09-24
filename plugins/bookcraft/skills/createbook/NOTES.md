@@ -1,6 +1,6 @@
 # /createbook: provenance and what is actually measured
 
-Not loaded at runtime. Read this before changing any number in `reference/chapter-prose.md`.
+Not loaded at runtime. Read this before changing any number in the rule files in `reference/`: `chapter-prose.md`, which every chapter follows, and the profile files `guide.md` and `narration.md` (§ The rule files split, 2026-09-24).
 
 ## Where the spec came from
 
@@ -10,7 +10,7 @@ Not loaded at runtime. Read this before changing any number in `reference/chapte
 
 **What the fork inherited** is `/ne` as it stood at `2f9326c` plus one uncommitted session's work, which is the state that wrote the reference book. That includes the H2 part headings added at `f0957e5`, the standalone rule scoped for book chapters at `4ad2bad` and `0b15f0a`, the number and ordinal rules narrowed at `f2c0209` and `bc24e7a`, the anchor rule narrowed at `2f9326c`, and the markdown allowance recorded below. All of it is now local.
 
-**What the fork changed** is the set of rules that used to travel as a delta table in `SKILL.md`, telling a chapter agent how a chapter departs from a standalone piece. Those are written into the spec itself now, at `chapter-prose.md § What the reader arrives with` for what the reader arrives with, `chapter-prose.md § Open` for the opening, `chapter-prose.md § Close` for the close, `chapter-prose.md § Every part does five things` and `chapter-prose.md § Spend these deliberately` for glossing only the terms the outline assigns, `chapter-prose.md § Spend these deliberately` and `chapter-prose.md § Every budget is per chapter` for the per-chapter budgets, `chapter-prose.md § Paragraph tags` for the paragraph tags, and `chapter-prose.md § The plan` for what the outline has already decided. Two sentences in `chapter-prose.md § Prerequisites` and `chapter-prose.md § Before sending` now say to report an over-large chapter back rather than write around it, since at book scale that is a fact about the outline. Session mode was dropped, having no meaning inside a book.
+**What the fork changed** is the set of rules that used to travel as a delta table in `SKILL.md`, telling a chapter agent how a chapter departs from a standalone piece. Those are written into the spec itself now, at `chapter-prose.md § What the reader arrives with` for what the reader arrives with, `narration.md § Open` for the opening, `narration.md § Close` for the close, `chapter-prose.md § Glosses` and `chapter-prose.md § Spend these deliberately` for glossing only the terms the outline assigns, `chapter-prose.md § Spend these deliberately` and `chapter-prose.md § Every budget is per chapter` for the per-chapter budgets, `chapter-prose.md § Paragraph tags` for the paragraph tags, and `chapter-prose.md § The plan` for what the outline has already decided. Two sentences in `chapter-prose.md § Prerequisites` and `chapter-prose.md § Before sending` now say to report an over-large chapter back rather than write around it, since at book scale that is a fact about the outline. Session mode was dropped, having no meaning inside a book.
 
 **One number was reconciled rather than copied.** The shape rule allocates about 1,300 words to the parts and 300 to the frame, which was calibrated when the cap was 1,750 and the aim 1,600. Those two figures matched exactly. When the cap moved to 2,000 the aim moved to 1,800 and the allocation did not, leaving 200 words unaccounted for. `chapter-prose.md § Shape` then said the 1,600 was the prose allocation and the slack above it was what a fenced block spends. That was a statement of intent rather than a measurement, and all four figures came out of the spec on 2026-09-13; see § The ceiling removed.
 
@@ -42,7 +42,7 @@ Added on operator judgment that continuous prose with no headings is harder to r
 
 - *A heading is never a term's first appearance.* Same-breath gloss is one of only two patterns measured across all five channels, and it requires the gloss inside the sentence that first uses the term. A heading is not a sentence, so a heading introducing a term breaks the strongest finding in the corpus.
 - *Headings count against every budget.* `chapter-prose.md § Spend these deliberately` already says to count the checkable names on the page rather than the ones you meant to spend, and a heading is on the page.
-- *The heading must be redundant with the part's first two sentences.* `chapter-prose.md § Every part does five things` already assigns the naming job to those sentences. A heading carrying anything they do not is a heading that rewards skipping the prose.
+- *The heading must be redundant with the part's first two sentences.* `narration.md § Every part does five things` already assigns the naming job to those sentences. A heading carrying anything they do not is a heading that rewards skipping the prose.
 
 The fourth, six words at most, is asserted with nothing behind it, on the same terms as every numeric ceiling above.
 
@@ -72,7 +72,7 @@ Operator request, 2026-09-10, for the reference book. It is a feature of the pro
 
 **A prompt cannot deliver a glossary that reaches the bound book.** Both tools treat every top-level `.md` in the folder as a chapter: `check-book.sh` collects with `find "$dir" -maxdepth 1 -name '*.md'` and `/makebook` with `sorted(src.glob("*.md"))` (`build-book.py:load_chapters`). A `glossary.md` written by an agent following a prompt either fails the filename pattern and the shape rules, or is quieted with an `exclude` entry, at which point the binder skips it too and the PDF ships without it. The second way looks like success, which is worse. So both tools now skip the glossary by name, whether or not `exclude` mentions it.
 
-**The term list is the outline's ledger rather than a fresh reading.** The ledger is fixed before drafting so chapters can be written in parallel, and it already names every term and its owning chapter. Re-deriving the list from twenty finished chapters would produce a second list that disagrees with the first. The definitions come from the same-breath gloss each chapter is already required to carry (`chapter-prose.md § Every part does five things`), so a definition exists at a known address before the glossary is written; in a tagged book the paragraph tag names that address exactly.
+**The term list is the outline's ledger rather than a fresh reading.** The ledger is fixed before drafting so chapters can be written in parallel, and it already names every term and its owning chapter. Re-deriving the list from twenty finished chapters would produce a second list that disagrees with the first. The definitions come from the same-breath gloss each chapter is already required to carry (`chapter-prose.md § Glosses`), so a definition exists at a known address before the glossary is written; in a tagged book the paragraph tag names that address exactly.
 
 **Deriving the glossary at bind time was considered and rejected.** The index is harvested that way and gets away with it, because an index entry needs only a term and a location. A gloss is a clause inside a sentence with no delimiter, so parsing definitions out of finished prose would be guesswork, and definitions are editorial content that should be reviewable in the repo.
 
@@ -519,7 +519,7 @@ books in general.
 | Glossary entries filed under `#` by a leading backtick | 2 |
 
 **What is asserted rather than measured.** Every rule in
-`chapter-prose.md § The guide profile` is a judgement about what a scanning
+`guide.md` is a judgement about what a scanning
 reader needs, argued from the counts above and from the instructional-design
 literature, and **none of it has been tried on a reader.** Specifically
 asserted: that headings carrying the point beat redundant ones; that four
@@ -695,3 +695,330 @@ except `jq` is what works. The first version ran a `$(basename)` subshell per
 entry and took 32 seconds; one `ln -s` per directory, letting `ln` refuse to
 clobber so `PATH` precedence survives, takes 1.5. The whole suite runs in under
 six seconds.
+
+## The rule files split, 2026-09-24
+
+Ticket #28, Phase 1. `reference/chapter-prose.md` held every rule for both profiles:
+about 9,000 words of narration rules, then about 2,400 words saying which of them a guide
+should ignore. `SKILL.md § 5` already warned that an agent told only to read the file reads
+the narration rules first and at length. So the file was split three ways:
+
+| File | Holds | Read by |
+|---|---|---|
+| `reference/chapter-prose.md` | The rules every chapter follows: the reader, the sources, shape, seams, glosses, the budgets, the header, the carried-in line, tags, provenance, voice, reference, § Never and the shared checks | Every chapter agent |
+| `reference/narration.md` | The handoff chain, the five things a part does, the required wrong model, redundant headings, and the `## In short` walk | Narration chapters |
+| `reference/guide.md` | The guide profile as a rule set of its own, with before-and-after examples | Guide chapters |
+
+A guide chapter agent now reads about 7,800 words where it read about 11,700, and none of
+them are rules it is told to ignore.
+
+**The core kept its name** so that a citation of a rule that did not move still resolves.
+Only citations of moved rules changed, and only their filename. `scripts/check-citations.py`
+confirmed every `<file> § <rule>` citation resolves after the move.
+
+**The reasoning moved here, and the rules stayed.** The rule files are what an agent reads
+at draft time, so they hold the rule and at most a clause of why. The longer arguments are
+in § Why the core rules say what they say and § Why the guide rules say what they say,
+below. `narration.md` is the exception: its text moved from `chapter-prose.md` unchanged,
+reasoning included, because this ticket is about guide books and rewriting the narration
+rules would change books nobody asked to change.
+
+**The core and the guide file are written in the style they ask for.** The ticket measured
+two verbal habits in the old spec and found them again in the reference guide's chapters.
+"Rather than" ran at 5.4 per 1,000 words in the spec and 3.6 in the book; "carries" at 4.1
+and 2.0. The ticket called that a correlation, not a measured cause, and said the split
+would make it cheap to test. Counted on 2026-09-24, before and after:
+
+| | Words | "rather than" | "carry" and its forms |
+|---|---|---|---|
+| Old `chapter-prose.md` | 11,668 | 63 | 62 |
+| New `chapter-prose.md` plus `guide.md` | about 7,800 | 1 | 12 |
+
+The one "rather than" left is inside the `Warning.` label's own description. Whether the
+next guide book shows fewer of either habit is the test, and it has not been run. Every
+paragraph in both files is also held to the 90-word stop and every sentence to 45, which
+the old file broke in several places.
+
+**One inconsistency was fixed in passing.** `§ A shape for a teaching chapter` offered five
+sections, four of them H2 parts, while `check-book.sh` fails a chapter with four parts. The
+key now goes to an appendix, so the shape has three parts and passes the checker.
+
+### Why the core rules say what they say
+
+Each entry names the rule in `reference/chapter-prose.md` and gives the argument that used
+to sit beside it.
+
+- **The reader.** The two readings pull in opposite directions: the first wants an argument
+  to follow, the second wants an address. That is what the chapter header, the provenance
+  marks and the concept list are for, and it is why no rule asks the prose itself to become
+  a briefing.
+- **Length.** Length still carries a signal, read and never thresholded. A chapter running
+  well past its neighbours is usually the outline drawing one chapter too wide, and only
+  reading can tell a subject that needed the room from a chapter that lost its shape. A
+  table of ten facts does not cost ten sentences' worth of attention, which is why structure
+  is counted apart from prose.
+- **Shape.** Never four parts, because four give the reader a fourth handoff and a fourth
+  named weakness to carry.
+- **Seams.** A seam with no device is the commonest seam in a chapter written without the
+  rule, and the paragraph seams are where a reader who understood every sentence still cannot
+  say what the chapter argued. Pairing a named referent with a marker is often the best seam
+  on the page.
+- **Glosses.** Describing the behaviour before attaching the label is one of the two patterns
+  with measured evidence behind it (§ What the numbers rest on).
+- **The wrong model.** The passage costs about 130 words and asks the reader to hold a
+  picture they then discard. The concession is what stops the reader defending the naive fix
+  instead of updating. It is the other evidenced pattern.
+- **Spend these deliberately.** An anchor takes two sentences because the name, its role and
+  the case it explains never fit in one. A name that only says what the chapter is about
+  spends nothing, because finding it wrong tells the reader they hold a different chapter,
+  not a broken one. A citation spends nothing because the budget exists to keep unearned
+  checkable names off the page, and a citation is the reader's route back to the authority.
+  A second analogy does not rise with length, because it makes the reader hold two pictures
+  at once. A partial quotation of a source's table reads as complete and is not, which is
+  why a published set is reproduced whole.
+- **Prerequisites.** Naming the idea that needed the aside, in the sentence after it, lets
+  the reader feel the debt paid instead of a thread dropped. The aside belongs to the part
+  that needed it, so it never stands as a section of its own.
+- **Headings.** A heading being a term's first appearance hands the reader the label before
+  the behaviour, which inverts the gloss rule. That is the one heading rule with a
+  measurement behind it (§ Where the part headings came from).
+- **The chapter header.** It makes the second reading possible: the reader who is not
+  reading the argument tonight but wants to know what the chapter settles. Written first,
+  the drift between a plan and what got written is exactly what a reader trusts it not to
+  have.
+- **In short, the carried-in line.** The literal prefix exists because inferring the line
+  from its first bolded term swallows a walk that opens on a glossed term and skips a line
+  whose first term lost its bold, and both read as a clean pass. The ledger row is far too
+  long to use whole, and an unenforced ceiling is how the line grows back into the header it
+  exists not to duplicate. A third wording beside the chapter's gloss and the glossary entry
+  is how a book comes to say three slightly different things about one term. `(ch. N)` is
+  used over a paragraph tag because a tag is more precise and more brittle. The history is
+  at § The overview section, 2026-09-20.
+- **Paragraph tags.** A tag is an address other files cite, so nothing that is not a
+  paragraph may advance the count: a table added to a finished chapter must not renumber
+  the paragraphs after it.
+- **Provenance.** A sourced claim is fixed by its resource, and a filled-in claim is where a
+  version, a default or a name goes stale. Marking every unit turns "recheck everything the
+  sources did not say" into a query instead of a reread of twenty chapters. A comment left
+  open swallows the rest of the file, and a mark that misses the grammar is invisible to
+  that query, which is why `check-book.sh` enforces both.
+- **Suggested reading.** A link rots, and the reader is going to a search box anyway, so the
+  list gives them the words that make the search work. Fewer than three items usually means
+  nobody looked for the edge; more than six is a syllabus. A mostly filled-in chapter needs
+  the list most, because the reader has just been told the sources were thin.
+- **The plan.** It catches parts that each work on their own and never add up, which is
+  nearly impossible to see once drafting has started.
+- **Voice.** There is no target for the mean sentence length because naming a referent and
+  marking a relation both cost words and both buy back more than they cost.
+- **Reference.** This is the cheapest reread in the book to introduce and the hardest to see,
+  because the writer always knows what the word meant. How many words the reference rules
+  add has never been measured; only the direction is established, so the spec carries no
+  figure for it.
+- **Never, on markdown.** An older rule held that easy to read and easy to skim are
+  opposites. It was written for a reader who only ever read straight through; this reader
+  comes back for a fact, so a table they can land on is a service. The guard that matters is
+  prose by default, with every structure answering for what a sentence would have lost.
+- **Never, on synonyms.** Cycling synonyms costs double in a book, because a reader who met
+  the term once now has to learn that a second term exists.
+- **Never, on the listed words.** They mark prose as generated before the argument gets a
+  hearing.
+- **Before sending.** The countable rules hold and the rules stated as judgements quietly go
+  unfollowed, which is why the reference sweep is written out as a list. Nothing triggers a
+  cut by arithmetic, because § Length sets no ceiling; the cut order exists because trimming
+  evenly across sentences eats the glosses and the hedges first, and those do the teaching.
+  The aside, the header, the concept list and the marks are not prose the reader walks
+  through, so cutting them saves nothing and costs the second reading.
+
+### Why the guide rules say what they say
+
+The evidence for the guide profile, and its limits, are at § The guide profile, 2026-09-20.
+These are the arguments that sat beside its rules.
+
+- **Why two profiles.** The narration rules were derived from audio narration, where a
+  listener cannot look back. Every one of them is right for a reader who starts at the first
+  sentence and goes to the last. Applied to a book opened at one chapter, they produce linked
+  essays with a lookup layer bolted on, which is well written and hard to use.
+- **Opening.** The handoff opening bought continuity for a reader going straight through,
+  and it costs that reader nothing to lose, because the outline still orders the chapters.
+  It was costing the reader who opens chapter 13 on a Saturday, for whom a definite article
+  pointing at chapter 12's last noun is a referent they never held.
+- **Headings.** The narration rule required a heading to be redundant with the prose, so a
+  reader who ignored every heading lost nothing. Its defence was that the handoff keeps
+  working underneath. A guide has no handoff, so the defence is gone and the rule with it.
+  A reader looking for what to do about late submissions needs a heading that says so.
+- **Callouts.** Nothing on a narration page says which kind of sentence you are reading, so
+  a warning, a grading rule and an aside about the room all render as body prose. A reader
+  going straight through infers the kind from the argument; a reader scanning cannot. The
+  label is literal for the reason the carried-in prefix is: a checker left to infer it has
+  to guess, and both of its guesses read as a clean pass.
+- **Section ends.** A reader who opens one part, reads it and closes the book should not be
+  left holding only the thing that breaks it.
+- **The wrong model.** The rule was right about explanation and wrong about reference.
+  Where the misconception is real the passage is the best teaching a chapter can do; where
+  it is not, the rule forces a strawman that costs 130 words and the reader's trust.
+- **Provenance in prose.** The narration rule produced thirty parenthetical citations in
+  under two thousand words of one reference chapter, which is a paragraph nobody can read at
+  speed. Attribution did not weaken: the mark beside every unit is exhaustive where the
+  prose was selective. A caveat repeated twenty-two times across thirteen chapters is noise
+  the reader learns to skip.
+- **Appendices.** The narration rules gave no home to the material a guide accumulates, so
+  answer keys and rubric pairs landed in whichever chapter was being written when they came
+  up, where no reader will look for them.
+
+**What the audit of the split found.** An independent read of the old file against the three
+new ones found eight rules lost, six weakened and four contradictions, nearly all on the guide
+side: rules a guide chapter used to inherit by default had moved into `narration.md` with
+their narration-only neighbours. All were restored except one change, kept on purpose. Under
+`guide` a part walks a mechanism only where it explains one (`guide.md § What a part does`),
+because a part that delivers a procedure, a lesson script or a grading rule has none, and
+the old inherited rule was forcing one.
+
+## The handoff chain leaves the guide path, 2026-09-24
+
+Ticket #28, Phase 2. The guide profile had dropped the rule that a chapter opens on the
+previous chapter's closing noun, but `SKILL.md § 2` still wrote an **Opens on** and a
+**Closes on** row for every chapter, `§ The plan` still called the opening noun fixed, and
+step 8 still read the seams for it. The outline recorded both nouns, the agents used them,
+and the reference guide's chapters opened on "The blanks are the fields...", "The scan is
+what week four ended on" and similar: each "the" pointing at something a reader who jumped
+straight to that chapter never saw.
+
+Under `guide` now: the outline records a **Scope** row and no handoff nouns; step 5 hands
+the agent the chapter's scope and its neighbours' titles, never a noun; the opening
+paragraph orients the reader; the close lands the chapter's main point or the next step and
+hands nothing forward; parts do not hand off either; and step 8 reads openings and closes
+for those two jobs. Narration is untouched.
+
+**One close in the reference guide was false**: chapter 1 ended "Everything in this chapter
+is a date" after covering prerequisites, pass-offs, withdrawal grades and the roster. That is
+why `guide.md § Close` requires the close to be true of the whole chapter, and why step 8
+reads each close against its chapter.
+
+**Asserted, not measured**: that an orienting opening reads better for this reader than a
+handoff. Phase 7's blind comparison is the first test.
+
+## In short under guide, 2026-09-24
+
+Ticket #28, Phase 3. Three changes, all under `guide` only.
+
+**The summary may use the chapter's own terms, with a short definition in the same clause.**
+The narration rule that the walk may use no glossed term turned the summary into a riddle in
+the chapters that most needed one: the reference guide's chapter 10 summary covered
+functional dependencies, candidate keys and attribute closure without naming any of them.
+
+**It stops near 120 words or five sentences, and it never reuses the chapter's sentences.**
+The reference guide's summaries ran 150 to 400 words, and in five chapters a summary shared
+20 to 44 six-word runs with the opening paragraph. The 120 is a judgement, not a
+measurement; the ticket said so and so does this note. `check-book.sh` reports a summary over
+120 words and any eight-word run it shares with the chapter below it. Eight words, not six,
+because a six-word run catches stock phrases a summary and a chapter can share innocently;
+that threshold is asserted too.
+
+**The `This chapter` header row merged into it.** A guide chapter stated its main point four
+times: in that row, in the summary, in each part's last sentence and in the close. The
+header tables and `## In short` sections together were about 14% of the reference guide,
+all of it before the first paragraph. The spec named the walk's ban on glossed terms as the
+one rule keeping the row and the summary apart, and the first change above removes it, so
+keeping both would leave two summaries of one chapter. No script reads the row, so the change
+was the spec, the guide fixtures and `SKILL.md`'s example. An appendix with no summary may
+keep the row.
+
+## The stops checked, and the reports, 2026-09-24
+
+Ticket #28, Phase 4. The spec called the 90-word paragraph and the 45-word sentence hard
+stops, and nothing checked either. In the reference guide the sentence stop held (4 of 2,071
+over) and the paragraph stop did not (46 of 576 over, 13 of them past 120, the longest at
+207), and 28 of the 46 sat in chapters 1 to 4, among the most revised.
+
+**The paragraph stop fails a `guide` book and is reported under `narration`.** The operator
+chose failing on 2026-09-24, once the reference guide was set to be recreated rather than
+patched, which removed the one named cost. A paragraph is counted exactly, by the same state
+machine as the tag sweep. Narration reports instead, so every narration book written before
+the check still passes: `fixtures/fence/` has a 108-word paragraph and now draws one report.
+
+**Everything else new is a report, and none fails.** A sentence boundary is a script's guess
+(a word ending `.`, `!` or `?` before a word that does not start in lowercase, except
+`p.`, `ch.`, `e.g.` and a few others), so the sentence stop and the callout length are
+reported. The summary's length and shared runs, the recurring phrases and the header keys
+are reported because each needs a reader to judge.
+
+**The recurring-phrase report counts four-word runs once per chapter**, keeps only runs with
+at least two words that are not function words, and lists the ten found in the most
+chapters. The stock phrasings the ticket found ("suggests itself" in four chapters, "The
+instinct is a good one" in three) are what it is for. It also finds a book's own
+vocabulary, which recurs by design; the cap keeps that from burying the rest.
+
+**The header check reports a repo-path key only where it has no display name**, because
+Phase 6 makes `/makebook` swap a named key for its name in the header and the endnotes.
+
+**Measured against the two real guide books, 2026-09-24.** An independent review ran the new
+checker over both: 46 and 7 paragraph-stop failures, the 46 matching the ticket's own count,
+and every paragraph spot-checked carried the reported word count. Output was identical under
+BSD awk, gawk 5.2.1 and mawk 1.3.4. The run is slower, about 30 seconds where it was 19.5 on
+a 105,000-word book, from the extra sweeps per chapter.
+
+**One known gap, disclosed and not fixed.** In a guide book declaring neither tags nor
+provenance, `## In short` has no marked end and runs to the first part heading, so the
+opening paragraph sits inside it: it escapes the paragraph stop and its words count toward
+the summary reports. The run's existing fallback note now says so. Every book this skill
+writes declares tags, which ends the section exactly.
+
+**Fixtures.** `fixtures/guide-reports/` is a passing guide book that draws every report, and
+its manifest row names each one and asserts that a key with a display name is not reported.
+`fixtures/paragraph-stop/run.sh` runs one chapter under both profiles and asserts the fail
+and the report.
+
+## What a guide's reader is handed, 2026-09-24
+
+Ticket #28, Phase 6. The reference guide was bound in the default edition, so every
+paragraph opened on a tag like `[16-1]` and every chapter opened on the `Draws on` and
+`Fills in` rows written for the operator. Three changes, the first in this skill and the
+other two in `/makebook`.
+
+**A guide book declares `"edition": "reading"`.** The template in `SKILL.md § 4` carries it
+for `guide` and a narration book leaves it out. `/makebook` already read the key, so its
+"every run writes both formats" contract stands: a guide bind with no flag writes the
+reader's PDF and EPUB, and the operator's tagged copy is `--no-reading-edition` with its
+own `--out`. The operator chose this over one run writing four files on 2026-09-24. This
+reverses the older advice here to leave the key out and pass the flag, which assumed the
+tagged copy was the one most binds wanted; for a guide it is the one fewest readers want.
+
+**Display names replace source keys in the chapter header, in both editions.** Four of the
+reference guide's `Draws on` rows named `CLAUDE.md § Teaching Calendar` although
+`book.json` gave it a display name, because the binder never swapped one in, and
+`check-book.sh` skipped table rows on the reasoning that the reading edition moves them.
+`build-book.py`'s `swap_display_names` now does the swap on the header before either
+edition renders it, so the endnotes get it too, and `check-book.sh` reports a path-like
+header key that has no display name to swap.
+
+**The swap touches only path-like keys, and only in the `Draws on` and `Fills in` rows**,
+and the first three versions did not. A key like `syllabus` already reads as a name, and
+the header writes it as one; swapping it for a display name starting with "the" printed
+"the the syllabus" in 34 header rows of the two real guide books. Now only a key passing
+`check-book.sh`'s repo-path test is swapped, and an article already in front of a key is
+kept in place of the name's own. On rows, the first two versions did not stay put either. The first ran on everything above the first H2, which in a narration
+chapter with no `## In short` includes the opening paragraph. The second ran on every table
+row, and the branch review found it printing "Check your the syllabus" in the `Act on this`
+row, the one row a reader of the reading edition still sees, because `syllabus` is a key
+whose display name is "the syllabus". A key that is an ordinary word appears in the author's
+prose as that word, so only the rows that name sources are the swap's to change.
+`makebook/fixtures/display-names/run.sh` lifts the function out of `build-book.py` and runs
+it under plain `python3`, so CI covers it without a bind; each earlier version fails it.
+**Not covered:** a key in a code span followed by `:` or `#`, such as `` `CLAUDE.md:42` ``,
+is left as written, and `check-book.sh` does not report it because the key has a name.
+
+**The page markers are out of the finished PDF's text layer.** They are how every page
+number is found, and `pdftotext` returned `ZQCH016QZ`, `ZQTOCSTARTQZ` and the rest. The
+settled book is now rendered once more with `.probe{visibility:hidden}`, which keeps each
+marker's box and paints no text, and the run compares the two renders page by page with
+the marker strings removed before keeping the clean one.
+
+**Verified by hand, 2026-09-24, and not by the fixture suite.** Bound `fixtures/guide/`
+before and after: 13 pages both times, 9 markers in the text layer before and none after,
+and the two texts identical once the markers were stripped. Bound `fixtures/guide-reports/`
+in both editions: the header row read "the course calendar § Week 3" in the default
+edition, the endnote read the same in the reading edition and its EPUB, and
+`notes/policy.md`, which has no display name, printed as written. The suite does not bind,
+because CI installs Python and `jq` and not the Chromium the binder drives, and a skipped
+fixture fails under `--strict`. The display-name swap is covered anyway, by the fixture
+above; the hidden markers are not, and a bind test is the gap to close if that changes.

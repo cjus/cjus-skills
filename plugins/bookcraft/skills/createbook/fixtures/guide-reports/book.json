@@ -1,0 +1,16 @@
+{
+  "subtitle": "Three guide chapters that pass and still draw every report",
+  "byline": "Claude Opus 5",
+  "description": [
+    "A fixture for check-book.sh's reports: the lines a human should read that fail nothing. It exits 0, and every report the checker has fires at least once.",
+    "Chapter 1 has a sentence over 45 words, a callout doing two jobs in six sentences, and a header naming a repo-path source key that has no display name. Chapter 2's summary runs past 120 words and copies a run from its own body. All three chapters share one stock phrase."
+  ],
+  "profile": "guide",
+  "tags": true,
+  "provenance": true,
+  "overview": true,
+  "sources": {
+    "notes/policy.md": "../notes/policy.md",
+    "notes/calendar.md": {"path": "../notes/calendar.md", "display": "the course calendar"}
+  }
+}

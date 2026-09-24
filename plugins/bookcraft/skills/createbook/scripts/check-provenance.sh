@@ -235,9 +235,13 @@ SUGG = "## Suggested reading"
 
 # In-book references a mark may carry. Both are verified against the book
 # itself rather than against any declared source.
-TAG = re.compile(r"^\[(\d+)-(\d+)\]$")
+TAG = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\]$")
 CHAPTER = re.compile(r"^ch(?:apter|\.)\s*(\d+)$", re.I)
-TAGDEF = re.compile(r"^\[(\d+)-(\d+)\] ")
+# Both accept an appendix's `A` half and a revision's lettered paragraph half,
+# `[A2-4]` and `[5-12a]` (reference/chapter-prose.md § Paragraph tags), and both
+# halves are kept as strings. Until 2026-09-24 neither did, so a mark citing an
+# appendix paragraph fell through to the source lookup and failed as unknown.
+TAGDEF = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\] ")
 
 # Locator grammars. Each is tried against the remainder left after the source
 # shorthand has been stripped off the front of a component.
@@ -1146,7 +1150,7 @@ def check_ledger(book):
 # --------------------------------------------------------------------------
 
 # `<book-slug>-appendix-N-<slug>.md`, the one chapter-kind filename that does
-# not carry a chapter number (`check-book.sh`, `reference/chapter-prose.md
+# not carry a chapter number (`check-book.sh`, `reference/guide.md
 # § Appendices`). Tried before the chapter rule, exactly as check-book.sh tries
 # it, because the chapter rule would match the N and be wrong.
 APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
@@ -1507,7 +1511,7 @@ def main(argv):
         for line in p.read_text().splitlines():
             m = TAGDEF.match(line)
             if m:
-                defined.add((int(m.group(1)), int(m.group(2))))
+                defined.add(refs.tag_key(m.group(1), m.group(2)))
     n_chapters = len(chapters)
 
     scan = chapters
@@ -1569,7 +1573,7 @@ def main(argv):
                 if m:
                     census["in-book"] += 1
                     wl_unchecked.append(c)
-                    if (int(m.group(1)), int(m.group(2))) not in defined:
+                    if refs.tag_key(m.group(1), m.group(2)) not in defined:
                         problem(f"{where}: the mark cites {c}, which the book does not define")
                     continue
                 m = CHAPTER.match(c)

@@ -7,7 +7,7 @@
 
 [A1-1] The four labels below are the whole set. A fifth is a change to the specification, made
 once, rather than a decision a chapter makes while it is being drafted.
-<!-- src: reference/chapter-prose.md § The guide profile -->
+<!-- src: reference/guide.md § Callouts -->
 
 | Label | For |
 |---|---|
@@ -15,9 +15,9 @@ once, rather than a decision a chapter makes while it is being drafted.
 | `> **Warning.**` | What goes wrong, stated before they do it rather than after. |
 | `> **In the room.**` | What this looks like live, with people in front of you. |
 | `> **Grade this.**` | The rule to apply when marking, or the line to hold. |
-<!-- src: reference/chapter-prose.md § The guide profile -->
+<!-- src: reference/guide.md § Callouts -->
 
 [A1-2] An appendix carries no parts, no opening paragraph and no close, so the shape rule does not
 apply to it. It still carries provenance marks and its paragraphs still take addresses, because
 the material here is exactly what a chapter cites.
-<!-- src: reference/chapter-prose.md § Appendices -->
+<!-- src: reference/guide.md § Appendices -->
