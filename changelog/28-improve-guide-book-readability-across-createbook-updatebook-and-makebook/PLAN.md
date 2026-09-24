@@ -26,24 +26,24 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 ## Plan
 
-- [ ] Phase 1: Make `guide` a rule set of its own. Split `chapter-prose.md` into a shared core
+- [x] Phase 1: Make `guide` a rule set of its own. Split `chapter-prose.md` into a shared core
       and one file per profile, and have step 5 load the core plus the book's profile. Move the
       reasoning to `NOTES.md` so the file an agent reads at draft time is short, and written in
       the style wanted back. Add before-and-after examples: a handoff opener, a teaser heading and
       a catch-all callout. State the heading test and "the wrong-model passage is a shape, not a
       script".
-- [ ] Phase 2: Take the handoff chain out of the guide path from end to end: the **Opens on**
+- [x] Phase 2: Take the handoff chain out of the guide path from end to end: the **Opens on**
       and **Closes on** rows in `SKILL.md § 2`, the opening noun in `§ The plan`, the seam read
       at step 8, and the handoff close. Under `guide`, the opening paragraph orients the reader
       instead.
-- [ ] Phase 3: Rework `## In short`. Let the summary use the chapter's own terms with a short
+- [x] Phase 3: Rework `## In short`. Let the summary use the chapter's own terms with a short
       definition, cap its length, forbid reusing the chapter's sentences, and decide what the
       `This chapter` row and the summary each do.
-- [ ] Phase 4: New `check-book.sh` reports. Paragraphs over 90 words and sentences over 45 words,
+- [x] Phase 4: New `check-book.sh` reports. Paragraphs over 90 words and sentences over 45 words,
       each by tag. Callouts over four sentences. Runs of eight or more words shared between
       `## In short` and the body. Multi-word phrases recurring across three or more chapters.
       Repo-path source keys in the header table. Add fixtures and manifest rows for each.
-- [ ] Phase 5: Change `/updatebook`'s edit rules. Reorder the cheapest-edit list, give revisions
+- [x] Phase 5: Change `/updatebook`'s edit rules. Reorder the cheapest-edit list, give revisions
       a way to add a paragraph without renumbering any tag, add a row for when a premise
       changes, and keep each callout to one idea. Add a rule for when to stop editing in place,
       with three levels where today there are two. Edit in place when the change is local and
@@ -55,7 +55,7 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       boundaries or order change, or the rules it was written under do. Before a rewrite or a
       recreate, move any fact a revision put only in the prose into `OUTLINE.md`, or the
       regeneration drops it silently.
-- [ ] Phase 6: Change `/makebook`'s bind. Give readers of a guide book the reading edition,
+- [x] Phase 6: Change `/makebook`'s bind. Give readers of a guide book the reading edition,
       swap in display names in the header and the endnotes, and keep the chapter-locating
       markers out of the PDF's text layer.
 - [ ] Phase 7: Validation. Redraft one teaching chapter and one administrative chapter under
@@ -102,6 +102,13 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
   scoring. The redraft runs on a branch in the repo that holds the reference guide, its
   outline and its sources; its path is passed to the run and never written here. An
   unattended run stops once the redrafts are ready to read.
+
+## Deferred
+
+- **A bind test in CI.** The fixture suite cannot exercise `build-book.py`, because CI
+  installs Python and `jq` and not the Chromium the binder drives, and a skipped fixture fails
+  under `--strict`. Phase 6's changes (display-name swap, hidden page markers) were verified by
+  hand on `fixtures/guide/` and `fixtures/guide-reports/`. Found 2026-09-24.
 
 ## About Ticket
 

@@ -4,13 +4,17 @@
 #
 # Checks only what is mechanically checkable: filenames, ordering, the H1 that
 # /makebook reads, the H2 per part, the markdown a chapter still may not carry,
-# and the [chapter-paragraph] tags. Chapter length is reported and never failed,
-# because the spec sets none. It says nothing about whether the prose is any
-# good or the facts are right.
+# the [chapter-paragraph] tags, and under the guide profile the 90-word
+# paragraph stop. Chapter length is reported and never failed, because the spec
+# sets none. Lines that need a reader rather than a rule, such as a long
+# sentence or a summary copying its chapter, print as REPORT and fail nothing.
+# It says nothing about whether the prose is any good or the facts are right.
 #
-# The prose rules it enforces are written in ../reference/chapter-prose.md and
-# cited below by rule name rather than by line, so that editing the spec does
-# not silently repoint every citation into it. At runtime it reads nothing but
+# The prose rules it enforces are written in ../reference/chapter-prose.md, which
+# every chapter follows, and in the profile files ../reference/guide.md and
+# ../reference/narration.md. They are cited below by rule name rather than by
+# line, so that editing the spec does not silently repoint every citation into
+# it. At runtime it reads nothing but
 # the book folder given to it; the build-book.py citations below say where a
 # format constraint comes from, and are not files this script opens.
 #
@@ -52,6 +56,12 @@ fi
 
 fail=0
 problem() { echo "FAIL  $*"; fail=1; }
+# A report is something a human should read and no rule fails on: a sentence
+# past the stop, a callout doing two jobs, a summary repeating the chapter. They
+# are counted and printed on their own line so a run with reports still reads
+# as a pass where it is one, and a pass with reports never reads as clean.
+reports=0
+report() { echo "REPORT  $*"; reports=$((reports + 1)); }
 
 # A checker that can report OK without having run is worse than no checker, so
 # every chapter that reaches the content checks increments `checked`, every
@@ -86,6 +96,7 @@ declared_ovw=""
 # keeps the documented no-jq configuration working.
 declared_profile=""
 source_keys=""
+display_keys=""
 gloss_name="glossary.md"
 fm_name="about-this-book.md"
 # The trailing concept list, by the one name the spec fixes. It is matched
@@ -108,8 +119,32 @@ ovw_carried_loose="Carried in:"
 # and chapter 1 always has none.
 ovw_carried_max=3
 # The ceiling on callouts in one chapter, under the guide profile
-# (reference/chapter-prose.md § The guide profile, § Callouts).
+# (reference/guide.md § Callouts).
 callout_max=4
+# The stops the spec calls hard (../reference/chapter-prose.md § Shape, § Voice).
+# A paragraph is counted exactly, so the paragraph stop fails a guide book and
+# is reported under narration, where every book written before the check
+# existed has to keep passing. A sentence boundary is a guess a script makes,
+# so the sentence stop is reported under both.
+para_max=90
+sent_max=45
+# One idea per callout, in one to four sentences (../reference/guide.md
+# § Callouts). Reported, because the count rests on the same sentence guess.
+callout_sent_max=4
+# The guide summary's length, and the shortest run it may share with the
+# chapter below it before it counts as reuse (../reference/guide.md § In short).
+ovw_words_max=120
+ovw_shared_run=8
+# A phrase recurring in this many chapters or more is reported as a possible
+# template (../reference/guide.md § The wrong model). Four words is the unit:
+# long enough that "of the" never fires, short enough to catch "the obvious
+# move is".
+phrase_chapters=3
+phrase_len=4
+phrase_report_max=10
+# A tag at the head of a paragraph, written with bracket expressions rather
+# than backslashes so it survives being passed to awk with -v.
+tag_head_re='^[[]A?[0-9]+-[0-9]+[a-z]?[]] '
 # jq missing is a supported configuration: the run falls back to inference and
 # says so. jq present but unable to run is not, and it is the more dangerous of
 # the two, because every `jq ... 2>/dev/null` below yields an empty string and
@@ -157,7 +192,8 @@ $extra"
   # terms as the two above: a book written before the section existed is still a
   # correct book and must pass untouched.
   declared_ovw=$(jq -r 'if has("overview") then (.overview | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  # `profile` selects the rule set in ../reference/chapter-prose.md. Absent means
+  # `profile` selects the rule set: ../reference/guide.md or ../reference/narration.md,
+  # each read on top of ../reference/chapter-prose.md. Absent means
   # the narration rules, which is every book written before the guide profile
   # existed, so the default cannot be anything else.
   declared_profile=$(jq -r '.profile // empty' "$dir/book.json" 2>/dev/null)
@@ -165,6 +201,10 @@ $extra"
   # be a bare path, a list of them, or an object carrying a reader-facing name
   # beside the path; only the last form has a display name to check against.
   source_keys=$(jq -r '(.sources // {}) | keys[]' "$dir/book.json" 2>/dev/null)
+  # The keys that carry a reader-facing name. /makebook prints that name in
+  # place of the key in the chapter header and its endnotes, so a path-like key
+  # there is only a problem when it has no name to be swapped for.
+  display_keys=$(jq -r '(.sources // {}) | to_entries[] | select((.value | type) == "object" and ((.value.display // "") | length) > 0) | .key' "$dir/book.json" 2>/dev/null)
 fi
 skip="$skip
 $gloss_name
@@ -218,9 +258,9 @@ case "$declared_profile" in
     ;;
 esac
 # Under the guide profile the overview section is required rather than opt-in
-# (../reference/chapter-prose.md § The guide profile, § Opening). It carries the
-# orientation the opening paragraph no longer has to, so a guide chapter without
-# one has lost the reader who opened the book at that chapter. An explicit
+# (../reference/guide.md § In short). It is the chapter's only summary, so a
+# guide chapter without one has lost the reader who opened the book at that
+# chapter. An explicit
 # "overview": false is still an error rather than an override, because a guide
 # that declares the section off is two declarations that contradict each other.
 if [ "$profile" = guide ]; then
@@ -247,7 +287,10 @@ if [ "${#chapters[@]}" -eq 0 ]; then
 fi
 
 titles_file=$(mktemp)
-trap 'rm -f "$titles_file"' EXIT
+# Each chapter's prose, one line per unit, for the recurring-phrase report that
+# can only run once every chapter has been read.
+phrases_file=$(mktemp)
+trap 'rm -f "$titles_file" "$phrases_file"' EXIT
 
 expected=1
 # Appendices are numbered in their own sequence, so they need their own counter.
@@ -276,7 +319,7 @@ for path in "${chapters[@]}"; do
   base=$(basename "$path")
 
   # An appendix is a chapter-kind file holding reference matter, bound after the
-  # chapters and before the glossary (../reference/chapter-prose.md § Appendices).
+  # chapters and before the glossary (../reference/guide.md § Appendices).
   # It is recognised before the chapter filename rule because it deliberately does
   # not match it: `-appendix-N-` in place of `-NN-`. Sorting still puts it after
   # every chapter, because `a` sorts after every digit, so a plain filename sort
@@ -414,7 +457,7 @@ for path in "${chapters[@]}"; do
     ovw_end=$(printf '%s\n' "$body" | awk -v start="$ovw_start" '
       NR <= start { next }
       /^[[:space:]]*## / { print NR; found = 1; exit }
-      /^\[A?[0-9]+-[0-9]+\] / { print NR; found = 1; exit }
+      /^\[A?[0-9]+-[0-9]+[a-z]?\] / { print NR; found = 1; exit }
       /^[[:space:]]*<!--/ { if (pstart) { print pstart; found = 1; exit } next }
       /^[[:space:]]*$/ { pstart = 0; next }
       { if (!pstart) pstart = NR; next }
@@ -461,7 +504,7 @@ for path in "${chapters[@]}"; do
     inblock && blankrun && /^[[:space:]]+[^[:space:]]/ { blankrun = 0; struct += NF; next }
     {
       inblock = 0; blankrun = 0; inpara = 1
-      sub(/^\[A?[0-9]+-[0-9]+\] /, "")
+      sub(/^\[A?[0-9]+-[0-9]+[a-z]?\] /, "")
       prose += NF
       next
     }
@@ -552,7 +595,7 @@ for path in "${chapters[@]}"; do
       if (!inpara) {
         inpara = 1
         n++
-        if (match($0, /^\[A?[0-9]+-[0-9]+\] /)) {
+        if (match($0, /^\[A?[0-9]+-[0-9]+[a-z]?\] /)) {
           print "TAG", substr($0, 2, RLENGTH - 3), n
         } else {
           print "UNTAGGED", n
@@ -573,6 +616,19 @@ for path in "${chapters[@]}"; do
     # The chapter half must be this chapter, and the paragraph half must run
     # 1, 2, 3 with no gap and no repeat. Both are how a tag stays a unique
     # address for the paragraph it names.
+    #
+    # A revision may add a paragraph without renumbering anything by giving it
+    # a letter: [5-12a] follows [5-12], then [5-12b], and [5-13] comes next
+    # (../reference/chapter-prose.md § Paragraph tags). So a plain tag counts on
+    # from the last plain tag, and a lettered one repeats the number of the
+    # paragraph it follows with the next letter, starting at a. Each tag is
+    # checked against the one before it rather than against its position, and
+    # the count resyncs to what is written, so one wrong tag is reported once
+    # instead of failing every tag after it.
+    prev_n=0
+    prev_s=""
+    lettered=""
+    alphabet=abcdefghijklmnopqrstuvwxyz
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       tag=$(printf '%s' "$line" | awk '{print $2}')
@@ -580,7 +636,7 @@ for path in "${chapters[@]}"; do
       tag_ch=${tag%%-*}
       tag_p=${tag##*-}
       # An appendix addresses its paragraphs [A<N>-<n>]
-      # (../reference/chapter-prose.md § Appendices). The chapter half is checked
+      # (../reference/guide.md § Appendices). The chapter half is checked
       # against the appendix's own number, and the leading-zero rule applies to
       # the digits after the A.
       if [ "$is_appendix" -eq 1 ]; then
@@ -599,11 +655,13 @@ for path in "${chapters[@]}"; do
             ;;
         esac
       fi
+      tag_n=${tag_p%[a-z]}
+      tag_s=${tag_p#"$tag_n"}
       # One spelling per address. The filename pads its chapter number so a
       # lexicographic sort orders the book; a tag is typed into a conversation
       # instead, so it does not pad, and [03-7] alongside [3-8] would give one
       # paragraph two names.
-      if [ "$tag_ch" != "$((10#$tag_ch))" ] || [ "$tag_p" != "$((10#$tag_p))" ]; then
+      if [ "$tag_ch" != "$((10#$tag_ch))" ] || [ "$tag_n" != "$((10#$tag_n))" ]; then
         problem "$base: paragraph $seq is tagged [$tag]; tag numbers carry no leading zeros"
       fi
       if [ "$((10#$tag_ch))" -ne "$((10#$num))" ]; then
@@ -613,12 +671,228 @@ for path in "${chapters[@]}"; do
           problem "$base: paragraph $seq is tagged [$tag] but this is chapter $((10#$num))"
         fi
       fi
-      if [ "$((10#$tag_p))" -ne "$seq" ]; then
-        problem "$base: paragraph $seq is tagged [$tag]; the paragraph number must count 1, 2, 3 through the chapter"
+      tag_half=${tag%-*}
+      if [ -z "$tag_s" ]; then
+        if [ "$((10#$tag_n))" -ne "$((prev_n + 1))" ]; then
+          problem "$base: paragraph $seq is tagged [$tag]; the paragraph number must count 1, 2, 3 through the chapter, so this one is [$tag_half-$((prev_n + 1))]"
+        fi
+        prev_n=$((10#$tag_n))
+        prev_s=""
+      else
+        if [ -z "$prev_s" ]; then
+          want=a
+        else
+          want_rest=${alphabet#*"$prev_s"}
+          want=${want_rest:0:1}
+        fi
+        if [ "$prev_n" -eq 0 ] || [ "$((10#$tag_n))" -ne "$prev_n" ] || [ "$tag_s" != "$want" ]; then
+          if [ "$prev_n" -eq 0 ]; then
+            problem "$base: paragraph $seq is tagged [$tag]; a lettered tag follows the paragraph it was added after, and nothing comes before the first"
+          else
+            problem "$base: paragraph $seq is tagged [$tag]; a paragraph added after [$tag_half-$prev_n$prev_s] is [$tag_half-$prev_n$want]"
+          fi
+        fi
+        prev_n=$((10#$tag_n))
+        prev_s=$tag_s
+        lettered="$lettered${lettered:+, }[$tag]"
       fi
     done < <(printf '%s\n' "$tag_report" | grep '^TAG ')
+    # Lettered tags are how a revision adds a paragraph without moving anyone's
+    # citation, and each one is a patch on the chapter as first written. They
+    # are reported so the count stays visible: a chapter collecting them is a
+    # chapter due a rewrite, which is what renumbers them away
+    # (../../updatebook/SKILL.md § When to stop editing in place).
+    if [ -n "$lettered" ]; then
+      report "$base: carries added paragraphs $lettered; rewriting the chapter renumbers them"
+    fi
   else
     untagged_chapters=$((untagged_chapters + 1))
+  fi
+
+  # The paragraph and sentence stops, the callout length, and the text the two
+  # repetition reports read. The walk is the tag sweep's state machine, so the
+  # two agree on what a paragraph is: the header, "## In short", the concept
+  # list, lists, tables, fences, figures, marks and headings are none of them.
+  # A callout is read as its own unit, with its label taken off before its
+  # sentences are counted, because "**Decide.**" would otherwise count as one.
+  #
+  # A sentence ends at a word ending in . ! or ? when the next word does not
+  # start in lowercase, and never at a short abbreviation a citation uses
+  # ("p. 4", "ch. 3", "e.g."). That is a guess, which is why the sentence and
+  # callout figures are reported and never fail a run.
+  unit_report=$(printf '%s\n' "$body" | awk -v sugg="$sugg_heading" -v ovws="$ovw_start" -v ovwe="$ovw_end" -v tagre="$tag_head_re" '
+    function ends_sentence(w, nx,   core) {
+      core = w
+      gsub(/["\047)*`_]+$/, "", core)
+      gsub(/[]]+$/, "", core)
+      if (core !~ /[.!?]$/) return 0
+      if (tolower(core) ~ /^(p|pp|ch|e\.g|i\.e|vs|cf|fig|dr|mr|mrs|ms)\.$/) return 0
+      if (nx ~ /^[a-z]/) return 0
+      return 1
+    }
+    # Sets nsent and slen[1..nsent]; returns the word count.
+    function sentences(text,   n, i, cur, total) {
+      nsent = 0; cur = 0; total = 0
+      n = split(text, W, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) {
+        if (W[i] == "") continue
+        cur++; total++
+        if (i < n && ends_sentence(W[i], W[i + 1])) { slen[++nsent] = cur; cur = 0 }
+      }
+      if (cur > 0) slen[++nsent] = cur
+      return total
+    }
+    function flush_para(   words, i) {
+      if (!inpara) return
+      words = sentences(ptext)
+      print "PARA", plabel, words
+      for (i = 1; i <= nsent; i++) if (slen[i] > 0) print "SENT", plabel, slen[i]
+      print "TEXT", plabel, ptext
+      inpara = 0; ptext = ""
+    }
+    function flush_quote(   i) {
+      if (!inquote) return
+      sentences(qtext)
+      gsub(/ /, "_", qlabel)
+      print "CALLOUT", qline, qlabel, nsent
+      print "TEXT", "callout@" qline, qtext
+      inquote = 0; qtext = ""
+    }
+    index($0, sugg) == 1 { flush_para(); flush_quote(); stop = 1 }
+    stop { next }
+    ovws && NR >= ovws && (ovwe == 0 || NR < ovwe) { flush_para(); flush_quote(); inblock = 0; blankrun = 0; next }
+    /^[[:space:]]*```/ { flush_para(); flush_quote(); inblock = 0; blankrun = 0; infence = !infence; next }
+    infence { next }
+    /^[[:space:]]*<!--/ { flush_para(); flush_quote(); inblock = 0; blankrun = 0; next }
+    /^[[:space:]]*$/ { flush_para(); flush_quote(); if (inblock) blankrun = 1; next }
+    /^[[:space:]]*#/ { flush_para(); flush_quote(); inblock = 0; blankrun = 0; next }
+    /^[[:space:]]*>/ {
+      flush_para()
+      line = $0
+      sub(/^[[:space:]]*>[[:space:]]?/, "", line)
+      if (!inquote) {
+        inquote = 1; qline = NR; qtext = ""; qlabel = "unlabelled"
+        if (match(line, /^\*\*[^*]+\.\*\*[[:space:]]*/)) {
+          qlabel = substr(line, 3, RLENGTH - 3)
+          sub(/\*\*[[:space:]]*$/, "", qlabel)
+          sub(/\.$/, "", qlabel)
+          line = substr(line, RLENGTH + 1)
+        }
+      }
+      qtext = qtext " " line
+      inblock = 0; blankrun = 0
+      next
+    }
+    { flush_quote() }
+    /^[[:space:]]*!\[[^]]*\]\([^)]*\)[[:space:]]*$/ { flush_para(); inblock = 0; blankrun = 0; next }
+    /^[[:space:]]*([-*+][[:space:]]|[0-9]+\.[[:space:]]|\|)/ { flush_para(); inblock = 1; blankrun = 0; next }
+    inblock && !blankrun { next }
+    inblock && blankrun && /^[[:space:]]+[^[:space:]]/ { blankrun = 0; next }
+    {
+      inblock = 0; blankrun = 0
+      line = $0
+      if (!inpara) {
+        inpara = 1; n++; ptext = ""
+        plabel = "paragraph " n
+        if (match(line, tagre)) {
+          plabel = "[" substr(line, 2, RLENGTH - 3) "]"
+          line = substr(line, RLENGTH + 1)
+        }
+        gsub(/ /, "_", plabel)
+      }
+      ptext = ptext " " line
+    }
+    END { flush_para(); flush_quote() }
+  ')
+  while read -r ukind ua ub uc; do
+    case "$ukind" in
+      PARA)
+        ulabel=${ua//_/ }
+        if [ "$ub" -gt "$para_max" ]; then
+          if [ "$profile" = guide ]; then
+            problem "$base: $ulabel runs $ub words; a paragraph stops at $para_max"
+          else
+            report "$base: $ulabel runs $ub words; a paragraph stops at $para_max"
+          fi
+        fi
+        ;;
+      SENT)
+        ulabel=${ua//_/ }
+        if [ "$ub" -gt "$sent_max" ]; then
+          report "$base: a sentence in $ulabel runs $ub words; a sentence stops at $sent_max"
+        fi
+        ;;
+      CALLOUT)
+        if [ "$profile" = guide ] && [ "$uc" -gt "$callout_sent_max" ]; then
+          report "$base: the ${ub//_/ } callout at body line $ua runs $uc sentences; a callout holds one idea in one to $callout_sent_max"
+        fi
+        ;;
+    esac
+  done < <(printf '%s\n' "$unit_report" | grep -E '^(PARA|SENT|CALLOUT) ')
+  # Every chapter's prose goes to the recurring-phrase report, keyed by the
+  # chapter so a phrase used twice in one chapter counts once.
+  if [ "$is_appendix" -eq 1 ]; then ukey="A$((10#$num))"; else ukey="$((10#$num))"; fi
+  printf '%s\n' "$unit_report" | awk -v k="$ukey" '$1 == "TEXT" { $1 = ""; $2 = ""; print k "\t" $0 }' >>"$phrases_file"
+
+  # The guide summary: its length, and any run it shares with the chapter
+  # below it (../reference/guide.md § In short). The carried-in line is left
+  # out of both, because its words come from the glossary rather than from
+  # this chapter. Guide only, because only the guide profile states either rule.
+  if [ "$profile" = guide ] && [ "$ovw_present" -eq 1 ]; then
+    ovw_summary=$(printf '%s\n' "$body" | awk -v start="$ovw_start" -v stop="$ovw_end" -v pfx="$ovw_carried_loose" '
+      NR <= start { next }
+      stop > 0 && NR >= stop { exit }
+      /^[[:space:]]*<!--/ { next }
+      NF == 0 { if (inpara) { inpara = 0; first = 0 } next }
+      {
+        if (!inpara) { inpara = 1; paras++; first = (paras == 1 && index($0, pfx) == 1) }
+        if (!first) printf "%s ", $0
+      }
+    ')
+    ovw_n=$(printf '%s' "$ovw_summary" | wc -w | tr -d ' ')
+    if [ "$ovw_n" -gt "$ovw_words_max" ]; then
+      report "$base: \"$ovw_heading\" runs $ovw_n words past its carried-in line; the summary stops near $ovw_words_max"
+    fi
+    shared=$( { printf '%s\n' "$unit_report" | awk '$1 == "TEXT" { $1 = ""; $2 = ""; print "B " $0 }'; printf 'S %s\n' "$ovw_summary"; } | awk -v run="$ovw_shared_run" '
+      function toks(s, arr,   n) {
+        s = tolower(s)
+        gsub(/[^a-z0-9\047]+/, " ", s)
+        return split(s, arr, / +/)
+      }
+      $1 == "B" {
+        n = toks(substr($0, 3), T); m = 0
+        for (i = 1; i <= n; i++) if (T[i] != "") U[++m] = T[i]
+        for (i = 1; i + run - 1 <= m; i++) {
+          g = U[i]; for (j = 1; j < run; j++) g = g " " U[i + j]
+          seen[g] = 1
+        }
+        next
+      }
+      $1 == "S" {
+        n = toks(substr($0, 3), T); m = 0
+        for (i = 1; i <= n; i++) if (T[i] != "") U[++m] = T[i]
+        i = 1
+        while (i + run - 1 <= m) {
+          g = U[i]; for (j = 1; j < run; j++) g = g " " U[i + j]
+          if (g in seen) {
+            k = i
+            while (k + run <= m) {
+              g2 = U[k + 1]; for (j = 2; j <= run; j++) g2 = g2 " " U[k + j]
+              if (!(g2 in seen)) break
+              k++
+            }
+            len = k - i + run
+            out = U[i]; for (j = i + 1; j < i + run; j++) out = out " " U[j]
+            print len "|" out
+            i = k + run
+          } else i++
+        }
+      }
+    ')
+    while IFS='|' read -r slen stext; do
+      [ -n "$slen" ] || continue
+      report "$base: \"$ovw_heading\" repeats $slen words of the chapter, from \"$stext ...\"; write the summary fresh"
+    done <<<"$shared"
   fi
 
   # Provenance. In a book that declares it, every unit a reader sees carries a
@@ -675,7 +949,7 @@ for path in "${chapters[@]}"; do
           inpara = 1
           flush()
           started = 1
-          if (match($0, /^\[A?[0-9]+-[0-9]+\] /)) {
+          if (match($0, /^\[A?[0-9]+-[0-9]+[a-z]?\] /)) {
             newunit("paragraph " substr($0, 2, RLENGTH - 3))
           } else {
             newunit("the paragraph at line " NR)
@@ -727,7 +1001,7 @@ for path in "${chapters[@]}"; do
   fi
   # Under narration, headings mark parts and only parts, so there is no level
   # below H2. Under guide, H3 is allowed for a named division inside a part and
-  # H4 is not (../reference/chapter-prose.md § The guide profile, § Headings):
+  # H4 is not (../reference/guide.md § Headings):
   # two levels give a scanning reader something to land on, and three are a
   # table of contents inside a chapter.
   if [ "$profile" = guide ]; then
@@ -828,7 +1102,7 @@ for path in "${chapters[@]}"; do
   fi
   # An appendix carries the overview and the concept list only where they earn
   # their place, and neither is required of it
-  # (../reference/chapter-prose.md § Appendices). Where one IS present it is
+  # (../reference/guide.md § Appendices). Where one IS present it is
   # still checked, above and below, because a section that exists and sits in
   # the wrong place is a defect whatever kind of file it is in.
   if [ "$ovw_mode" = required ] && [ "$ovw_seen" -eq 0 ] && [ "$is_appendix" -eq 0 ]; then
@@ -863,7 +1137,7 @@ for path in "${chapters[@]}"; do
   #
   # An appendix is reference matter rather than an argument: no parts, no
   # opening paragraph, no close and no handoff noun
-  # (../reference/chapter-prose.md § Appendices). It carries whatever headings
+  # (../reference/guide.md § Appendices). It carries whatever headings
   # the material wants, so the shape rule does not apply to it.
   if [ "$is_appendix" -eq 0 ]; then
     h2=$(printf '%s\n' "$body" | grep -cE '^\s*## ' || true)
@@ -887,8 +1161,7 @@ for path in "${chapters[@]}"; do
   # plain prose was the rule's cost rather than its benefit.
   #
   # Under the guide profile the ban lifts for exactly four labelled shapes and
-  # stays for everything else (../reference/chapter-prose.md § The guide profile,
-  # § Callouts). The label is matched literally, for the reason § In short gives
+  # stays for everything else (../reference/guide.md § Callouts). The label is matched literally, for the reason § In short gives
   # about the carried-in prefix: a checker left to infer which quotes were meant
   # as callouts has to guess, and both of its guesses read as a clean pass.
   #
@@ -999,6 +1272,28 @@ for path in "${chapters[@]}"; do
         problem "$base: names the source key \"$skey\" on the page; that key is a repo path, so give the source a \"display\" name in book.json and cite that in the prose"
       fi
     done < <(printf '%s\n' "$source_keys")
+
+    # The header is exempt above, and it still reaches the page: the default
+    # edition prints the Draws-on row and the reading edition prints the same
+    # text as an endnote. /makebook swaps a key for its display name in both
+    # places, so a path-like key there is a problem only when it has no display
+    # name. Reported, because the header is the operator's inventory and a path
+    # in it is a thing to fix before binding, not a malformed book.
+    header_rows=$(printf '%s\n' "$body" | awk '
+      /^[[:space:]]*$/ { if (seen) exit; next }
+      /^[[:space:]]*\|/ { seen = 1; print; next }
+      { exit }
+    ')
+    if [ -n "$header_rows" ]; then
+      while IFS= read -r skey; do
+        [ -n "$skey" ] || continue
+        printf '%s' "$skey" | grep -qE '(\.(md|py|sh|json|ya?ml|txt|csv)([^a-z0-9]|$)|/)' || continue
+        printf '%s\n' "$display_keys" | grep -qxF -- "$skey" && continue
+        if printf '%s\n' "$header_rows" | grep -qF -- "$skey"; then
+          report "$base: the chapter header names the source key \"$skey\", a repo path with no \"display\" name in book.json, so the bound book prints the path"
+        fi
+      done < <(printf '%s\n' "$source_keys")
+    fi
   fi
 
   checked=$((checked + 1))
@@ -1121,6 +1416,57 @@ if [ "$ovw_mode" = required ] && [ "$declared_gloss" = "true" ] && [ -f "$gloss_
   done
 fi
 
+# Phrases recurring across chapters. A wrong-model passage written from a
+# template comes out in the same words each time ("suggests itself", "the
+# obvious move is"), and so does any other stock move. A four-word run is
+# counted once per chapter, and only runs holding at least two words that are
+# not function words, so "at the end of" never fires. Reported and never
+# failed: a book's own vocabulary recurs by design, and only a reader can tell
+# a term from a tic (../reference/guide.md § The wrong model).
+if [ -s "$phrases_file" ]; then
+  phrase_lines=$(awk -F'\t' -v len="$phrase_len" -v minch="$phrase_chapters" '
+    BEGIN {
+      n = split("a an the and or but so of to in on at by for with from as is are was were be been being it its this that these those there here which who whom what when where how why not no do does did has have had will would can could should may might must you your they their them he she his her we our i me my if than then into out up down over about all each every any some more most other only also just same such own both before after once again very s t", SW, " ")
+      for (i = 1; i <= n; i++) stop[SW[i]] = 1
+    }
+    {
+      ch = $1
+      text = tolower($2)
+      gsub(/[^a-z0-9\047]+/, " ", text)
+      m = split(text, T, / +/)
+      k = 0
+      for (i = 1; i <= m; i++) { w = T[i]; gsub(/^\047+|\047+$/, "", w); if (w != "") U[++k] = w }
+      for (i = 1; i + len - 1 <= k; i++) {
+        content = 0
+        g = ""
+        for (j = 0; j < len; j++) {
+          g = g (j ? " " : "") U[i + j]
+          if (!(U[i + j] in stop)) content++
+        }
+        if (content < 2) continue
+        if ((g, ch) in seen) continue
+        seen[g, ch] = 1
+        count[g]++
+        chs[g] = chs[g] (chs[g] == "" ? "" : ", ") ch
+      }
+    }
+    END { for (g in count) if (count[g] >= minch) print count[g] "\t" g "\t" chs[g] }
+  ' "$phrases_file" | sort -t'	' -k1,1nr -k2,2)
+  if [ -n "$phrase_lines" ]; then
+    phrase_total=$(printf '%s\n' "$phrase_lines" | grep -c .)
+    shown=0
+    while IFS='	' read -r pcount pgram pchs; do
+      [ -n "$pcount" ] || continue
+      [ "$shown" -lt "$phrase_report_max" ] || break
+      report "\"$pgram\" recurs in $pcount chapters ($pchs); read them for a phrase written from a template"
+      shown=$((shown + 1))
+    done <<<"$phrase_lines"
+    if [ "$phrase_total" -gt "$phrase_report_max" ]; then
+      echo "        and $((phrase_total - phrase_report_max)) more recurring phrases, not listed"
+    fi
+  fi
+fi
+
 # A tag is an address a reader cites, so half a tagged book is worse than none:
 # the chapters without tags look like chapters nobody can point at. Any tagged
 # chapter therefore obliges the rest.
@@ -1157,6 +1503,12 @@ if [ "$checked" -gt 0 ]; then
   # Rounded to nearest, not truncated, so this agrees with the average quoted in
   # SKILL.md and NOTES.md rather than sitting a word below it.
   echo "chapter prose: mean $(((total_words + checked / 2) / checked))    longest $longest_words in $longest_chapter"
+fi
+# Reports are counted apart from failures, so a run that passes with ten of
+# them is not mistaken for a clean one, and a run that fails says how many of
+# its lines were only reports.
+if [ "$reports" -gt 0 ]; then
+  echo "reports: $reports    none of them fails the run; each is a thing to read"
 fi
 if [ "$tag_mode" = "inferred" ]; then
   echo "note: this book neither declares \"tags\" in book.json nor was given a flag,"

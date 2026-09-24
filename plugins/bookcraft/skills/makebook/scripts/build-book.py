@@ -681,16 +681,16 @@ PROVENANCE_RE = re.compile(r"^[ \t]*<!--[ \t]*src:.*?-->[ \t]*$\n?", re.M)
 # reaches the printed page by design: the operator working on the book wants it
 # there. A reader does not, which is what the reading edition is for. The
 # appendix form carries an A before the first number
-# (createbook/reference/chapter-prose.md § Appendices).
+# (createbook/reference/guide.md § Appendices).
 #
 # Anchored to the start of a line, because that is the only place a tag is a
 # tag. A bracketed pair of numbers mid-sentence is prose the book wrote and
 # stripping it would silently edit the text.
-PARA_TAG_RE = re.compile(r"^\[A?\d+-\d+\] ", re.M)
+PARA_TAG_RE = re.compile(r"^\[A?\d+-\d+[a-z]?\] ", re.M)
 
 # An appendix is a chapter-kind file holding reference matter, bound after the
 # chapters and before the glossary
-# (createbook/reference/chapter-prose.md § Appendices). The filename is what
+# (createbook/reference/guide.md § Appendices). The filename is what
 # says so, and it is the same pattern check-book.sh recognises: `-appendix-N-`
 # where a chapter carries `-NN-`. `a` sorts after every digit, so the plain
 # filename sort that orders the book already puts these last.
@@ -703,7 +703,7 @@ APPENDIX_FILE_RE = re.compile(r"-appendix-(\d+)-[a-z0-9-]+\.md$")
 # The two header rows the reading edition moves to chapter endnotes. They are
 # the operator's rows rather than the reader's: an inventory of sources at the
 # head of every chapter is furniture the reader scrolls past to reach the prose
-# (createbook/reference/chapter-prose.md § The guide profile). They are moved
+# (createbook/reference/guide.md § The chapter header). They are moved
 # rather than cut, because check-provenance.sh and the review passes read them
 # and the source file is never touched.
 # The chapter header table ends where the first H2 begins, which for a guide
@@ -713,15 +713,86 @@ FIRST_H2_RE = re.compile(r"^[ \t]*##[ \t]", re.M)
 HEADER_NOTE_RE = re.compile(
     r"^[ \t]*\|[ \t]*\*\*(Draws on|Fills in)\*\*[ \t]*\|(?P<body>.*?)\|[ \t]*$\n?",
     re.M)
+CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 
 
-def load_chapters(src: Path, skip: set[str], reading: bool = False) -> list[dict]:
+def source_displays(cfg: dict) -> dict[str, str]:
+    """book.json's reader-facing source names, keyed by the mark key.
+
+    A `sources` value may be a path, a list of paths, or an object carrying a
+    `display` beside its path (createbook/SKILL.md § 4). Only the object form
+    names a source for a reader.
+    """
+    out = {}
+    for key, val in (cfg.get("sources") or {}).items():
+        if isinstance(val, dict) and isinstance(val.get("display"), str) \
+                and val["display"].strip():
+            out[key] = val["display"].strip()
+    return out
+
+
+def swap_display_names(text: str, displays: dict[str, str]) -> str:
+    """Put each source's display name where the chapter header names its key.
+
+    The header's Draws-on row is an inventory written for the operator, so it
+    names sources by the key the marks and check-provenance.sh use, which is
+    often a repo path: `CLAUDE.md § Teaching Calendar`. The default edition
+    prints that row and the reading edition prints the same text as an
+    endnote, so without this a reader of either was shown a path they cannot
+    open. The markdown is never touched; this runs on the text being bound.
+
+    Only table rows are touched. The text above a chapter's first H2 is the
+    header table and, in a narration chapter with no `## In short`, the opening
+    paragraph too, and prose is already held to display names by check-book.sh.
+
+    A code span whose content is a key, or a key followed by a locator, becomes
+    the display name and the locator as plain text: `` `docs/build.md § Caching` ``
+    reads "the build docs § Caching". A bare key is swapped where it stands.
+    A display name already in the row is left alone, so a key that is a word
+    of its own name ("syllabus", shown as "the syllabus") is never doubled.
+    Longer strings are tried first, so a key that is a prefix of another never
+    claims the other's text.
+    """
+    if not displays:
+        return text
+    keys = sorted(displays, key=len, reverse=True)
+    names = sorted({v for v in displays.values() if v not in displays},
+                   key=len, reverse=True)
+    bare = re.compile(r"(?<![\w/.-])(" + "|".join(re.escape(t) for t in names + keys)
+                      + r")(?![\w/-])")
+
+    def span(m: re.Match) -> str:
+        inner = m.group(1)
+        for k in keys:
+            if inner == k or inner.startswith(k + " ") or inner.startswith(k + ","):
+                return displays[k] + inner[len(k):]
+        return m.group(0)
+
+    def row(line: str) -> str:
+        if not line.lstrip().startswith("|"):
+            return line
+        line = CODE_SPAN_RE.sub(span, line)
+        parts = re.split(r"(`[^`\n]+`)", line)
+        for i in range(0, len(parts), 2):
+            parts[i] = bare.sub(lambda m: displays.get(m.group(1), m.group(1)), parts[i])
+        return "".join(parts)
+
+    return "\n".join(row(ln) for ln in text.split("\n"))
+
+
+def load_chapters(src: Path, skip: set[str], reading: bool = False,
+                  displays: dict[str, str] | None = None) -> list[dict]:
     """Chapter records, one per markdown file in filename-sort order.
 
     `reading` selects the reading edition: paragraph tags come off the page and
     the header's `Draws on` and `Fills in` rows move to chapter endnotes. The
     source file is never touched, so the tags other files cite keep resolving
     and the two editions bind from one folder.
+
+    `displays` maps a source key to its reader-facing name, and in both editions
+    the chapter header shows the name where it named the key
+    (swap_display_names). The endnotes are built from the header after the
+    swap, so they show it too.
 
     The term harvest reads `plain`, which is built from the text before either
     change. Both editions carry the same words on the page -- the rows moved
@@ -747,6 +818,14 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False) -> list[dict
             body_md = text.strip()
         harvest_md = body_md
         notes: list[tuple[str, str]] = []
+        if displays:
+            # The header only: the table above the first H2. The prose is held
+            # to display names already (check-book.sh fails a path-like key
+            # there), and a chapter quoting a key in a fenced block is showing
+            # the key on purpose.
+            split = FIRST_H2_RE.search(body_md)
+            cut = split.start() if split else len(body_md)
+            body_md = swap_display_names(body_md[:cut], displays) + body_md[cut:]
         if reading:
             body_md = PARA_TAG_RE.sub("", body_md)
             # Only the chapter header table, which sits under the H1 and above
@@ -779,7 +858,7 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False) -> list[dict
 
 
 # The four callout labels of the guide profile
-# (createbook/reference/chapter-prose.md § The guide profile). markdown-it
+# (createbook/reference/guide.md § Callouts). markdown-it
 # renders each as an ordinary blockquote, which on the page is a grey rule and
 # nothing else: the label is the only thing saying what kind of sentence the
 # reader is in, and it reads as bold prose inside a quotation. Boxing them is
@@ -3102,7 +3181,8 @@ def main(argv: list[str]) -> int:
     else:
         reading_edition = args.reading_edition
 
-    chapters = load_chapters(src, skip, reading=reading_edition)
+    chapters = load_chapters(src, skip, reading=reading_edition,
+                             displays=source_displays(cfg))
     if not chapters:
         print(f"error: no markdown files in {src}", file=sys.stderr)
         return 1
@@ -3228,7 +3308,32 @@ def main(argv: list[str]) -> int:
 
     pages, index_page = state["pages"], state["index_page"]
     entries = state["entries"]
+
+    # The probes are how every page number above was found, and they are white
+    # 5pt text, so until now they stayed in the finished PDF's text layer: a
+    # screen reader read "ZQCH016QZ" aloud and a copy and paste picked it up.
+    # Now the settled book is rendered once more with them hidden. Hidden, not
+    # removed: `visibility: hidden` keeps each probe's box, so nothing on any
+    # page can move, and Chromium paints no text for it. That is checked rather
+    # than assumed. The clean render has to match the probed one page for page
+    # once the probe strings are taken out, or the probed PDF is put back and
+    # the run says why, because a page number that moved is worse than a marker
+    # in the text layer.
+    probed = page_texts(out)
+    clean_html = page_html.replace(
+        "</head>", "<style>.probe{visibility:hidden !important;}</style></head>", 1)
+    tables = render(clean_html, src, out, args.title, body_pt)
     final = page_texts(out)
+
+    def flat(page: str) -> str:
+        return re.sub(r"\s+", "", PROBE_RE.sub("", page))
+
+    markers_hidden = (len(final) == len(probed)
+                      and all(flat(a) == flat(b) for a, b in zip(probed, final))
+                      and not any(PROBE_RE.search(re.sub(r"\s+", "", t)) for t in final))
+    if not markers_hidden:
+        tables = render(page_html, src, out, args.title, body_pt)
+        final = page_texts(out)
     total = len(final) - (1 if not final[-1].strip() else 0)
     print(f"wrote {out}")
     print(f"pages: {total}   chapters: {len(chapters)}")
@@ -3478,6 +3583,10 @@ def main(argv: list[str]) -> int:
                 print(f"  Widen the pattern in {terms_path.name}.")
     print(f"page numbers settled after {settled} passes "
           f"(re-reading the finished PDF reproduces every printed number)")
+    if not markers_hidden:
+        print("  warning: hiding the page markers changed the layout, so they were "
+              "left in the PDF's text layer. A screen reader or a copy will pick up "
+              "strings like ZQCH001QZ in this file.")
 
     # Both formats, every run. The PDF is for reading with a pen on a fixed
     # page; the EPUB is for reading at whatever font size the reader picked.

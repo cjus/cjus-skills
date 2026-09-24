@@ -96,6 +96,7 @@ MANIFEST=$(cat <<'ROWS'
 createbook/fence|check-book|0|structure is sound
 createbook/guide|check-book|0|structure is sound
 createbook/guide-under-narration|check-book|1|body carries an H3 or deeper~body carries a block quote~filename does not match
+createbook/guide-reports|check-book|0|structure is sound~reports: 7~a sentence in [1-2] runs 47 words~the Warning callout at body line 32 runs 6 sentences~names the source key "notes/policy.md"~!"notes/calendar.md"~"## In short" runs 124 words~"## In short" repeats 13 words~"the obvious move is" recurs in 3 chapters
 createbook/jq-unrunnable|check-book|0|structure is sound~provenance: required
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound

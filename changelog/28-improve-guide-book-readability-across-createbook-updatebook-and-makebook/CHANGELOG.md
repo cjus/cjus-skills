@@ -51,3 +51,65 @@ decision. Phase 7 still stops once, when the redrafts are ready for the operator
 - **Phase 7: the operator reads blind, and the redraft runs in the source repo.** Four
   versions labelled A to D, with the key opened after scoring. The source repo's path is
   passed to the run rather than recorded here.
+
+### 2026-09-24 — Phases 1 to 4: the rule files, the guide path, the summary and the checks
+
+**Phase 1: `guide` is a rule set of its own.** `reference/chapter-prose.md` is now the core
+every chapter follows, with `reference/guide.md` and `reference/narration.md` beside it, and
+step 5 hands an agent the core plus the book's profile file and no third. The core kept its
+name, so only citations of moved rules changed; `scripts/check-citations.py` resolves all of
+them. The reasoning moved to `NOTES.md § The rule files split, 2026-09-24`, and the core and
+guide file are written in the style they ask for: "rather than" fell from 63 uses to 1 and
+"carry" from 62 to 12, and every paragraph and sentence in both keeps the stops.
+`narration.md` moved unchanged. `guide.md` carries before-and-after examples for a handoff
+opener, teaser headings, a catch-all callout, a riddling summary and a noun-delivering close,
+plus the heading test and "a shape, not a script". An independent audit of old against new
+found eight lost rules, six weakened and four contradictions; all were fixed but one, kept on
+purpose and recorded: a guide part walks a mechanism only where it explains one. The teaching
+shape lost a fourth part it could never have passed the checker with.
+
+**Phase 2: no handoff chain under `guide`.** The outline's **Opens on** and **Closes on**
+rows, the plan's fixed nouns, step 5's nouns and step 8's seam read are narration-only now.
+A guide outline records a **Scope** row; the opening orients; the close lands the main point
+or the next step, must be true of the whole chapter, and hands nothing forward.
+
+**Phase 3: `## In short` under `guide`.** One summary: it opens with what the chapter covers,
+may use the chapter's terms with a short definition, stops near 120 words and never reuses
+the chapter's sentences. The `This chapter` row merged into it, per the settled question.
+
+**Phase 4: `check-book.sh` checks the stops.** A paragraph over 90 words fails a guide book
+and is reported under narration. New reports: sentences over 45, callouts over four
+sentences, summaries over 120 words or sharing an eight-word run with the chapter, four-word
+phrases in three or more chapters, and repo-path header keys with no display name. Two new
+fixtures, `guide-reports/` (manifest row) and `paragraph-stop/` (`run.sh`); the suite passes
+13 of 13. `/updatebook` step 5 now reads the reports against step 0's.
+
+### 2026-09-24 — Phases 5 and 6: revising without wear, and what the reader is handed
+
+**Phase 5: `/updatebook` adds a paragraph without renumbering.** A new paragraph after
+`[5-12]` is `[5-12a]`, then `[5-12b]`; `[5-13]` never moves. All five programs that read a
+tag accept the form: `check-book.sh` checks the lettered sequence and reports every chapter
+carrying one; `check-references.sh` and `check-provenance.sh` parse it; `/check-claims` takes
+it as written; `build-book.py` strips it from the reading edition. Accepting `[A2-4a]` closed
+the gap where `check-references.sh` never saw an appendix citation. Its check 4 also stopped
+reading a provenance mark as part of the paragraph above it, and its slid-versus-reworded
+test counts only plain tags. `§ Adding prose` now puts the lettered paragraph first, lets a
+paragraph grow only within 90 words and bars text from callouts, tables and lists; cutting is
+its own section; the classify table gained adding, cutting and premise rows; and the new
+`§ When to stop editing in place` sets the three levels, with the revision-facts-to-outline
+step before any rewrite. `fixtures/lettered-tags/run.sh` asserts it through all three
+checkers, and the pre-change checkers fail it on every lettered tag.
+
+**Phase 6: a guide reader gets the reading edition, display names, and no markers.**
+`/createbook` writes `"edition": "reading"` for a guide book, so the default bind is the
+reader's copy and the operator's is `--no-reading-edition` with its own `--out`; step 9 and
+`/updatebook`'s rebind name both files. `build-book.py` swaps display names for source keys
+in the header rows of both editions, which carries into the endnotes, and renders the
+settled book once more with the page markers hidden, keeping the clean render only when it
+matches the probed one page for page. Verified by hand: 13 pages before and after, 9 markers
+before and none after, display names in the header, the endnote and the EPUB. A self-review
+caught the swap reaching a narration chapter's opening paragraph and doubling a name already
+present; it now touches table rows only and leaves existing names alone.
+
+bookcraft bumped to 1.6.0. The suite passes 14 of 14 under `--strict`, and
+`scripts/check-citations.py` resolves all 180 citations.

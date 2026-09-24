@@ -10,7 +10,7 @@ Update the book in the first argument, according to the second: $ARGUMENTS
 
 A book here is what `/createbook` produces: a folder of chapter markdown, an `OUTLINE.md`, a `book.json`, usually a `glossary.md`, and sometimes a `diagrams/`. This skill changes one that already exists. It does not write a new one, and it does not rerun `/createbook`.
 
-**The rules for the prose are `/createbook`'s, not this skill's.** A revised sentence meets the same bar as a written one, so `${CLAUDE_PLUGIN_ROOT}/skills/createbook/reference/chapter-prose.md` is the authority on shape, voice, budgets and the before-sending checks, and `${CLAUDE_PLUGIN_ROOT}/skills/createbook/SKILL.md` is the authority on the structure around a chapter. Nothing here restates a rule from either file. What this skill owns is the part neither of them covers: which files an instruction is allowed to touch, and what an edit obliges you to carry with it.
+**The rules for the prose are `/createbook`'s, not this skill's.** A revised sentence meets the same bar as a written one, so `${CLAUDE_PLUGIN_ROOT}/skills/createbook/reference/chapter-prose.md`, with the book's profile file beside it (`guide.md` or `narration.md` in the same folder), is the authority on shape, voice, budgets and the before-sending checks, and `${CLAUDE_PLUGIN_ROOT}/skills/createbook/SKILL.md` is the authority on the structure around a chapter. Nothing here restates a rule from either file. What this skill owns is the part neither of them covers: which files an instruction is allowed to touch, and what an edit obliges you to carry with it.
 
 ## Arguments
 
@@ -50,7 +50,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 
 Read `book.json`'s `tags` while you are in there. **A book declaring `"tags": false` has no addresses**, which makes most of § Adding prose moot for it.
 
-**Read `profile` in the same pass, and hold the edit to the rule set it names.** Absent means the narration rules; `"guide"` means `chapter-prose.md § The guide profile` overrides the rules it names and everything else in that file still applies. This is the one book-level fact most likely to be missed here, because the rules it changes are the ones an editor applies from memory rather than by looking them up: a guide chapter opening on no handoff noun is correct, an H3 inside a part is correct, and a labelled callout is correct. **Editing a guide under the narration rules reads as tidying up.** It silently reverts the thing the profile was set to buy, and `check-book.sh` cannot catch it, because it passes a chapter that merely stopped using what the profile allows.
+**Read `profile` in the same pass, and hold the edit to the rule set it names.** Absent means the narration rules, `createbook/reference/narration.md`; `"guide"` means `createbook/reference/guide.md`. Either way `chapter-prose.md` applies underneath, and the profile file wins where it names one of its rules. This is the one book-level fact most likely to be missed here, because the rules it changes are the ones an editor applies from memory rather than by looking them up: a guide chapter opening on no handoff noun is correct, a guide header with no `This chapter` row is correct, an H3 inside a part is correct, and a labelled callout is correct. **Editing a guide under the narration rules reads as tidying up.** It silently reverts the thing the profile was set to buy, and `check-book.sh` cannot catch it, because it passes a chapter that merely stopped using what the profile allows.
 
 `check-book.sh` prints the profile first on its summary line, so the run you record at this step already tells you which set you are under. Read it rather than inferring it from the chapters.
 
@@ -78,17 +78,23 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 |---|---|---|
 | **Corrects a fact** | Nothing moves, if the sentence is rewritten where it stands | Every other place the fact appears, the outline's verified list and anchor ledger among them, and any figure that draws it |
 | **Rewrites a passage** | Nothing moves while the paragraph count holds | The outline's brief, if the chapter's claim moved |
-| **Adds or cuts prose** | The tail of that chapter renumbers. See § Adding prose | Every citation of a moved tag |
+| **Adds prose** | Nothing moves: a new paragraph takes a lettered tag. See § Adding prose | A citation whose sentence moved, where a paragraph was split |
+| **Cuts prose** | The tail of that chapter renumbers. See § Cutting prose | Every citation of a moved tag |
+| **Changes a premise** | The chapter is rewritten, and its tags renumber | Every passage built on the old premise, in every chapter it reaches. See § When to stop editing in place |
 | **Adds or retires a term** | Nothing moves | The term ledger row, and `glossary.md`. See § The glossary |
 | **Adds a figure** | Nothing moves: a figure line takes no tag and advances no count (`chapter-prose.md § Paragraph tags`) | `diagrams/README.md`, and the figure numbers after it in the same chapter |
 | **Adds a chapter** | Appending is free; inserting rewrites every later filename and every tag inside it | See § Adding a chapter |
 | **Removes a chapter** | Breaks every citation into it, and renumbers everything after it | Stop and confirm with the operator first |
 
+**Most rows are edits, and three things are not.** A changed premise, a chapter that needs several new paragraphs at once, and a change to the chapters' boundaries or order each call for a rewrite: of one chapter, or of the book. § When to stop editing in place says which, and it is worth reading before the first edit rather than after the tenth.
+
 ### 3. Make the edit, and make it the smallest one that satisfies the instruction
 
-**Edit, never rewrite.** Use the Edit tool on the passage. Writing a chapter file whole reflows prose the instruction never reached, and a chapter that was supposed to come back byte-identical comes back merely equivalent. That distinction is invisible in a summary and obvious in a diff.
+**Edit, never rewrite, at this level.** Use the Edit tool on the passage. Writing a chapter file whole reflows prose the instruction never reached, and a chapter that was supposed to come back byte-identical comes back merely equivalent. That distinction is invisible in a summary and obvious in a diff. The one time this skill writes a chapter file whole is a chapter rewrite, and § When to stop editing in place says when an edit has become one.
 
-**Do not delegate the prose to a subagent.** The edit is small, local, and depends on the surrounding paragraphs you have just read, which is exactly the context a spawn discards. Chapter prose also makes claims a reader takes as taught, and `createbook/SKILL.md § 5. Draft the chapters` keeps that work on the session's own tier. The one exception is a whole new chapter, which is a `/createbook`-shaped job and uses that same section's chapter prompt.
+**Do not delegate the prose to a subagent.** The edit is small, local, and depends on the surrounding paragraphs you have just read, which is exactly the context a spawn discards. Chapter prose also makes claims a reader takes as taught, and `createbook/SKILL.md § 5. Draft the chapters` keeps that work on the session's own tier. The two exceptions are a whole new chapter and a chapter rewrite, which are `/createbook`-shaped jobs and use that same section's chapter prompt.
+
+**A callout holds one idea** (`guide.md § Callouts`). A callout takes no tag, which makes it look like a free place to add text, and that is how a `Warning.` comes to hold a definition, a points split, a scheduling gap and a contact. A second idea is a second callout under the label that fits it, or a paragraph.
 
 **Every budget is still per chapter and still does not pool** (`chapter-prose.md § Every budget is per chapter`). An edit that adds a term, an anchor or a number spends this chapter's allowance, and the outline's ledgers are where you check what is already spent. Moving prose into a neighbouring chapter is not a fix: it changes a chapter the instruction never reached.
 
@@ -108,12 +114,12 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 Whatever the change touched:
 
 - **The chapter's brief in `OUTLINE.md` § Chapters**, when what the chapter explains moved.
-- **The handoff chain**, when the noun a chapter opens or closes on moved. Both neighbours are affected, and the seam is checked by reading at step 5.
+- **The handoff chain, under `narration`**, when the noun a chapter opens or closes on moved. Both neighbours are affected, and the seam is checked by reading at step 5. A `guide` outline has no handoff chain.
 - **The term ledger and the anchor ledger**, when a term or an anchor arrived or retired.
 - **The verified-facts section**, when a measurement was re-run. Say what was measured, on what, and on what date, the way the existing entries do.
 - **`glossary.md`**, per § The glossary.
 - **`diagrams/README.md`**, when a figure arrived, retired, or stopped being true.
-- **The chapter header's four rows**, when the edit changed what the chapter covers, what it asks the reader to do, which sources it rests on, or what it fills in. The Draws-on row has to name every source the chapter's marks now name, and nothing they do not.
+- **The chapter header's rows**, four under `narration` and three under `guide`, when the edit changed what the chapter covers, what it asks the reader to do, which sources it rests on, or what it fills in. Under `guide`, what the chapter covers lives in the first sentence of `## In short`, so that moves instead. The Draws-on row has to name every source the chapter's marks now name, and nothing they do not.
 - **The chapter's `## Suggested reading` list**, when the edit closed a gap the list names or opened one it does not. An item naming something the book now teaches sends the reader out of the book for what they already own.
 - **`about-this-book.md`**, when the edit changed what the book was built from or what it fills in. It is the header's claims at book scale, and it goes stale the same way.
 - **The source ledger in `OUTLINE.md`**, when a source arrived, retired, or turned out to say something else. This is the row that decides what every later `/updatebook` run believes it can check against.
@@ -131,7 +137,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 2. **`check-book.sh` must pass, and its `content-checked` count must equal its chapter count.** A run that examined fewer chapters than it found says nothing about the rest, and it says so on its own summary. Compare the `prose`, `structure`, `tagged` and `glossary` figures against the lines you recorded at step 0.
 3. **`check-references.sh` for every file that cites this book**, including the book's own `OUTLINE.md` and `diagrams/README.md`. It runs four checks and reports them separately so the weaker cannot stand in for the stronger: a cited chapter exists, a quotation attributed to a chapter is in that chapter, a cited `[N-M]` names a paragraph the book defines, and that paragraph is still the paragraph it was at the baseline. **The fourth is the one that matters here**, because it is the only check that sees the failure this skill is built around, and it needs no argument: the baseline defaults to `HEAD`, which step 0's clean-folder rule makes exactly the book as it stood before your edit.
 4. **`check-provenance.sh` reads the marks in the other direction**, out at the sources they name, which is the direction an edit breaks. A paragraph rewritten against a different page of the syllabus keeps its old `p. 4` and nothing else notices; a source re-exported from Canvas can lose the heading a mark cites. It fails on a source `book.json` does not declare and on a locator that does not resolve, and it reports quotation mismatches as `REVIEW` because against the reference book a hard failure there was wrong ten times out of ten. **Compare its census against step 0's**: a rise in `unverifiable` or `unparsed` means fewer of the book's quotations were settled than before, and neither moves the exit code. **A rise in `unverifiable` does not always mean the edit moved a claim onto unreadable ground, and reading it that way is how this number misleads.** A quotation counts as unverifiable when **any** source its mark names is unreadable, so an edit that breaks a quotation against a perfectly readable co-named source lands in the same bucket, masked by the unreadable one. That masking case is the live majority: 12 of the reference book's 28 unverifiable quotations name a readable source alongside an image-only PDF. So when the number climbs, read the named lines and find the quotation, rather than assuming a source went dark.
-5. **Read the seams.** No script sees continuity. Read the closing paragraph of the chapter before the one you changed, the changed chapter's opening and closing paragraphs, and the opening of the chapter after. The failure this catches is a handoff noun that drifted, and it is invisible to everything above.
+5. **Read the seams.** No script sees continuity. Read the closing paragraph of the chapter before the one you changed, the changed chapter's opening and closing paragraphs, and the opening of the chapter after. Under `narration` the failure this catches is a handoff noun that drifted. Under `guide` it is an opening that stopped orienting a reader who arrives there first, or a close that is no longer true of the whole chapter (`createbook/SKILL.md § 8. Read the seams`). Both are invisible to everything above.
 
 **None of the five reaches a paraphrase that drifted, which is the failure step 3 warns about in its own words: "a claim edited to match a source you did not re-read".** `/check-claims` is the pass that does, sending one agent per chapter to read the sources the marks name:
 
@@ -145,7 +151,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 
 **Commit before you run it, and the check stops working.** Once the edit is in `HEAD` the baseline is the edited book, so every citation compares equal and check 4 reports zero drift over a book that just renumbered. Run it while the edit is still uncommitted, or pass `--since <the commit before yours>`.
 
-Two rules the checker does not enforce and you have to hold yourself: the 90-word paragraph stop and the 45-word sentence stop (`chapter-prose.md § Shape` and `§ Voice`). It counts a chapter, never a paragraph.
+**Read the `REPORT` lines as well as the exit code, and compare them with step 0's.** `check-book.sh` fails a guide book on a paragraph over 90 words (`chapter-prose.md § Shape`) and reports one under narration. It reports a sentence over 45 words (`chapter-prose.md § Voice`), a callout over four sentences, and a `## In short` summary that has grown past 120 words or picked up a run of the chapter's own sentences (`createbook/SKILL.md § 7. Check the folder`). An edit that adds a report the step 0 run did not have is an edit that wore the chapter down, which is how the reference guide's paragraphs grew.
 
 ### 6. Report
 
@@ -161,42 +167,72 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
   "Book Title" "$BOOK" --type-size 14
 ```
 
+**A `guide` book declares `"edition": "reading"`, so that command rebinds the reader's copy.** Where the folder also holds the operator's tagged copy, rebind it too with `--no-reading-edition` and the `--out` it was bound to (`makebook/SKILL.md § The reading edition`), and say which file is which in the report.
+
 **`--type-size` is in that command because a rebind overwrites an existing edition.** `/makebook` binds at 14pt unless told otherwise, so a bare command re-editions any book bound at another size rather than refreshing it. Pass the size the folder's current PDF was actually bound at rather than inheriting a default that has moved twice; the reference book is 14pt. `makebook/SKILL.md` § Type size has the sizes.
 
 **Do not bind unless asked**, matching `/createbook`'s last step (`createbook/SKILL.md § 9. Report`). A rebind rewrites two tracked binaries and `/makebook`'s own procedure wants the figure decisions made against the finished chapters first, so it is a separate decision by the operator.
 
 ## Adding prose
 
-This is the case that costs something, and the cost is worth stating plainly.
+**A new paragraph takes a lettered tag, so nothing renumbers.** A tag is an address other files cite. Until 2026-09-24 the only way to add a paragraph to a tagged chapter was to renumber every tag after it and repoint every citation, so revisions grew existing paragraphs instead and wore the chapter down: one of the reference guide's paragraphs went from 81 words at its first bind to 207 in a single revision. Take the edit that fits what the new text is, in this order:
 
-`check-book.sh` holds a tagged chapter to three things: the chapter half of every tag is that chapter, the paragraph half counts 1, 2, 3 with no gap and no repeat, and neither half is padded. So there is no `[5-12a]`. A paragraph inserted at position 12 makes the old 12 into 13, and every tag after it shifts by one.
+1. **A new idea gets its own paragraph, with the next letter.** Place it after the paragraph it follows, and tag it with that paragraph's number and the next free letter: after `[5-12]` comes `[5-12a]`, then `[5-12b]`, and `[5-13]` is untouched. Give it its own provenance mark. Nothing renumbers and no citation moves.
+2. **More of the same idea may grow its paragraph, only while the paragraph stays at 90 words or fewer.** A paragraph that would pass 90 holds two ideas. Split it where the direction turns, keep the first half under its tag, and give the second half the next letter. Repoint any citation whose sentence moved into the new half; `check-references.sh`'s check 4 names each one.
+3. **A sentence that belongs in a neighbour may move there**, where both paragraphs stay within the stop.
 
-**There is no free way to add a paragraph to a tagged chapter.** Appending after the last one looks free, and is not: the last paragraph is the close, which is one paragraph carrying the chapter's verdict and the noun it hands forward (`chapter-prose.md § Close`). A paragraph after the close is a chapter with two closes.
+**Never park new text in a callout, a table or a list because those take no tag.** A callout holds one idea (§ 3), and a table or a list holds a set, not an argument.
 
-So take the cheapest edit that satisfies the instruction, in this order:
+**A lettered paragraph never goes after the close, or before the first paragraph.** The last paragraph is the close (`narration.md § Close`, `guide.md § Close`), and a paragraph after it is a chapter with two closes, so add before the close, lettered after the paragraph it follows. Nothing comes before paragraph 1, so new opening material is an edit to paragraph 1 or a lettered paragraph after it.
 
-1. **Grow an existing paragraph**, up to the 90-word stop. Nothing renumbers.
-2. **Move a sentence between two adjacent paragraphs.** Nothing renumbers.
-3. **Insert, renumber, and repoint.** Only when the first two cannot carry it.
+**Lettered tags accumulate, and `check-book.sh` reports every chapter that has them.** Each one is a patch on the chapter as first written. A chapter collecting several, or needing several at once, is due a rewrite, which is what renumbers them (§ When to stop editing in place).
 
-Taking the third path is three steps and none of them is optional:
+## Cutting prose
+
+**A cut renumbers the rest of its chapter**, because tags run with no gap and a cut leaves one. Where the cut is part of a larger change to the chapter, make it inside a chapter rewrite instead. Otherwise, renumber and repoint:
 
 ```bash
-# every tag in the chapter from the insertion point on shifts by one
+# every tag in the chapter after the cut shifts back by one
 # then: who cited one of them? everything but the chapter's own file is a citation
 CH=<chapter-number>
 CHAPTER=$(ls "$BOOK"/*-$(printf '%02d' "$CH")-*.md)
-grep -rnoE "\[$CH-[0-9]+\]" --include='*.md' . | grep -v "^$CHAPTER:"
+grep -rnoE "\[$CH-[0-9]+[a-z]?\]" --include='*.md' . | grep -v "^$CHAPTER:"
 ```
 
-**Excluding the whole book folder here would be wrong**, which is why the filter names one file. `OUTLINE.md` and `diagrams/README.md` live inside the folder and cite tags like anything else: eight such citations sit in the reference book's own two files, counted 2026-09-10. Only the chapter being renumbered holds tags as definitions rather than citations.
+**Excluding the whole book folder here would be wrong**, which is why the filter names one file. `OUTLINE.md` and `diagrams/README.md` live inside the folder and cite tags like anything else: eight such citations sit in the reference book's own two files, counted 2026-09-10. Only the chapter being renumbered holds tags as definitions rather than citations. For an appendix, the chapter half is `A` and its number, and the filename holds `-appendix-N-`.
 
-- Renumber every tag in that chapter from the insertion point to the end. Tags before it do not move, so citations of them are unaffected and do not need touching.
+- Renumber every tag in that chapter after the cut. Tags before it do not move, so citations of them are unaffected. A lettered tag after the cut renumbers with the paragraph it follows: `[5-12a]` becomes `[5-11a]`.
 - Repoint every citation of a moved tag, **in the same change**, inside the book folder as well as outside it. A citation left behind still resolves, which is what makes this the failure worth guarding: it points at a real paragraph that is no longer the one meant.
-- **Then run `check-references.sh` before committing, and let it tell you which ones you missed.** Its check 4 compares every cited paragraph against the same paragraph at `HEAD`, so an insert-and-renumber makes it name each stale citation and print the prose the tag used to reach beside the prose it reaches now. Measured against this book on 2026-09-10: renumbering chapter 6 by one paragraph left all 25 of `readiness-checklist.md`'s citations resolving, and the check reported 20 of them as failures. The grep above finds the citations; the check finds the ones you did not fix.
+- **Then run `check-references.sh` before committing, and let it tell you which ones you missed.** Its check 4 compares every cited paragraph against the same paragraph at `HEAD`, so a renumber makes it name each stale citation and print the prose the tag used to reach beside the prose it reaches now. Measured against this book on 2026-09-10: renumbering chapter 6 by one paragraph left all 25 of `readiness-checklist.md`'s citations resolving, and the check reported 20 of them as failures. The grep above finds the citations; the check finds the ones you did not fix.
 - Rerun `check-book.sh`, which catches a tag that kept its old number.
 
-Cutting a paragraph is the same problem with the shift running the other way.
+## When to stop editing in place
+
+An edit is the right tool while the change is local. Past that, a rewrite costs less than the edits, and it reads better. There are three levels:
+
+| Level | When | What moves |
+|---|---|---|
+| **Edit in place** | The change is local, and the chapter's claim still holds | Only the edited passage and what § 4 carries with it |
+| **Rewrite one chapter**, keeping its number | A premise under the chapter changed, or it needs several new paragraphs at once, or it already carries several lettered tags | That chapter's tags renumber and citations into it are repointed. Every other chapter stays byte-identical |
+| **Recreate the book** | The chapters' boundaries or order change, or the rules the book was written under do | Everything, through `/createbook` and `createbook/SKILL.md § When the book supersedes one that already exists` |
+
+**A premise is a fact the chapter's plans are built on**: the class size, the number of sessions, the version a procedure assumes. When one changes, the passages built on it are wrong in their structure, not only in a number. Patching the number leaves plans built for the old premise with an aside about the new one. When the reference guide's class size moved from twenty to eleven, five chapters gained "your roster is eleven, so..." beside plans built for twenty, and one of them carried both four-evening schedules with the arithmetic for the outdated one. Rewrite every chapter the premise reaches, cut what no longer serves, and accept the renumber.
+
+**"Several" is a judgement, not a measurement.** A chapter whose added paragraphs no longer read as additions, or whose new material changes what it argues, is due a rewrite. The lettered-tag report in step 5 is where to watch for one.
+
+### Rewriting one chapter
+
+1. **Carry each revision's facts into the outline first.** A rewrite works from the outline row and the sources, so a fact a revision put only into the prose is lost unless the outline has it. `git log -p -- <chapter file>` lists every revision. Move each fact a revision added into `OUTLINE.md`, in the brief, the verified-facts list or the source ledger, before drafting.
+2. **Update the chapter's outline row** for the change: the brief, the terms and the anchors.
+3. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row and its sources. This is the one edit this skill hands to a chapter agent.
+4. **Replace the file whole.** Its tags count from 1 again, and the lettered ones are gone.
+5. **Repoint every citation into the chapter**, inside the book folder and outside it, by finding where the cited sentence now lives. A citation whose content is gone is reworded or removed. `check-references.sh`'s check 4 names each citation whose paragraph changed, so run it before committing, for the reason § Cutting prose gives.
+6. **Redo the chapter's header, `## In short` and concept list**, and the glossary entries it owns (§ The glossary).
+7. **Run the checks in step 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed and the repointed files, and nothing else.
+
+### Recreating the book
+
+When the chapters' boundaries or order change, or the rules the book was written under change, rewriting chapter by chapter keeps the old book's shape under the new rules. Run `/createbook` against the same sources instead, then repoint every outside citation through `createbook/SKILL.md § When the book supersedes one that already exists`. Carry each revision's facts into the new outline first, as in step 1 above: a recreate works from the outline and the sources, and silently drops a fact that lives only in the old prose.
 
 ## Adding a chapter
 
@@ -204,8 +240,8 @@ Cutting a paragraph is the same problem with the shift running the other way.
 
 What appending obliges here, beyond that section:
 
-- **The old last chapter has to gain a handoff.** Only the last chapter of a book hands forward nothing (`chapter-prose.md § Close`), so the chapter that used to be last now closes on a noun the new one opens on. That is an edit to its closing paragraph, and it makes the old last chapter a chapter the instruction reached.
-- **The outline gains a row in every ledger**: the chapters section, the handoff chain, the term ledger, the anchor ledger. An anchor another chapter already spent is not available to the new one.
+- **Under `narration`, the old last chapter has to gain a handoff.** Only the last chapter of a narration book hands forward nothing (`narration.md § Close`), so the chapter that used to be last now closes on a noun the new one opens on. That is an edit to its closing paragraph, and it makes the old last chapter a chapter the instruction reached. **Under `guide`, chapters do not chain**, so appending leaves the old last chapter untouched.
+- **The outline gains a row in every ledger**: the chapters section, the term ledger, the anchor ledger, and under `narration` the handoff chain. An anchor another chapter already spent is not available to the new one.
 - **The glossary gains the new chapter's terms**, per § The glossary.
 - Write the chapter with `/createbook`'s step 5 prompt, carrying this chapter's number so its tags are right.
 
@@ -213,7 +249,7 @@ What appending obliges here, beyond that section:
 
 `glossary.md` is derived from the outline's term ledger, so the ledger moves first and the glossary follows it.
 
-- **A term arrives:** a ledger row for the chapter that glosses it, then an entry reading `**term** (ch. N) definition`. The definition restates that chapter's own gloss, which `chapter-prose.md § Every part does five things` put inside the sentence that first uses the term, and in a tagged book the paragraph tag names that sentence exactly. An entry saying something its chapter does not is worse than no entry.
+- **A term arrives:** a ledger row for the chapter that glosses it, then an entry reading `**term** (ch. N) definition`. The definition restates that chapter's own gloss, which `chapter-prose.md § Glosses` put inside the sentence that first uses the term, and in a tagged book the paragraph tag names that sentence exactly. An entry saying something its chapter does not is worse than no entry.
 - **A term retires:** remove both. An entry with no chapter behind it is a definition the book does not make.
 - **A term's owning chapter changes:** the `(ch. N)` moves with it.
 
@@ -223,6 +259,7 @@ What appending obliges here, beyond that section:
 
 - **It does not bind.** See step 6.
 - **It does not judge the prose.** `check-book.sh` checks structure; a clean run means the folder will bind, and says nothing about whether the book reads well.
+- **It does not recreate a book.** It says when one is due (§ When to stop editing in place), and `/createbook` does the work.
 - **It does not repoint references wholesale.** It repoints the citations its own edit moved. A book replacing another book is a different job, at `createbook/SKILL.md § When the book supersedes one that already exists`.
 - **It does not verify that a repointed tag now names the right paragraph.** `check-references.sh` verifies that a cited `[N-M]` resolves, and that it still names the prose it named at the baseline. Neither answers whether the paragraph supports the sentence citing it, and a tag moved by hand from one real paragraph to another real one satisfies both checks. That one is verified by reading.
 

@@ -1,0 +1,12 @@
+{
+  "subtitle": "One chapter with one paragraph past the 90-word stop",
+  "byline": "Claude Opus 5",
+  "description": [
+    "A fixture for check-book.sh's paragraph stop. Under the guide profile a paragraph over 90 words fails the book; under narration the same paragraph is reported and the book passes, so every narration book written before the check keeps passing.",
+    "run.sh checks both halves: this folder as it stands, and a copy with the profile line removed."
+  ],
+  "profile": "guide",
+  "tags": true,
+  "provenance": true,
+  "overview": true
+}

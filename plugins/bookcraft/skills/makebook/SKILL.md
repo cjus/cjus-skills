@@ -362,6 +362,19 @@ Two editions bind from one folder. The default is unchanged and is what every bo
 
 **The endnotes carry the rows rather than cutting them**, so nothing is lost and `check-provenance.sh` still reads them out of the source file.
 
+**A guide book declares the reading edition, so its readers get it by default.** `/createbook` writes `"edition": "reading"` into every `guide` book's `book.json` (`createbook/SKILL.md § 4`), because a guide is handed to people who read it, and the tags and source rows are the operator's. A bind with no flag writes the reader's copy. The operator's copy, with tags on the page and the source rows in the header, is the same folder bound with `--no-reading-edition` and its own `--out`, since both editions default to the same filename:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/makebook/scripts/build-book.py \
+  "Book Title" books/<book-slug> --no-reading-edition \
+  --out books/<book-slug>/<title-slug>-editor.pdf
+```
+
+That still writes two files, a PDF and an EPUB, so § Every run writes both formats holds for each edition.
+
+**Display names replace source keys in the header, in both editions.** `book.json` may give a source a `display` name beside its path (`createbook/SKILL.md § 4`). Where it does, the chapter header shows that name wherever its `Draws on` or `Fills in` row named the key, and the reading edition's endnotes are built from the header after the swap, so they show it too. `` `CLAUDE.md § Teaching Calendar` `` prints as "the course calendar § Teaching Calendar". The markdown keeps the key, which is what `check-provenance.sh` opens. A key with no display name prints as written, and `check-book.sh` reports a path-like one in the header before the bind.
+
 ## Callouts
 
 A chapter written under `/createbook`'s **guide** profile may carry four labelled block quotes, and this binder renders each as a boxed aside with its label as the box title, in both formats:
@@ -391,7 +404,7 @@ A chapter written under `/createbook`'s **guide** profile may carry four labelle
 
 A file named `<book-slug>-appendix-<N>-<slug>.md` is bound as an appendix: after the chapters, before the glossary, labelled **Appendix N** rather than **Chapter N** on its own page and in the Contents. A plain filename sort still gives the reading order, because `a` sorts after every digit.
 
-The appendix kind comes from `/createbook`'s guide profile; see `createbook/reference/chapter-prose.md § Appendices` for what belongs in one.
+The appendix kind comes from `/createbook`'s guide profile; see `createbook/reference/guide.md § Appendices` for what belongs in one.
 
 ## Type size
 
@@ -486,7 +499,7 @@ reason the ceiling is 17, and what the sweep did not cover.
 - US Letter. The page area is 0.95in top and bottom, 0.7in left and right; body padding holds the text to a 6.0in measure, which leaves 0.55in either side for a wide figure to bleed into. Body is a serif face at 14pt, or at whatever `--type-size` asks for.
 - The page number and running title print on every page, the cover included, because Chromium applies one footer template to the whole document. Contents and index numbers are physical PDF pages, so they match the reader's page indicator.
 - A render takes a few seconds per pass; most of it is Chromium's cold start. The EPUB adds well under a second, since nothing renders.
-- Chapters carry an invisible white marker used to locate them in the text layer. It is not visible in print, but it is present if someone selects the text. The EPUB carries no markers: nothing reads them there, and white 5pt text in a reflowable book is litter.
+- **The page markers are out of the finished PDF's text layer.** Each pass plants an invisible white marker (`ZQCH001QZ` and similar) at every chapter, figure and section start, and reads it back through `pdftotext` to find its page. Until 2026-09-24 the markers stayed in the finished PDF, so a screen reader or a copy and paste picked them up. Now the settled book is rendered once more with the markers hidden: `visibility: hidden` keeps their boxes, so no page can move, and paints no text. The run checks that, comparing the two renders page by page with the marker strings taken out, and puts the probed PDF back with a warning if they differ. The EPUB never carried markers.
 - The EPUB is typically a fraction of the PDF's size, because it packages the SVG sources rather than a rendered page for each one.
 
 ## Security

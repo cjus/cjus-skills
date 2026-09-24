@@ -172,7 +172,7 @@ The gate also shows you the **profile**, which is the rule set the whole book is
 | Profile | For | What it changes |
 |---|---|---|
 | `narration` | A book read once, straight through. An explainer, a primer, a long argument | Nothing. These are the rules every book was written under before profiles existed |
-| `guide` (default for a new book) | A book opened at one chapter the week it is needed. A preparation guide, a runbook, a handbook | Chapters stand alone instead of chaining; headings carry the point; four labelled callouts mark what kind of sentence you are reading; numbered procedures; reference matter moves to appendices |
+| `guide` (default for a new book) | A book opened at one chapter the week it is needed. A preparation guide, a runbook, a handbook | Chapters stand alone instead of chaining: each opens by orienting the reader and closes on its main point or next step; headings pass a contents-page test; `## In short` is the one summary; four labelled callouts, one idea each; numbered procedures; reference matter moves to appendices |
 
 **The test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead.
 
@@ -210,6 +210,10 @@ What it produces: a cover, a contents page, one chapter per file in filename ord
 ### The reading edition
 
 `--reading-edition`, or `"edition": "reading"` in `book.json`, binds the same folder with the workshop marks taken down: paragraph tags off the page, and the chapter header's `Draws on` and `Fills in` rows moved to endnotes. **The markdown is never touched**, so the tags other files cite keep resolving and both editions bind from one folder.
+
+**A guide book binds the reading edition by default.** `/createbook` writes the key into every `guide` book's `book.json`, because a guide is handed to readers. The operator's tagged copy is `--no-reading-edition` with its own `--out`.
+
+**Source keys print as their display names**, in the header of either edition and in the reading edition's endnotes, wherever `book.json` gives a source a `display` name. And the invisible markers the build uses to find page numbers are hidden in the finished PDF, so a screen reader or a copy no longer picks up strings like `ZQCH001QZ`.
 
 ### Type size
 
@@ -264,6 +268,10 @@ Two things travel with an edit, or the record stops being one:
 
 - **`OUTLINE.md`** is what the book was written against, so a change to a chapter's scope, terms or anchors moves the outline in the same run.
 - **`glossary.md`** is derived from the outline's term ledger, so a term that arrives or retires reaches it in the same run.
+
+**A new paragraph takes a lettered tag, so nothing renumbers.** A paragraph added after `[5-12]` is `[5-12a]`, and `[5-13]` stays where it is. A paragraph grows only while it stays at 90 words, and new text never goes into a callout, table or list just because those take no tag.
+
+**Some changes are not edits.** When a fact a chapter's plans are built on changes, or a chapter needs several new paragraphs at once, the skill rewrites that one chapter, keeping its number and repointing citations into it. When the chapters' boundaries or order change, or the rules the book was written under do, it says the book is due for a recreate with `/createbook`. Either way it moves any fact a revision put only into the prose into `OUTLINE.md` first, so the rewrite does not drop it.
 
 It runs both checkers before the edit as well as after, because a failure that was already there is not yours and finding that out afterwards costs an hour. It stops on uncommitted changes in the book folder, since those poison the proof that untouched chapters are untouched.
 
@@ -346,8 +354,11 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-book.sh fixtures/provenance               # exits 0
 ./scripts/check-provenance.sh fixtures/provenance         # exits 1, six failures by design
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
+./scripts/check-book.sh fixtures/guide-reports            # exits 0, with seven REPORT lines
 ./fixtures/jq-unrunnable/run.sh                           # exits 0, the jq guard still fires
 ./fixtures/ledger/run.sh                                  # exits 0, --ledger-only still fires
+./fixtures/paragraph-stop/run.sh                          # exits 0, the stop fails a guide and reports under narration
+./fixtures/lettered-tags/run.sh                           # exits 0, every checker accepts [1-2a]
 ```
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.
@@ -356,7 +367,9 @@ Chapter 1 of the provenance fixture holds only passing marks, so a run reporting
 
 **An expected exit code is not an assertion on its own.** `fixtures/provenance/` exited 1 under `check-book.sh` for a year, for a structural reason unrelated to provenance, and an exit-code-only suite would have passed it the whole time while reporting nothing about what the folder exists to check. So `test-fixtures.sh` pairs every expectation with a string the output has to carry, and a folder covered by neither a manifest row nor a `run.sh` fails the run rather than going quiet.
 
-**Three fixtures are scripts rather than folders to check.** A book folder cannot express a `PATH` to manipulate or a mutated copy to compare against, so those carry a `run.sh` beside them and the suite runs it. `jq-unrunnable/run.sh` runs `check-book.sh` three times against its own fully-declared book: with a working `jq`, expecting the three modes to read `required`; with a `jq` that exits 126, expecting the run to stop; and with no `jq` on `PATH` at all, expecting the documented fallback, which grades in the weakest mode and says so. No one of the three passes for the right reason alone — without the second the guard could be deleted and nothing would say so, without the first a checker that rejected every book would pass, and without the third a CI runner with no `jq` would grade every folder in the weakest mode while still reporting success. `ledger/run.sh` covers `check-provenance.sh --ledger-only`, and `check-claims/fixtures/appendix/run.sh` covers the appendix rules.
+**`guide-reports` passes and draws every report.** A `REPORT` line fails nothing: it is a long sentence, a callout holding two ideas, a summary copying its chapter, a phrase recurring across chapters, or a path-like source key in a header. The manifest row names each one, so a report that stops firing fails the suite.
+
+**Five fixtures are scripts rather than folders to check.** A book folder cannot express a `PATH` to manipulate or a mutated copy to compare against, so those carry a `run.sh` beside them and the suite runs it. `jq-unrunnable/run.sh` runs `check-book.sh` three times against its own fully-declared book: with a working `jq`, expecting the three modes to read `required`; with a `jq` that exits 126, expecting the run to stop; and with no `jq` on `PATH` at all, expecting the documented fallback, which grades in the weakest mode and says so. No one of the three passes for the right reason alone — without the second the guard could be deleted and nothing would say so, without the first a checker that rejected every book would pass, and without the third a CI runner with no `jq` would grade every folder in the weakest mode while still reporting success. `ledger/run.sh` covers `check-provenance.sh --ledger-only`, and `check-claims/fixtures/appendix/run.sh` covers the appendix rules. `paragraph-stop/run.sh` runs one chapter under both profiles, because the 90-word stop fails a guide book and only reports under narration. `lettered-tags/run.sh` runs a revised chapter through all three checkers and mutates it three ways, one broken lettering sequence each.
 
 ---
 
@@ -388,7 +401,9 @@ skills/
   createbook/
     SKILL.md                        the procedure
     NOTES.md                        what is measured and what is asserted
-    reference/chapter-prose.md      the prose specification: shape, voice, budgets
+    reference/chapter-prose.md      the prose rules every chapter follows: shape, voice, budgets
+    reference/guide.md              the guide profile's own rules, with examples
+    reference/narration.md          the narration profile's handoff rules
     scripts/check-book.sh           structure
     scripts/check-provenance.sh     marks pointing out
     scripts/check-references.sh     citations pointing in
