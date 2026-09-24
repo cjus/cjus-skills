@@ -1198,14 +1198,17 @@ def default_description(title: str, chapters: list[dict], src: Path) -> str:
 
 def bind_stamp() -> str:
     """The line both covers print under the byline: when this binding ran, in
-    local time with the zone's abbreviation.
+    local time with the zone's abbreviation, or its UTC offset (+04) where the
+    zone has none.
 
-    It is the bound book's version marker. Two bindings of one folder are
-    otherwise indistinguishable, down to the EPUB's identifier, which is
-    derived from the folder and the title so a re-send replaces the book on a
-    device. Seconds are kept because a rebind after a one-line fix can land
-    inside the same minute. Read once per run by the caller, never per cover,
-    so the PDF, its every settling pass, and the EPUB all carry the same one.
+    It is the bound book's version marker. Two bindings of one folder otherwise
+    look the same to a reader, down to the EPUB's identifier, which is derived
+    from the folder and the title so a re-send replaces the book on a device.
+    The PDF's CreationDate and the EPUB's dcterms:modified do record a time,
+    but only in metadata a reader never sees. Seconds are kept because a
+    rebind after a one-line fix can land inside the same minute. Read once per
+    run by the caller, never per cover, so the PDF, its every settling pass,
+    and the EPUB all carry the same one.
     """
     return f"Created: {datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}"
 

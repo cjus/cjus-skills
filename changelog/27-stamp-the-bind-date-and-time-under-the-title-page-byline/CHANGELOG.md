@@ -18,5 +18,9 @@ EPUB `/makebook` produces, so the stamp serves as the bound book's version marke
   itself would disagree with its own EPUB.
 - Flushed the EPUB cover's byline left. It picked up `p`'s 1.2em indent whenever a subtitle
   preceded it, and the stamp beneath it would have been indented only some of the time.
-- Measured the cost on the PDF cover: 21pt at every `--type-size`, since the stamp's type and
-  margins are fixed.
+- Measured the cost on the PDF cover: 21pt with a byline and 36pt without one, the same at
+  every `--type-size`, since the stamp's type and margins are fixed. The first note said a
+  flat 21pt. The pre-test review caught that the no-byline cover had been checked for fit but
+  never measured.
+- Close review: bumped bookcraft from 1.5.0 to 1.6.0. Behavior changes have taken a minor bump,
+  and without one, installed copies are never offered the update.

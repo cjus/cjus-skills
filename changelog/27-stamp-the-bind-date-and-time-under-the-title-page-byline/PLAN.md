@@ -53,9 +53,14 @@ All three are in `plugins/bookcraft/skills/makebook/scripts/build-book.py`:
   page and the generated EPUB cover art, and that the cover still fits on one page. The
   `guide` fixture was bound at 11.8, 14 and 17pt, plus a copy with no byline. In each, the PDF
   and the EPUB carried the same stamp, page 2 was Contents, and there was no cover warning.
-  The stamp costs a fixed 21pt (about 0.29in) of cover height at every size, because none of
-  it scales. A cover within 21pt of spilling on main now spills, and the existing
-  `ZQCOVERENDQZ` warning reports it.
+  Measured against main in the PDF text layer, the stamp pushes the description down 21pt
+  (about 0.29in) with a byline and 36pt (0.5in) without one. With no byline the stamp takes
+  over the byline's whole slot. Each cost is the same at every size, because none of the
+  cover's lettering scales. A cover within that distance of spilling on main now spills, and
+  the existing `ZQCOVERENDQZ` warning reports it.
+
+**Status (2026-09-24):** all five phases are done. The pre-test and close reviews both approved.
+At close, bookcraft was bumped from 1.5.0 to 1.6.0 so installed copies are offered the change.
 
 ## Open Questions
 
@@ -75,3 +80,13 @@ None open. The operator answered all six on 2026-09-24:
 - **Reproducibility override:** none. No `SOURCE_DATE_EPOCH` or equivalent.
 
 ## Deferred
+
+- No automated check binds a book. `test-fixtures.sh` and the fixtures workflow never run
+  `build-book.py`, so a green CI says nothing about this branch; the manual binds are the only
+  evidence. The symptom would be a `build-book.py` regression shipping with CI green. Worth
+  revisiting when the workflow gains Chromium and poppler for another reason. Raised by the
+  pre-test review. Filed as #32 at close.
+- Every fixture `book.json` sets `byline` to an AI model's name, and the bound covers print it.
+  The pre-test review asked whether that conflicts with the repo's no-attribution rule. It is
+  by design: #10 made `/createbook` write the name of the model that wrote the chapters as the
+  byline (`createbook/SKILL.md § 4`), and the fixtures follow that rule.
