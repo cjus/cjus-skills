@@ -213,7 +213,7 @@ What it produces: a cover, a contents page, one chapter per file in filename ord
 
 **A guide book binds the reading edition by default.** `/createbook` writes the key into every `guide` book's `book.json`, because a guide is handed to readers. The operator's tagged copy is `--no-reading-edition` with its own `--out`.
 
-**Source keys print as their display names**, in the header of either edition and in the reading edition's endnotes, wherever `book.json` gives a source a `display` name. And the invisible markers the build uses to find page numbers are hidden in the finished PDF, so a screen reader or a copy no longer picks up strings like `ZQCH001QZ`.
+**Path-like source keys print as their display names** in the header's `Draws on` and `Fills in` rows, in either edition and so in the reading edition's endnotes, wherever `book.json` gives the source a `display` name. A key that already reads as a name, such as `syllabus`, is left as written. And the invisible markers the build uses to find page numbers are hidden in the finished PDF, so a screen reader or a copy no longer picks up strings like `ZQCH001QZ`.
 
 ### Type size
 

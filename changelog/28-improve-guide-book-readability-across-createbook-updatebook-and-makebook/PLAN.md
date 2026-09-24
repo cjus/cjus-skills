@@ -58,9 +58,12 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 - [x] Phase 6: Change `/makebook`'s bind. Give readers of a guide book the reading edition,
       swap in display names in the header and the endnotes, and keep the chapter-locating
       markers out of the PDF's text layer.
-- [ ] Phase 7: Validation. Redraft one teaching chapter and one administrative chapter under
+- ~~Phase 7: Validation. Redraft one teaching chapter and one administrative chapter under
       the changed rules, from the same outline rows and sources, and compare them blind with
-      the current versions.
+      the current versions.~~ **Split to #34, 2026-09-24, by operator decision.** It needs the
+      operator as the reader and runs in the source repo, and the rules only bite when a book
+      is next written, so they merge now. The reference guide is not recreated until #34 has
+      run.
 
 ## Open Questions
 
@@ -109,6 +112,18 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
   `jq` and not the Chromium the binder drives, and a skipped fixture fails under `--strict`.
   The display-name swap is a pure function and is covered by `makebook/fixtures/display-names/`;
   the hidden page markers were verified by hand on `fixtures/guide/`. Found 2026-09-24.
+- **Overlapping windows in the recurring-phrase report.** One eight-word stock phrase fills
+  several of the ten report slots. Report-only. Pre-test review suggestion, 2026-09-24.
+- **A code-span key followed by `:` or `#`** (`` `CLAUDE.md:42` ``) is neither swapped for its
+  display name nor reported. Recorded in `createbook/NOTES.md`. Found 2026-09-24.
+- **The header report skips display-named path keys outside the source rows**, so one in
+  `Act on this` prints unreported. Same on `main`. Close review suggestion, 2026-09-24.
+- **The binder's appendix filename pattern is unanchored**, so a chapter slug holding
+  `-appendix-N-` binds as an appendix while the checkers now read it as a chapter. Predates
+  this branch. Close review, 2026-09-24. **Ticketed as #35.**
+
+Triaged at close, 2026-09-24: #35 filed for the appendix pattern, a pre-existing correctness
+defect; the other four dropped, each recorded in `createbook/NOTES.md` or the close review.
 
 ## About Ticket
 
