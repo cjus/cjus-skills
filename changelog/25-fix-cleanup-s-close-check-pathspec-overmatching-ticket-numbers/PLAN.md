@@ -84,4 +84,5 @@ None open.
   222, 237`. This branch's own `/pr:close` will hit it.
 - With worktrees disabled, cleanup's step 0 resolves a branch but no `$WORKTREE_PATH`, and
   `git -C ""` leaves the working directory unchanged, so step 1 reads whatever checkout the
-  session is in rather than the branch.
+  session is in rather than the branch. The review found it reaches further: step 3 re-derives
+  `BRANCH` the same way, so steps 6 and 8 can act on the session's branch. Pre-existing on `main`.

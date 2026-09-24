@@ -58,8 +58,8 @@ In `plugins/pr/skills/cleanup/SKILL.md`:
 
 A scratch script built one fresh repo per case. Each repo had closed decoys `16-decoy`, `26-decoy`
 and `14-phases-6-9` committed on the default branch, and plan-folder files left untracked, as a
-close leaves them. The new-rule rows run the pattern and pathspecs lifted from the edited
-`SKILL.md`, so they check the skill's text rather than a copy of it.
+close leaves them. The new-rule rows ran the pattern and pathspecs copied verbatim from the edited
+`SKILL.md`.
 
 | Case | Old rules | New rules |
 |---|---|---|
@@ -82,3 +82,40 @@ nothing else, and tickets 2, 5 and 6 return no rows. `test-acceptance.sh plugins
 ### Phase 5 — version (2026-09-23)
 
 `pr` bumped from 0.2.3 to 0.2.4 so installed copies pick up the new `cleanup` skill.
+
+### Pre-test review — a prefix regression, fixed (2026-09-23)
+
+The review (`pr-review-2026-09-23.md`) returned NEEDS_DISCUSSION on one in-scope finding. Both
+the finding and the tag suggestion were confirmed in a scratch repo before anything changed.
+
+**Fixed: step 0 found no workspace where `branchPrefix` does not end in `/`.** `/pr:ticket` builds a
+branch by concatenation (`ticket/SKILL.md:67`) and the schema allows any string, so `feature-6-x` is
+a valid branch. The path rule on `main` found it; the new pattern did not. The pattern now opens
+with `(<branchPrefix>)?`, the group `reference/config.md:131` already carries. The alternative,
+declaring that a prefix must end in `/`, would have narrowed a documented setting to cover a
+regression this branch introduced.
+
+**Fixed: `%(refname:short)` became `%(refname:lstrip=2)`.** A tag named like the branch makes `short`
+print `heads/feature/6-…`, which yields the wrong slug, so step 1 read a closed ticket as never
+closed.
+
+**Also taken from the review:** the multiple-rows bullet now says which rows can be chosen when
+worktrees are on, and the flat-layout incident says the loose glob "opened the next gap" rather than
+"caused the next incident", since the observed overmatch still produced the right verdict.
+
+**Not taken:** step 3's re-assignment of `BRANCH`. It is optional, and it matches step 0's value for a
+linked worktree. The worktrees-off case where it does differ joins that Deferred item.
+
+**Unverified assumption:** the incident repo that nested an owner segment is taken to have carried it
+in the branch name too, as `/pr:start`'s folder rule requires. If it lived only in the folder, step 1
+finds nothing there and asks, defaulting to no.
+
+The repro script now reads the format, pattern and pathspecs out of `SKILL.md` each time it runs,
+and gained two cases:
+
+| Case | New rules |
+|---|---|
+| L. `branchPrefix: feature-`: `feature-6-dash` closed, beside `feature-16-x` and `feature-14-phases-6-9` | resolves `feature-6-dash` only; `verified` |
+| M. a tag named `feature/6-tagged` beside the branch | resolves `feature/6-tagged`; `verified` |
+
+New rules: 20 of 20 pass. CI on the first push passed on macOS and Ubuntu.

@@ -36,18 +36,18 @@ Steps 4b and 4c are the exception to "never skip": they are bookkeeping rather t
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-lifecycle-state.mjs" --offline --text
 git worktree list --porcelain
-git for-each-ref --format='%(refname:short)%09%(worktreepath)' refs/heads \
-  | grep -iE '^([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
+git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
+  | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
 ```
 
-Drop the `(<ticketPrefix>-)?` group when `ticketPrefix` is empty.
+Drop the `(<branchPrefix>)?` and `(<ticketPrefix>-)?` groups when those settings are empty, and escape any regex metacharacters in them. `lstrip=2` rather than `short`, which prints `heads/…` when a tag shares the branch's name and so yields the wrong slug.
 
-**Match the branch name, never the worktree path.** The pattern requires the ticket to open a segment of the branch name and to end at its hyphen, so `/pr:cleanup 6` finds `feature/6-…`, a nested `feature/<owner>/6-…` and, with `ticketPrefix` set to `abc`, `feature/abc-6-…`, and not `feature/16-…`, `feature/66-…`, `feature/6x-…` or `feature/14-phases-6-9`. A path cannot be anchored that way: `6-` is a substring of `…/feature/16-…`, and a worktree root's own name can carry digits.
+**Match the branch name, never the worktree path.** The pattern requires the ticket to open a segment of the branch name, or to follow `branchPrefix` directly, and to end at its hyphen. So `/pr:cleanup 6` finds `feature/6-…`, a nested `feature/<owner>/6-…`, `feature-6-…` where `branchPrefix` is `feature-`, and, with `ticketPrefix` set to `abc`, `feature/abc-6-…`; and not `feature/16-…`, `feature/66-…`, `feature/6x-…` or `feature/14-phases-6-9`. A path cannot be anchored that way: `6-` is a substring of `…/feature/16-…`, and a worktree root's own name can carry digits.
 
 Each row is a branch and the worktree it is checked out in. That second field is empty when the branch is checked out nowhere, and is the main checkout (the first `worktree` entry above) when worktrees are off and the branch is checked out there. Neither is a workspace: step 5 must never be handed the main checkout.
 
 - **No row checked out in a worktree of its own** → where `worktrees.enabled` is false the branch has no worktree, so resolve the branch by name from the rows and skip steps 5 and 7; no rows at all means there is no branch, so report that and stop. Where it is true, report "no workspace found for ticket $1" and stop.
-- **Multiple rows** → list them and ask.
+- **Multiple rows** → list them and ask. Where `worktrees.enabled` is true, only a row checked out in a worktree of its own can be chosen.
 
 Set `WORKTREE_PATH` and `BRANCH` from the row, and `SLUG` to the branch minus `branchPrefix`. **Echo them immediately**, with the full slug and never the bare number.
 
@@ -260,7 +260,7 @@ Every gate here was added after a real failure. They are retained because they e
 
 **A close gate that cried wolf.** An earlier version keyed the "was this closed?" check on a terminal tab label that nothing reliably wrote, so it prompted on correctly closed tickets. Because it prompted on a *destructive* action, its practical effect was training the operator to click through the guard. It was replaced with artifact detection, which is written at a point the close can only reach after every halting gate has passed. **A guard that false-positives is worse than no guard.**
 
-**An artifact pathspec that assumed a flat layout.** In a repo that nested an owner segment under the changelog root, the gate found zero artifacts on a correctly closed ticket and false-negatived. The loose glob that fixed it caused the next incident; step 1 now reads the exact slug, which carries any nesting with it.
+**An artifact pathspec that assumed a flat layout.** In a repo that nested an owner segment under the changelog root, the gate found zero artifacts on a correctly closed ticket and false-negatived. The loose glob that fixed it opened the next gap; step 1 now reads the exact slug, which carries any nesting with it.
 
 **A glob that matched other tickets' closes.** The `*` the flat-layout fix put before the ticket number matched leading digits and mid-slug text as well as an owner segment, so `/pr:cleanup 6` matched the artifacts of tickets 16 and 26 alongside its own. Had ticket 6's folder lacked `COMMITMSG.md`, the gate would have reported the close verified off another ticket's record and proceeded without prompting, in front of a destructive step. Step 0's path substring had the same gap: with only `feature/16-…` checked out, it would resolve ticket 16's workspace for ticket 6. Step 0 now anchors on a segment of the branch name and step 1 on the exact slug.
 
