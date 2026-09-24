@@ -66,8 +66,10 @@ Prefer GitHub's own verdict where a PR exists:
 
 ```bash
 git fetch origin "$DEFAULT_BRANCH"
-gh pr view --repo "$REPO" --json mergeable,mergeStateStatus,baseRefName,headRefName
+gh pr view "$BRANCH" --repo "$REPO" --json mergeable,mergeStateStatus,baseRefName,headRefName
 ```
+
+**Every `gh pr view` and `gh pr edit` in this skill passes the branch.** With `--repo`, `gh pr view` refuses to infer the PR ("argument required when using the --repo flag"), while `gh pr edit` silently falls back to the checkout. "No pull requests found for branch" here means no PR exists yet. Use the local check.
 
 - `mergeable: "CONFLICTING"`, or `mergeStateStatus: "DIRTY"` → **stop.** The branch must be rebased or merged before the close continues.
 - `mergeable: "UNKNOWN"` → GitHub is still computing. Fall back to the local check.
@@ -207,7 +209,7 @@ gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
   --title "<resolved issue title>" \
   --body-file "<changelogRoot>/<slug>/pr-summary-<date>.md"
 
-gh pr edit --repo "$REPO" --body "$(gh pr view --repo "$REPO" --json body --jq .body)
+gh pr edit "$BRANCH" --repo "$REPO" --body "$(gh pr view "$BRANCH" --repo "$REPO" --json body --jq .body)
 
 Closes #$N"
 ```
@@ -219,7 +221,7 @@ The title comes from the issue resolved just above, so it cannot drift from the 
 Before appending to an existing description, ask the **same** question the assertion below asks:
 
 ```bash
-gh pr view --repo "$REPO" --json closingIssuesReferences \
+gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
   --jq "[.closingIssuesReferences[].number] | index($N) != null"
 ```
 
@@ -234,7 +236,7 @@ gh pr view --repo "$REPO" --json closingIssuesReferences \
 This assertion is the point of the step, and it runs whether the PR was just created or already existed:
 
 ```bash
-gh pr view --repo "$REPO" --json body,closingIssuesReferences \
+gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences \
   --jq "[(.body | length), ([.closingIssuesReferences[].number] | index($N) != null)]"
 ```
 

@@ -16,6 +16,8 @@ This is deliberately **not** a recap of the conversation. It examines git, GitHu
 node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-lifecycle-state.mjs" --text
 ```
 
+Take the branch, repo and default branch from that.
+
 **The distinction that matters:** per-branch files (`PLAN.md`, `CHANGELOG.md`, `pr-summary-*.md`, `pr-review-*.md`) live in `<changelogRoot>/<slug>/`. Repo-global documents, including the assertions file and the continuity folder, live at the repo root and are **shared across every branch**. They are never duplicated per branch, so do not look for them inside the branch folder. See `${CLAUDE_PLUGIN_ROOT}/reference/handoff-docs.md`.
 
 ## Step 2. Read the branch's documents
@@ -70,8 +72,10 @@ git stash list
 ## Step 6. Check GitHub state
 
 ```bash
-gh pr view --repo "$REPO" --json state,title,mergeable,reviewDecision,statusCheckRollup,comments
+gh pr view "$BRANCH" --repo "$REPO" --json state,title,mergeable,reviewDecision,statusCheckRollup,comments
 ```
+
+**Always pass the branch.** With `--repo`, `gh pr view` does not infer the PR from the checkout: it stops with "argument required when using the --repo flag". "No pull requests found for branch" means there is no PR yet. Report that; it is not an error.
 
 Review comments needing a reply, CI status, merge conflicts.
 
