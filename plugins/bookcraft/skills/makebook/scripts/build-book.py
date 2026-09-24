@@ -696,14 +696,20 @@ PARA_TAG_RE = re.compile(r"^\[A?\d+-\d+[a-z]?\] ", re.M)
 # An appendix is a chapter-kind file holding reference matter, bound after the
 # chapters and before the glossary
 # (createbook/reference/guide.md § Appendices). The filename is what
-# says so, and it is the same pattern check-book.sh recognises: `-appendix-N-`
-# where a chapter carries `-NN-`. `a` sorts after every digit, so the plain
-# filename sort that orders the book already puts these last.
+# says so: `<book-slug>-appendix-N-<slug>.md`, `-appendix-N-` where a chapter
+# carries `-NN-`. `a` sorts after every digit, so the plain filename sort that
+# orders the book already puts these last.
+#
+# Anchored the way check-book.sh, check-provenance.sh and check-references.sh
+# anchor it: the book slug is letters and dashes only, so the word has to follow
+# it directly. Unanchored, a chapter slug that happens to hold the word,
+# `sql-02-appendix-1-of-the-standard.md`, bound as Appendix 1 while every
+# checker read it as chapter 2.
 #
 # The binder still numbers every file sequentially for its own purposes --
 # probes, figure numbers, the index -- and that number is not what the reader
 # is shown. What they are shown is the label.
-APPENDIX_FILE_RE = re.compile(r"-appendix-(\d+)-[a-z0-9-]+\.md$")
+APPENDIX_FILE_RE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-[a-z0-9-]+\.md$")
 
 # The two header rows the reading edition moves to chapter endnotes. They are
 # the operator's rows rather than the reader's: an inventory of sources at the
@@ -1873,7 +1879,10 @@ def plan_columns(tables: list[dict]) -> dict[tuple[int, int], list[float]]:
 
     Keyed by (chapter number, index of the table within that chapter), which is
     stable because assembly is deterministic and the measurement walks the
-    document in the same order.
+    document in the same order. The chapter number is the binder's sequential
+    `num`, read off the section's `data-ch`, which is the one inject_colgroups
+    looks up by. The printed label is not unique once a book has appendices,
+    since Appendix 3 and Chapter 3 both print a 3.
     """
     plan: dict[tuple[int, int], list[float]] = {}
     seen: dict[int, int] = {}
@@ -1961,7 +1970,7 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
                                     else str(ch["num"])))
         body = inject_colgroups(body, ch["num"], col_plan or {})
         out.append(
-            '<section class="chapter">'
+            f'<section class="chapter" data-ch="{ch["num"]}">'
             '<div class="chapter-head">'
             '<div class="chapter-eyebrow">'
             f'<span class="chapter-number">'
@@ -2192,9 +2201,14 @@ TABLE_FIT_JS = """
   const out = [];
   for (const tbl of document.querySelectorAll('.chapter table')) {
     const sec = tbl.closest('section.chapter');
+    // Keyed on the binder's own sequential number, which is what
+    // inject_colgroups looks the plan up by. The printed label is not a key:
+    // "Appendix 3" and "Chapter 3" both read as 3, so keying on it filed an
+    // appendix's plan where the appendix never asked for it. The label is
+    // still what the warning names the table by.
+    const ch = sec && sec.dataset.ch ? parseInt(sec.dataset.ch, 10) : null;
     const numEl = sec && sec.querySelector('.chapter-number');
-    const m = numEl && numEl.textContent.match(/(\\d+)/);
-    const ch = m ? parseInt(m[1], 10) : null;
+    const label = numEl ? numEl.textContent.trim() : null;
 
     const rows = Array.from(tbl.rows);
     if (!rows.length) continue;
@@ -2282,6 +2296,7 @@ TABLE_FIT_JS = """
     // are what the author will search the markdown for.
     out.push({
       ch: ch,
+      label: label,
       cols: colNatural.length,
       natural_pt: natural * PT,
       avail_pt: avail * PT,
@@ -3050,9 +3065,6 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
             page(f"chap{ch['num']:03d}", epub_chapter_href(ch["num"]),
                  ch["title"], body))
 
-    cover = page("cover-page", "cover.xhtml", title,
-                 epub_cover_body(title, cfg, chapters, src, stamp))
-
     front = []
     # Before the figures, as it sits before everything in the PDF.
     if front_matter_path is not None and front_matter_path.is_file():
@@ -3111,10 +3123,21 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
             book.set_cover("cover.png", png, create_page=False)
             generated_cover = True
 
+    # The text cover page, unless the cover art is a picture of it. A reader
+    # opens on the cover art, so a generated cover followed by this page showed
+    # the same title, byline and stamp twice in a row. Declared art is the
+    # author's own image rather than a render of this page, so the page stays
+    # behind it. Not built at all rather than built and left out of the spine:
+    # page() adds to the manifest, and nothing links it once the spine does not.
+    cover = (None if generated_cover else
+             page("cover-page", "cover.xhtml", title,
+                  epub_cover_body(title, cfg, chapters, src, stamp)))
+
     book.toc = epub_toc(chapters, chapter_items, cfg, front, back)
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
-    book.spine = [cover, "nav"] + front + chapter_items + back
+    book.spine = (([cover] if cover else []) + ["nav"] + front
+                  + chapter_items + back)
 
     epub.write_epub(str(out_path), book)
     return {"path": out_path, "figures": len(figures), "entries": len(entries),
@@ -3481,7 +3504,9 @@ def main(argv: list[str]) -> int:
               f"longest word:")
         for t in wide[:6]:
             short, i = worst_column(t)
-            ch = f"ch {t['ch']}" if t["ch"] else "front matter"
+            # The printed label, so an appendix's table is reported as
+            # Appendix 3 rather than by the sequential number it is keyed on.
+            ch = t.get("label") or "front matter"
             shown = ", ".join(t["broken"][:4])
             more = f", +{len(t['broken']) - 4} more" if len(t["broken"]) > 4 else ""
             name = ""
