@@ -1540,8 +1540,10 @@ if [ "$ovw_fallback" -gt 0 ]; then
   echo "      end \"$ovw_heading\", so it was ended at the next part heading, or at the"
   echo "      end of the file where there was none. Everything inside that span counts"
   echo "      as overview rather than prose and is exempt from the tag and provenance"
-  echo "      sweeps, so the figures above understate the prose and a chapter's opening"
-  echo "      paragraph went unswept. Declaring \"tags\" ends the section exactly."
+  echo "      sweeps and from the paragraph stop, so the figures above understate the"
+  echo "      prose, a chapter's opening paragraph went unswept, and under the guide"
+  echo "      profile its words count toward the summary's length and shared-run"
+  echo "      reports. Declaring \"tags\" ends the section exactly."
 fi
 
 # Say out loud what was not examined. A checker's silence about a file it never

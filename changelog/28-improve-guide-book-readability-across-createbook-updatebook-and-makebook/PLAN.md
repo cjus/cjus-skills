@@ -105,10 +105,10 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 ## Deferred
 
-- **A bind test in CI.** The fixture suite cannot exercise `build-book.py`, because CI
-  installs Python and `jq` and not the Chromium the binder drives, and a skipped fixture fails
-  under `--strict`. Phase 6's changes (display-name swap, hidden page markers) were verified by
-  hand on `fixtures/guide/` and `fixtures/guide-reports/`. Found 2026-09-24.
+- **A bind test in CI.** The fixture suite cannot bind a book, because CI installs Python and
+  `jq` and not the Chromium the binder drives, and a skipped fixture fails under `--strict`.
+  The display-name swap is a pure function and is covered by `makebook/fixtures/display-names/`;
+  the hidden page markers were verified by hand on `fixtures/guide/`. Found 2026-09-24.
 
 ## About Ticket
 

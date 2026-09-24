@@ -373,7 +373,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
 
 That still writes two files, a PDF and an EPUB, so § Every run writes both formats holds for each edition.
 
-**Display names replace source keys in the header, in both editions.** `book.json` may give a source a `display` name beside its path (`createbook/SKILL.md § 4`). Where it does, the chapter header shows that name wherever its `Draws on` or `Fills in` row named the key, and the reading edition's endnotes are built from the header after the swap, so they show it too. `` `CLAUDE.md § Teaching Calendar` `` prints as "the course calendar § Teaching Calendar". The markdown keeps the key, which is what `check-provenance.sh` opens. A key with no display name prints as written, and `check-book.sh` reports a path-like one in the header before the bind.
+**Display names replace path-like source keys in the header, in both editions.** `book.json` may give a source a `display` name beside its path (`createbook/SKILL.md § 4`). Where it does and the key looks like a repo path, the chapter header shows that name wherever its `Draws on` or `Fills in` row named the key, keeping any article the row already put in front of it, and the reading edition's endnotes are built from the header after the swap, so they show it too. `` `CLAUDE.md § Teaching Calendar` `` prints as "the course calendar § Teaching Calendar". The markdown keeps the key, which is what `check-provenance.sh` opens. A key that already reads as a name, such as `syllabus`, is never swapped. A path-like key with no display name prints as written, and `check-book.sh` reports it in the header before the bind.
 
 ## Callouts
 

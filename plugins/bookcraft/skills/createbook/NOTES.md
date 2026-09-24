@@ -951,6 +951,18 @@ vocabulary, which recurs by design; the cap keeps that from burying the rest.
 **The header check reports a repo-path key only where it has no display name**, because
 Phase 6 makes `/makebook` swap a named key for its name in the header and the endnotes.
 
+**Measured against the two real guide books, 2026-09-24.** An independent review ran the new
+checker over both: 46 and 7 paragraph-stop failures, the 46 matching the ticket's own count,
+and every paragraph spot-checked carried the reported word count. Output was identical under
+BSD awk, gawk 5.2.1 and mawk 1.3.4. The run is slower, about 30 seconds where it was 19.5 on
+a 105,000-word book, from the extra sweeps per chapter.
+
+**One known gap, disclosed and not fixed.** In a guide book declaring neither tags nor
+provenance, `## In short` has no marked end and runs to the first part heading, so the
+opening paragraph sits inside it: it escapes the paragraph stop and its words count toward
+the summary reports. The run's existing fallback note now says so. Every book this skill
+writes declares tags, which ends the section exactly.
+
 **Fixtures.** `fixtures/guide-reports/` is a passing guide book that draws every report, and
 its manifest row names each one and asserts that a key with a display name is not reported.
 `fixtures/paragraph-stop/run.sh` runs one chapter under both profiles and asserts the fail
@@ -979,6 +991,22 @@ reference guide's `Draws on` rows named `CLAUDE.md § Teaching Calendar` althoug
 edition renders it, so the endnotes get it too, and `check-book.sh` reports a path-like
 header key that has no display name to swap.
 
+**The swap touches only path-like keys, and only in the `Draws on` and `Fills in` rows**,
+and the first three versions did not. A key like `syllabus` already reads as a name, and
+the header writes it as one; swapping it for a display name starting with "the" printed
+"the the syllabus" in 34 header rows of the two real guide books. Now only a key passing
+`check-book.sh`'s repo-path test is swapped, and an article already in front of a key is
+kept in place of the name's own. On rows, the first two versions did not stay put either. The first ran on everything above the first H2, which in a narration
+chapter with no `## In short` includes the opening paragraph. The second ran on every table
+row, and the branch review found it printing "Check your the syllabus" in the `Act on this`
+row, the one row a reader of the reading edition still sees, because `syllabus` is a key
+whose display name is "the syllabus". A key that is an ordinary word appears in the author's
+prose as that word, so only the rows that name sources are the swap's to change.
+`makebook/fixtures/display-names/run.sh` lifts the function out of `build-book.py` and runs
+it under plain `python3`, so CI covers it without a bind; each earlier version fails it.
+**Not covered:** a key in a code span followed by `:` or `#`, such as `` `CLAUDE.md:42` ``,
+is left as written, and `check-book.sh` does not report it because the key has a name.
+
 **The page markers are out of the finished PDF's text layer.** They are how every page
 number is found, and `pdftotext` returned `ZQCH016QZ`, `ZQTOCSTARTQZ` and the rest. The
 settled book is now rendered once more with `.probe{visibility:hidden}`, which keeps each
@@ -992,4 +1020,5 @@ in both editions: the header row read "the course calendar § Week 3" in the def
 edition, the endnote read the same in the reading edition and its EPUB, and
 `notes/policy.md`, which has no display name, printed as written. The suite does not bind,
 because CI installs Python and `jq` and not the Chromium the binder drives, and a skipped
-fixture fails under `--strict`. A bind test is the gap to close if that changes.
+fixture fails under `--strict`. The display-name swap is covered anyway, by the fixture
+above; the hidden markers are not, and a bind test is the gap to close if that changes.

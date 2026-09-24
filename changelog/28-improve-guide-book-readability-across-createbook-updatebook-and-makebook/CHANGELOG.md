@@ -113,3 +113,37 @@ present; it now touches table rows only and leaves existing names alone.
 
 bookcraft bumped to 1.6.0. The suite passes 14 of 14 under `--strict`, and
 `scripts/check-citations.py` resolves all 180 citations.
+
+### 2026-09-24 — /pr:pre-test review fixes
+
+**The display-name swap is scoped to the `Draws on` and `Fills in` rows.** The branch review
+(REQUEST_CHANGES) found it touching every header row, so a key that is an ordinary word
+printed "Check your the syllabus" in the `Act on this` row of the reader's copy. Pinned by
+`makebook/fixtures/display-names/run.sh`, which runs the pure function under plain `python3`
+so CI covers it without a bind; the committed version fails it on exactly that case.
+
+**Suggestions taken:** the marker comparison collapses whitespace before stripping markers,
+as `locate()` does, so a split marker cannot read as a moved page; `check-references.sh`'s
+baseline notes print "appendix 2" rather than "chapter A2"; a stale "five headings" is gone;
+and `/updatebook § Adding prose` says a paragraph with a lettered follower cannot be split
+without a rewrite. **Not taken:** merging overlapping four-word windows in the phrase report,
+which is report-only.
+
+**A citation written `[03-7]` resolves again.** Keeping tag halves as strings had made it
+fail where `main` resolved it through `int()`; `check-references.sh` and
+`check-provenance.sh` now drop leading zeros before the lookup, so behaviour outside the
+book is unchanged. The suite passes 15 of 15.
+
+**The second, independent review found three more, all fixed and pinned.** The swap
+doubled articles ("the the syllabus") in 34 header rows of the two real guide books,
+because it swapped every key with a display name; it now swaps only path-like keys, by
+`check-book.sh`'s own test, and keeps an article already in front of a key.
+`check-references.sh` check 4 read a relettered run (cut `[1-2a]`, reletter `[1-2b]`) as a
+rewording and exited 0; a run whose baseline letters are no longer the start of its
+current letters now counts as a slide. And its unanchored appendix pattern read
+`sql-02-appendix-1-...` as an appendix, a regression; it is anchored as the other two
+checkers anchor it. `lettered-tags/run.sh` gained both check-references cases and
+`display-names/run.sh` the article and word-key cases; each new case fails against the
+committed code. One gap is disclosed rather than fixed: an untagged guide book with no
+marks lets its opening paragraph escape the paragraph stop, and the run's fallback note now
+says so.

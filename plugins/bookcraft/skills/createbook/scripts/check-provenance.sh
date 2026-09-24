@@ -1511,7 +1511,7 @@ def main(argv):
         for line in p.read_text().splitlines():
             m = TAGDEF.match(line)
             if m:
-                defined.add((m.group(1), m.group(2)))
+                defined.add(refs.tag_key(m.group(1), m.group(2)))
     n_chapters = len(chapters)
 
     scan = chapters
@@ -1573,7 +1573,7 @@ def main(argv):
                 if m:
                     census["in-book"] += 1
                     wl_unchecked.append(c)
-                    if (m.group(1), m.group(2)) not in defined:
+                    if refs.tag_key(m.group(1), m.group(2)) not in defined:
                         problem(f"{where}: the mark cites {c}, which the book does not define")
                     continue
                 m = CHAPTER.match(c)

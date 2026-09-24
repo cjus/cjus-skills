@@ -67,7 +67,23 @@ REF = re.compile(r"\bch(?:apter|\.)\s*(\d+)\b", re.I)
 # one appendix passed, uncounted.
 TAG = re.compile(r"\[(A?\d+)-(\d+[a-z]?)\]")
 TAGDEF = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\] ")
-APPENDIX_FILE = re.compile(r"-appendix-(\d+)-")
+
+
+def tag_key(unit, para):
+    """A tag's two halves with leading zeros dropped, so `[03-7]` is `[3-7]`.
+
+    The book spells a tag one way and check-book.sh enforces it, but a referring
+    file sits outside the book, and while the halves were integers a citation
+    written `[03-7]` resolved. Keeping the halves as strings must not quietly
+    start failing it.
+    """
+    m = re.match(r"(A?)0*(\d+)$", unit)
+    p = re.match(r"0*(\d+)([a-z]?)$", para)
+    return (m.group(1) + m.group(2), p.group(1) + p.group(2))
+# Anchored the way check-book.sh and check-provenance.sh anchor it, so a
+# chapter slug that happens to hold the word, `sql-02-appendix-1-of-the-standard.md`,
+# stays chapter 2 in all three tools.
+APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
 CHAPTER_FILE = re.compile(r"-(\d{2,})-")
 
 
@@ -315,7 +331,7 @@ def tag_paragraphs(text):
         if m:
             if key:
                 out[key] = norm(" ".join(buf))
-            key, buf = (m.group(1), m.group(2)), [ln[m.end():]]
+            key, buf = tag_key(m.group(1), m.group(2)), [ln[m.end():]]
         elif key is not None:
             # A provenance mark ends the paragraph the way a blank line does,
             # as it does in check-book.sh's unit sweep. A mark is not prose: a
@@ -361,7 +377,7 @@ def tag_citations(lines):
         if infence:
             continue
         for m in TAG.finditer(ln):
-            yield i, m.group(1), m.group(2)
+            yield (i, *tag_key(m.group(1), m.group(2)))
 
 
 def baseline_paragraphs(book, units, excluded, ref):
@@ -436,14 +452,12 @@ def baseline_paragraphs(book, units, excluded, ref):
     notes = []
     if missing:
         one = len(missing) == 1
-        notes.append(("chapter " if one else "chapters ") +
-                     ", ".join(unit_label(n).split()[-1] if not n.startswith("A") else n for n in missing) +
+        notes.append(", ".join(unit_label(n) for n in missing) +
                      f" did not exist at {ref}, so citations into " +
                      ("it were" if one else "them were") + " not drift-checked")
     if renamed:
         one = len(renamed) == 1
-        notes.append(("chapter " if one else "chapters ") +
-                     ", ".join(unit_label(n).split()[-1] if not n.startswith("A") else n for n in renamed) +
+        notes.append(", ".join(unit_label(n) for n in renamed) +
                      (" was" if one else " were") + " renamed since " + ref +
                      ", and compared by chapter number")
     return out, "; ".join(notes), set(renamed)
@@ -600,6 +614,24 @@ def main(argv):
     renamed_reason = {c: "was renamed" for c in renamed}
     for c in shifted:
         renamed_reason[c] = f"went from {base_count[c]} paragraphs to {cur_count[c]}"
+    # Lettered tags slide too, without moving the plain count. Letters run with
+    # no gap, so cutting [5-12a] reletters [5-12b] as [5-12a], and a citation
+    # of [5-12a] now names what was [5-12b]. Adding a letter at the end of a run
+    # slides nothing, so a run is only suspect when what it held at the
+    # baseline is no longer the start of what it holds now.
+    def letter_runs(m):
+        out = {}
+        for c, para in (m or {}):
+            num, let = para_order(para)
+            if let:
+                out.setdefault((c, num), []).append(let)
+        return {k: sorted(v) for k, v in out.items()}
+    cur_runs, base_runs = letter_runs(paras), letter_runs(base)
+    for (c, num), was in base_runs.items():
+        if cur_runs.get((c, num), [])[:len(was)] != was and c not in shifted:
+            shifted.add(c)
+            renamed_reason[c] = (f"lost or relettered a paragraph added after "
+                                 f"[{c}-{num}]")
     shifted |= renamed
 
     # The book's own chapter filenames. A block that names one of these before a

@@ -9,7 +9,10 @@
 #
 #   check-book.sh        the folder passes and reports its lettered tags; three
 #                        broken sequences each fail with the right message
-#   check-references.sh  citations of [1-2a] and [A1-1a] resolve; [1-2c] fails
+#   check-references.sh  citations of [1-2a] and [A1-1a] resolve; [1-2c] fails;
+#                        cutting [1-2a] and relettering [1-2b] fails check 4 as
+#                        a slide, not a rewording; and a chapter whose slug
+#                        holds "appendix" is still a chapter
 #   check-provenance.sh  marks citing [1-2a] and [A1-1a] resolve; [1-2z] fails
 #
 # Usage: ./run.sh          (from anywhere; paths are resolved from the script)
@@ -75,6 +78,39 @@ printf 'Cites [1-2a], [A1-1a] and [1-2c].\n' >"$tmp/refs.md"
 out=$("$scripts/check-references.sh" --no-baseline "$here" "$tmp/refs.md" 2>&1); rc=$?
 expect "check-references: lettered and appendix citations resolve, a missing one fails" "$rc" "$out" 1 \
   "cites [1-2c]; chapter 1 ends at paragraph 3" "tag citations: 3    unresolved: 1"
+
+# Check 4 needs a baseline commit, so this half builds a throwaway repository
+# under the temp folder: record the book, cut [1-2a], reletter [1-2b] as [1-2a],
+# and cite [1-2a]. The citation now names what was [1-2b], and the plain count
+# did not move, so only the lettered-run test can call it a slide.
+if command -v git >/dev/null 2>&1; then
+  repo="$tmp/repo"
+  mkdir -p "$repo/book"
+  cp "$here"/*.md "$here/book.json" "$repo/book/"
+  printf 'Cites [1-2a].\n' >"$repo/refs.md"
+  git -C "$repo" init -q
+  git -C "$repo" add -A
+  git -C "$repo" -c user.name=fixture -c user.email=fixture@example.invalid \
+    commit -q -m baseline
+  awk '/^\[1-2a\] / { skip = 1; next } skip && /^<!--/ { skip = 0; next } skip { next } { print }' \
+    "$repo/book/$ch" \
+    | sed 's/^\[1-2b\] /[1-2a] /; s/<!-- src: \[1-2a\] -->/<!-- src: [1-2] -->/' \
+    >"$repo/book/$ch.new"
+  mv "$repo/book/$ch.new" "$repo/book/$ch"
+  out=$(cd "$repo" && "$scripts/check-references.sh" book refs.md 2>&1); rc=$?
+  expect "check-references: a relettered run is a slide, not a rewording" "$rc" "$out" 1 \
+    "[1-2a] names different prose than at HEAD" "lost or relettered a paragraph added after [1-2]"
+else
+  echo "skip  no git, so check 4's baseline cannot be built"
+fi
+
+mkdir -p "$tmp/slug"
+printf '# Basics\n\n[1-1] One.\n' >"$tmp/slug/sql-01-basics.md"
+printf '# Of the Standard\n\n[2-1] Two.\n' >"$tmp/slug/sql-02-appendix-1-of-the-standard.md"
+printf 'See ch. 2 and [2-1].\n' >"$tmp/slug-refs.md"
+out=$("$scripts/check-references.sh" --no-baseline "$tmp/slug" "$tmp/slug-refs.md" 2>&1); rc=$?
+expect "check-references: a chapter slug holding \"appendix\" is still a chapter" "$rc" "$out" 0 \
+  "chapters: 2" "tag citations: 1    unresolved: 0"
 
 out=$("$scripts/check-provenance.sh" "$here" 2>&1); rc=$?
 expect "check-provenance: marks citing lettered tags resolve" "$rc" "$out" 0

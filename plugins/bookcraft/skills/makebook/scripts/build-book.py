@@ -714,17 +714,29 @@ HEADER_NOTE_RE = re.compile(
     r"^[ \t]*\|[ \t]*\*\*(Draws on|Fills in)\*\*[ \t]*\|(?P<body>.*?)\|[ \t]*$\n?",
     re.M)
 CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
+SOURCE_ROW_RE = re.compile(r"^[ \t]*\|[ \t]*\*\*(Draws on|Fills in)\*\*[ \t]*\|")
+
+
+# A key that looks like a repo path: the test check-book.sh uses to decide a
+# key must not reach the page, so the two tools agree on which keys those are.
+PATH_KEY_RE = re.compile(r"(\.(md|py|sh|json|ya?ml|txt|csv)([^a-z0-9]|$)|/)")
+ARTICLE_TAIL_RE = re.compile(r"(?:^|(?<=[\s(]))(the|a|an) $", re.I)
 
 
 def source_displays(cfg: dict) -> dict[str, str]:
-    """book.json's reader-facing source names, keyed by the mark key.
+    """book.json's reader-facing names for the sources whose keys are paths.
 
     A `sources` value may be a path, a list of paths, or an object carrying a
-    `display` beside its path (createbook/SKILL.md § 4). Only the object form
-    names a source for a reader.
+    `display` beside its path (createbook/SKILL.md § 4). Only a key that looks
+    like a repo path is returned. A key like "syllabus" already reads as a name,
+    and the header writes it as one, "the syllabus § 4"; swapping it for a
+    display name that starts with its own article printed "the the syllabus" in
+    34 header rows of two real guide books.
     """
     out = {}
     for key, val in (cfg.get("sources") or {}).items():
+        if not PATH_KEY_RE.search(key):
+            continue
         if isinstance(val, dict) and isinstance(val.get("display"), str) \
                 and val["display"].strip():
             out[key] = val["display"].strip()
@@ -741,40 +753,53 @@ def swap_display_names(text: str, displays: dict[str, str]) -> str:
     endnote, so without this a reader of either was shown a path they cannot
     open. The markdown is never touched; this runs on the text being bound.
 
-    Only table rows are touched. The text above a chapter's first H2 is the
-    header table and, in a narration chapter with no `## In short`, the opening
-    paragraph too, and prose is already held to display names by check-book.sh.
+    Only the `Draws on` and `Fills in` rows are touched: they are where the
+    header names sources. The `Act on this` row, the `This chapter` row and a
+    narration chapter's opening paragraph are the author's words for a reader.
 
     A code span whose content is a key, or a key followed by a locator, becomes
     the display name and the locator as plain text: `` `docs/build.md § Caching` ``
     reads "the build docs § Caching". A bare key is swapped where it stands.
-    A display name already in the row is left alone, so a key that is a word
-    of its own name ("syllabus", shown as "the syllabus") is never doubled.
-    Longer strings are tried first, so a key that is a prefix of another never
+    Where the row already puts an article in front of the key and the display
+    name starts with one, the row's article is kept and the name's dropped, so
+    "the `docs/build.md`" reads "the build docs", never "the the build docs".
+    Longer keys are tried first, so a key that is a prefix of another never
     claims the other's text.
     """
     if not displays:
         return text
     keys = sorted(displays, key=len, reverse=True)
-    names = sorted({v for v in displays.values() if v not in displays},
-                   key=len, reverse=True)
-    bare = re.compile(r"(?<![\w/.-])(" + "|".join(re.escape(t) for t in names + keys)
+    bare = re.compile(r"(?<![\w/.-])(" + "|".join(re.escape(k) for k in keys)
                       + r")(?![\w/-])")
 
-    def span(m: re.Match) -> str:
-        inner = m.group(1)
-        for k in keys:
-            if inner == k or inner.startswith(k + " ") or inner.startswith(k + ","):
-                return displays[k] + inner[len(k):]
-        return m.group(0)
+    def named(key: str, before: str) -> str:
+        name = displays[key]
+        head, _, tail = name.partition(" ")
+        if tail and head.lower() in ("the", "a", "an") and ARTICLE_TAIL_RE.search(before):
+            return tail
+        return name
 
     def row(line: str) -> str:
-        if not line.lstrip().startswith("|"):
+        if not SOURCE_ROW_RE.match(line):
             return line
-        line = CODE_SPAN_RE.sub(span, line)
-        parts = re.split(r"(`[^`\n]+`)", line)
+        out, pos = [], 0
+        for m in CODE_SPAN_RE.finditer(line):
+            out.append(line[pos:m.start()])
+            inner, done = m.group(1), m.group(0)
+            for k in keys:
+                if inner == k or inner.startswith(k + " ") or inner.startswith(k + ","):
+                    done = named(k, "".join(out)) + inner[len(k):]
+                    break
+            out.append(done)
+            pos = m.end()
+        out.append(line[pos:])
+        # Bare keys, outside the code spans just handled.
+        parts = re.split(r"(`[^`\n]+`)", "".join(out))
         for i in range(0, len(parts), 2):
-            parts[i] = bare.sub(lambda m: displays.get(m.group(1), m.group(1)), parts[i])
+            prefix = "".join(parts[:i])
+            parts[i] = bare.sub(
+                lambda m, i=i: named(m.group(1), prefix + parts[i][:m.start()]),
+                parts[i])
         return "".join(parts)
 
     return "\n".join(row(ln) for ln in text.split("\n"))
@@ -3325,8 +3350,11 @@ def main(argv: list[str]) -> int:
     tables = render(clean_html, src, out, args.title, body_pt)
     final = page_texts(out)
 
+    # Whitespace first, as locate() does: pdftotext can split a 5pt probe
+    # across a space, and a probe left half-matched would read as a changed
+    # page and keep the markers in for the wrong reason.
     def flat(page: str) -> str:
-        return re.sub(r"\s+", "", PROBE_RE.sub("", page))
+        return PROBE_RE.sub("", re.sub(r"\s+", "", page))
 
     markers_hidden = (len(final) == len(probed)
                       and all(flat(a) == flat(b) for a, b in zip(probed, final))
