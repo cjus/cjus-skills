@@ -105,13 +105,15 @@ Go through the chapters one at a time. For each, write a single line naming the 
 
 | Page | Content |
 |---|---|
-| 1 | Cover: title, optional subtitle and byline, a description, an optional footnote. It has to fit on one page, and the build warns when it does not |
+| 1 | Cover: title, optional subtitle and byline, the creation stamp, a description, an optional footnote. It has to fit on one page, and the build warns when it does not |
 | 2 | Contents, every chapter with its page, optionally grouped under section headings |
 | 3 | About this book, when the folder holds `about-this-book.md`. What the book is for, what it was built from, what it fills in, what it does not cover |
 | 3 | Figures, listing every figure with its page. Appears only when the book has figures |
 | Then | The chapters, each opening on a fresh page |
 | Then | Glossary, one column, each term with the chapter that defines it. Appears only when the folder holds a `glossary.md` |
 | Last | Index, two columns, terms with the pages they appear on |
+
+**Every cover carries a creation stamp**, the bound book's version marker. Directly under the author name, in the byline's type, the PDF cover and the EPUB's cover page both print a line like `Created: 2026-09-24 06:14:10 MDT`: the local time the binding ran, with the zone's abbreviation. Two bindings of one folder are otherwise identical, down to the EPUB's identifier, so the stamp is how you tell which one you are holding. It is read once per run, so the PDF and the EPUB from one binding carry the same stamp. A book with no `byline` still gets one, in the byline's place. There is no way to fix it to another time: every binding takes the time it ran.
 
 **`about-this-book.md` is front matter, never a chapter**, and both this tool and `check-book.sh` skip it by name whether or not `exclude` mentions it. `book.json`'s `front_matter_file` renames it, and both tools read that same key so neither can disagree about which file is a chapter. It carries no paragraph tags and gets no contents entry: a reader reaches it by turning the page from the listing, and the page it would list is the next one.
 
@@ -148,7 +150,7 @@ build one.
 
 | Part | Content |
 |---|---|
-| Cover | Title, subtitle, byline, description, footnote, as one page. The cover **art** comes from `book.json`'s `cover_image`, or, when that is absent, from rasterising the PDF's own cover page |
+| Cover | Title, subtitle, byline, creation stamp, description, footnote, as one page. The cover **art** comes from `book.json`'s `cover_image`, or, when that is absent, from rasterising the PDF's own cover page, stamp included |
 | Nav | The contents, as the EPUB navigation document, plus a readable contents page. `sections` become nested entries |
 | Figures | Every figure, linking to where it sits in its chapter. Only when the book has figures |
 | Chapters | One XHTML file each, in the same sort order as the PDF |
@@ -274,7 +276,7 @@ Drop it in the same folder. Every field is optional.
 - `sections` groups chapters by their 1-based position in sort order. The section title also prints on each chapter's opening page, and becomes a nested entry in the EPUB's navigation. Omit it for a flat contents page.
 - `exclude` drops files from the chapter list. `book.json` and the glossary file are always excluded.
 - `glossary` declares that this book is meant to carry one, so a missing file errors rather than binding silently without it. `glossary_file` renames it from the default `glossary.md`. See **The glossary**.
-- `cover_image` is **EPUB only**, and optional: the file becomes the book's cover art in a library or on a device. Around 1600×2560 JPEG suits a Kindle Scribe. The PDF ignores it and keeps its typeset cover page. **Omit it and the EPUB still gets cover art**: the builder rasterises the PDF's own cover page at 1600px wide and uses that, so a library shows the book's title rather than a blank tile. It keeps the printed page's 7.1:9.1 proportions, so a device letterboxes it rather than cropping a page that was designed. Name a `cover_image` when you want art of your own; the generated one is never used then.
+- `cover_image` is **EPUB only**, and optional: the file becomes the book's cover art in a library or on a device. Around 1600×2560 JPEG suits a Kindle Scribe. The PDF ignores it and keeps its typeset cover page. **Omit it and the EPUB still gets cover art**: the builder rasterises the PDF's own cover page at 1600px wide and uses that, so a library shows the book's title rather than a blank tile. It keeps the printed page's 7.1:9.1 proportions, so a device letterboxes it rather than cropping a page that was designed. Name a `cover_image` when you want art of your own; the generated one is never used then. Supplied art is used as it is and does not carry the creation stamp; the cover page inside the book still does.
 
 ## The glossary
 
