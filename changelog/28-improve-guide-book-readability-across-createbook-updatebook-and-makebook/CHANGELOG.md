@@ -147,3 +147,16 @@ checkers anchor it. `lettered-tags/run.sh` gained both check-references cases an
 committed code. One gap is disclosed rather than fixed: an untagged guide book with no
 marks lets its opening paragraph escape the paragraph stop, and the run's fallback note now
 says so.
+
+### 2026-09-24 — Synced with main, and bumped to 1.7.0
+
+**Merged `main` at `ee9a8e1`**, which brought in #26 (the pr plugin's cleanup) and #31 (the
+bind date and time stamped under the title page byline). `git merge-tree` reported a clean
+merge, and it was one, but #31 touched three files this branch also changes. Two needed a
+look. #31 reads its stamp once per run and threads it through `assemble`, so the new
+hidden-marker render prints the same stamp as the probed one and the page comparison holds;
+a bind after the merge printed the stamp, the display names and no markers, with no
+fallback warning. And #31 had bumped bookcraft from 1.5.0 to 1.6.0, the same edit this
+branch made, so the merge was silent about it while leaving this branch's changes under a
+version already released. **bookcraft is now 1.7.0**, so installed copies refresh. The suite
+passes 15 of 15 under `--strict` after the merge.
