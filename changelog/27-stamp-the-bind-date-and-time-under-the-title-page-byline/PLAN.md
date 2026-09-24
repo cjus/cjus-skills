@@ -1,0 +1,92 @@
+# Stamp the bind date and time under the title page byline
+
+Start date: 2026-09-24 06:14:10 MDT
+
+## Overview
+
+A bound book carries nothing that says when it was bound, so two PDFs or two EPUBs made from the
+same folder cannot be told apart. This branch adds the date and time of binding to the title
+page, directly under the author name, in both the PDF and the EPUB `/makebook` produces. The
+stamp is the book's version marker.
+
+The objective is fixed here and is immutable for the life of the branch. Later updates
+refresh status only; newly discovered work goes under `## Deferred`, never as new scope.
+
+## About Ticket
+
+Issue #27: Stamp the bind date and time under the title page byline (priority:high)
+https://github.com/cjus/cjus-skills/issues/27
+
+> Add the date and time a book was bound to the title page, directly under the author name. The
+> stamp serves as the version marker for a bound book, so two bindings of the same folder can be
+> told apart.
+>
+> - Applies to both outputs `/makebook` produces: the PDF and the EPUB.
+> - Placement: under the author name on the title page (the `byline` from `book.json`, rendered
+>   on the cover by `build_cover` in `plugins/bookcraft/skills/makebook/scripts/build-book.py`).
+> - The value is the time of binding, meaning when `/makebook` ran.
+
+### Where the title page is rendered
+
+All three are in `plugins/bookcraft/skills/makebook/scripts/build-book.py`:
+
+- **PDF cover:** `build_cover`, which places `.byline` after the title and subtitle and before
+  the `.head-rule`.
+- **EPUB cover page:** `cover.xhtml`, built from `epub_cover_body`.
+- **EPUB cover art:** when `book.json` declares no `cover_image`, `render_cover_png` rasterises
+  the PDF cover, so a stamp on the PDF cover shows up in that image too. A declared
+  `cover_image` is used as-is.
+
+## Plan
+
+- [x] Phase 1: capture the bind time once per run, so the PDF and EPUB from one binding carry
+  the same stamp. `bind_stamp()` is read once in `main` before the settling loop and passed
+  as a required `stamp` argument through `assemble`, `build_epub` and `render_cover_png`.
+- [x] Phase 2: render the stamp under the byline on the PDF cover (`build_cover`) and style it.
+  `.cover .stamp` shares the byline's 10pt sans. The byline's gap before the rule moved to
+  the stamp.
+- [x] Phase 3: render the same stamp under the byline on the EPUB cover page (`epub_cover_body`).
+  `.byline` and `.stamp` both set `text-indent: 0`. Main indented the byline 1.2em whenever a
+  subtitle preceded it, which would have left the stamp and byline misaligned.
+- [x] Phase 4: document the stamp in `makebook/SKILL.md`.
+- [x] Phase 5: bind a fixture book and confirm the stamp shows on the PDF cover, the EPUB cover
+  page and the generated EPUB cover art, and that the cover still fits on one page. The
+  `guide` fixture was bound at 11.8, 14 and 17pt, plus a copy with no byline. In each, the PDF
+  and the EPUB carried the same stamp, page 2 was Contents, and there was no cover warning.
+  Measured against main in the PDF text layer, the stamp pushes the description down 21pt
+  (about 0.29in) with a byline and 36pt (0.5in) without one. With no byline the stamp takes
+  over the byline's whole slot. Each cost is the same at every size, because none of the
+  cover's lettering scales. A cover within that distance of spilling on main now spills, and
+  the existing `ZQCOVERENDQZ` warning reports it.
+
+**Status (2026-09-24):** all five phases are done. The pre-test and close reviews both approved.
+At close, bookcraft was bumped from 1.5.0 to 1.6.0 so installed copies are offered the change.
+
+## Open Questions
+
+None open. The operator answered all six on 2026-09-24:
+
+- **Format and time zone:** local time with the zone abbreviation, such as MST. Written as
+  `2026-09-24 06:14:10 MDT`, the same shape as this plan's start date. Seconds are kept so a
+  rebind inside the same minute still reads differently.
+- **Label:** `Created: `, so the line reads `Created: 2026-09-24 06:14:10 MDT`.
+- **No `byline`:** the stamp still prints on the title page, in the place under the author name.
+  Every binding carries the version marker, whether or not `book.json` names an author.
+- **Size:** the same type as the author name. On the PDF cover that is the byline's 10pt system
+  sans. In the EPUB it is the byline's unstyled body size. Whether the extra line still fits a
+  long-description cover on one page is Phase 5's to measure.
+- **Declared `cover_image`:** left as it is. The stamp is not drawn onto supplied art, and the
+  text cover page carries it.
+- **Reproducibility override:** none. No `SOURCE_DATE_EPOCH` or equivalent.
+
+## Deferred
+
+- No automated check binds a book. `test-fixtures.sh` and the fixtures workflow never run
+  `build-book.py`, so a green CI says nothing about this branch; the manual binds are the only
+  evidence. The symptom would be a `build-book.py` regression shipping with CI green. Worth
+  revisiting when the workflow gains Chromium and poppler for another reason. Raised by the
+  pre-test review. Filed as #32 at close.
+- Every fixture `book.json` sets `byline` to an AI model's name, and the bound covers print it.
+  The pre-test review asked whether that conflicts with the repo's no-attribution rule. It is
+  by design: #10 made `/createbook` write the name of the model that wrote the chapters as the
+  byline (`createbook/SKILL.md § 4`), and the fixtures follow that rule.

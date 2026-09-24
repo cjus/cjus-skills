@@ -54,6 +54,7 @@ import sys
 import tempfile
 import uuid
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 from string import Template
 
@@ -208,10 +209,14 @@ body {
 .cover .subtitle {
   font-size: 15pt; color: #4a4a4a; font-style: italic; margin: 0 0 0.28in;
 }
-.cover .byline {
+/* The stamp is set in the byline's type, close under it so the two read as one
+   block, and it takes over the byline's space before the rule. It prints with
+   or without a byline, because it is the bound book's version marker. */
+.cover .byline, .cover .stamp {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 10pt; color: #4a4a4a; margin: 0 0 0.28in;
 }
+.cover .byline { margin-bottom: 0.06in; }
 /* The rule under the title block is its own element, so a cover with no
    byline still gets one. */
 .cover .head-rule { border-top: 1px solid #cfcfcf; margin: 0 0 0.34in; }
@@ -1191,7 +1196,24 @@ def default_description(title: str, chapters: list[dict], src: Path) -> str:
     )
 
 
-def build_cover(title, cfg, chapters, src) -> str:
+def bind_stamp() -> str:
+    """The line both covers print under the byline: when this binding ran, in
+    local time with the zone's abbreviation, or its UTC offset (+04) where the
+    zone has none.
+
+    It is the bound book's version marker. Two bindings of one folder otherwise
+    look the same to a reader, down to the EPUB's identifier, which is derived
+    from the folder and the title so a re-send replaces the book on a device.
+    The PDF's CreationDate and the EPUB's dcterms:modified do record a time,
+    but only in metadata a reader never sees. Seconds are kept because a
+    rebind after a one-line fix can land inside the same minute. Read once per
+    run by the caller, never per cover, so the PDF, its every settling pass,
+    and the EPUB all carry the same one.
+    """
+    return f"Created: {datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}"
+
+
+def build_cover(title, cfg, chapters, src, stamp: str) -> str:
     md = markdown_renderer()
     desc = cfg.get("description")
     if isinstance(desc, list):
@@ -1216,6 +1238,7 @@ def build_cover(title, cfg, chapters, src) -> str:
         bits.append(f'<div class="subtitle">{html_mod.escape(cfg["subtitle"])}</div>')
     if cfg.get("byline"):
         bits.append(f'<div class="byline">{html_mod.escape(cfg["byline"])}</div>')
+    bits.append(f'<div class="stamp">{html_mod.escape(stamp)}</div>')
     bits.append('<div class="head-rule"></div>')
     if cfg.get("footnote"):
         bits.append(f'<div class="description">{desc_html}</div>')
@@ -1946,7 +1969,7 @@ def build_index(entries) -> str:
 
 
 def assemble(title, cfg, chapters, src, state, want_index, css: str,
-             glossary=None, front_matter: str | None = None,
+             stamp: str, glossary=None, front_matter: str | None = None,
              col_plan: dict | None = None) -> list:
     """Returns [html, figures, slides]. Both are discovered while building the
     chapters, so the caller learns about them from the same call that renders.
@@ -1960,6 +1983,10 @@ def assemble(title, cfg, chapters, src, state, want_index, css: str,
     compact pages wrapped in a footer scaled to whatever size was asked for.
     Requiring the argument removes the mismatch and the question of which size
     the fallback means.
+
+    `stamp` is required for a related reason: it is read once per run, and a
+    cover that read the clock itself would print a different time on every
+    settling pass and another again in the EPUB.
     """
     figures: list[dict] = []
     slides: list[dict] = []
@@ -1969,7 +1996,7 @@ def assemble(title, cfg, chapters, src, state, want_index, css: str,
         '<html lang="en"><head><meta charset="utf-8">',
         f"<title>{html_mod.escape(title)}</title>",
         f"<style>{css}</style></head><body>",
-        build_cover(title, cfg, chapters, src),
+        build_cover(title, cfg, chapters, src, stamp),
         build_toc(chapters, cfg, state.get("pages"), state.get("index_page"),
                   want_index, bool(figures), state.get("lof_page"),
                   bool(glossary), state.get("gloss_page")),
@@ -2269,7 +2296,7 @@ def page_box_in(css: str) -> tuple[float, float] | None:
     return w_in, h_in
 
 
-def render_cover_png(title, cfg, chapters, src,
+def render_cover_png(title, cfg, chapters, src, stamp: str,
                      body_pt: float = BASELINE_BODY_PT) -> bytes | None:
     """The PDF's own cover page, rasterised for the EPUB's cover slot.
 
@@ -2305,7 +2332,7 @@ def render_cover_png(title, cfg, chapters, src,
         "html,body{background:#ffffff;margin:0;}"
         ".probe{display:none !important;}"
         "</style></head><body>"
-        f"{build_cover(title, cfg, chapters, src)}"
+        f"{build_cover(title, cfg, chapters, src, stamp)}"
         "</body></html>"
     )
     tmp = None
@@ -2444,7 +2471,11 @@ figure img, figure svg { display: block; margin: 0 auto; }
 figcaption { font-size: 0.85em; margin-top: 0.5em; text-align: left; }
 figcaption .fignum { font-weight: bold; }
 .subtitle { font-size: 1.1em; font-style: italic; margin: 0.4em 0 1em; }
-.byline { margin: 0 0 1.4em; }
+/* The stamp sits close under the byline and takes over its space before the
+   description. Neither indents: they are the title block, not prose, and
+   `p`'s indent would otherwise catch whichever one no heading precedes. */
+.byline, .stamp { margin: 0 0 1.4em; text-indent: 0; }
+.byline { margin-bottom: 0.2em; }
 .footnote { font-size: 0.85em; margin-top: 2em; }
 .lead { font-size: 0.9em; font-style: italic; margin: 0 0 1.2em; }
 .entry { text-indent: -1.1em; margin-left: 1.1em; margin-bottom: 0.25em; }
@@ -2706,7 +2737,7 @@ def epub_chapter_href(num: int) -> str:
     return f"chap_{num:03d}.xhtml"
 
 
-def epub_cover_body(title, cfg, chapters, src) -> str:
+def epub_cover_body(title, cfg, chapters, src, stamp: str) -> str:
     md = markdown_renderer()
     desc = cfg.get("description")
     if isinstance(desc, list):
@@ -2729,6 +2760,7 @@ def epub_cover_body(title, cfg, chapters, src) -> str:
         bits.append(f'<p class="subtitle">{html_mod.escape(cfg["subtitle"])}</p>')
     if cfg.get("byline"):
         bits.append(f'<p class="byline">{html_mod.escape(cfg["byline"])}</p>')
+    bits.append(f'<p class="stamp">{html_mod.escape(stamp)}</p>')
     bits.append(desc_html)
     if cfg.get("footnote"):
         bits.append(f'<div class="footnote">{md.render(cfg["footnote"])}</div>')
@@ -2847,7 +2879,7 @@ def epub_toc(chapters, items, cfg, front, back) -> tuple:
 
 
 def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
-               glossary=None, front_matter_path: Path | None = None,
+               stamp: str, glossary=None, front_matter_path: Path | None = None,
                body_pt: float = BASELINE_BODY_PT) -> dict:
     # Drop any previous build first. Assembling the book can exit part-way
     # through, on a source file whose raw HTML will not convert, and that
@@ -2915,7 +2947,7 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
                  ch["title"], body))
 
     cover = page("cover-page", "cover.xhtml", title,
-                 epub_cover_body(title, cfg, chapters, src))
+                 epub_cover_body(title, cfg, chapters, src, stamp))
 
     front = []
     # Before the figures, as it sits before everything in the PDF.
@@ -2970,7 +3002,7 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
         # body_pt reaches only this call. An EPUB is reflowable and takes its
         # size from the reader, so nothing else here scales; the cover art is
         # a picture of a fixed page and has to match the page it pictures.
-        png = render_cover_png(title, cfg, chapters, src, body_pt)
+        png = render_cover_png(title, cfg, chapters, src, stamp, body_pt)
         if png:
             book.set_cover("cover.png", png, create_page=False)
             generated_cover = True
@@ -3155,6 +3187,9 @@ def main(argv: list[str]) -> int:
             terms = harvest_terms(chapters, args.max_terms)
             terms_source = f"harvested from the text ({len(terms)} candidates)"
 
+    # Read here, once, before the first render. Every settling pass and the
+    # EPUB after them print this same value, so one binding carries one stamp.
+    stamp = bind_stamp()
     footer = args.title
     state: dict = {}
     figures: list[dict] = []
@@ -3168,7 +3203,7 @@ def main(argv: list[str]) -> int:
     for attempt in range(1, MAX_PASSES + 1):
         page_html, figures, slides = assemble(args.title, cfg, chapters, src,
                                               state, want_index, css=css,
-                                              glossary=glossary,
+                                              stamp=stamp, glossary=glossary,
                                               front_matter=front_matter,
                                               col_plan=col_plan)
         tables = render(page_html, src, out, args.title, body_pt)
@@ -3483,7 +3518,7 @@ def main(argv: list[str]) -> int:
     # page; the EPUB is for reading at whatever font size the reader picked.
     epub_out = out.with_suffix(".epub")
     report = build_epub(args.title, cfg, chapters, src, epub_out,
-                        terms, want_index, glossary,
+                        terms, want_index, stamp, glossary,
                         front_matter_path=fm_path, body_pt=body_pt)
     print(f"wrote {epub_out}")
     print(f"epub: {len(chapters)} chapters, {report['figures']} figures, "
