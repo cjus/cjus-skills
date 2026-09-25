@@ -276,3 +276,37 @@ moved pr to 0.2.6. That is the number this branch had bumped to. The two identic
 merged without a conflict, which would have left this branch's `/pr:close` change without a
 version of its own, so pr is now 0.2.7. The merge was otherwise clean. Draft PR #48 is retitled
 with the `[#46]` prefix #45 introduced, since the installed pr (0.2.5) predates it.
+
+### 2026-09-25 12:37:52 MDT — Pre-test review: APPROVE, and its findings fixed
+
+Draft PR #48 was opened so CI runs, and the review is in `pr-review-2026-09-25.md`: APPROVE,
+with four Important items, all fixed on this branch.
+
+1. **The backfill's `supersede` would have written the new value `expected`.** It would then be
+   uncited on every run, and nothing could turn it back. Step 6 now names `--citation legacy` and
+   says why, and `supersede`'s docstring says `citation` does not carry over. The reviewer offered
+   carrying it over instead; the stricter default stays, since in a book edited through
+   `/updatebook` a carried-over `legacy` would drop the uncited report's safety net.
+2. **The sweep never ran on a book with no `provenance` or no `sources`.** Both early exits came
+   before the file was read, and those older books are the ones a backfill is likeliest to meet.
+   The file is now read first, and `without_marks` checks it and sweeps it on both paths. Only the
+   uncited report, which needs marks, is skipped, and the summary says so.
+3. **"now:" followed one link.** `current()` walks the supersession chain to its end, which ends
+   because `check` requires every replacement to be newer. A retired end is named as retired.
+4. **The worklist's `entries` and `settled` were untested.** `run.sh` now checks both. It asserts
+   `cited == {3}` rather than the reviewer's `{2, 6, 7}`, because a unit citing only an entry is
+   not emitted, by the same rule as `fill`.
+
+Suggestions taken:
+
+- A write keeps the file's mode. `mkstemp`'s 0600 had survived the rename.
+- The missing-file note prints under `OK*` as well as `OK`.
+- Figures have their XML entities decoded before the sweep.
+- `init --how createbook` refuses a folder that already holds markdown, which is a book to backfill.
+- The message about `citation` on a `book` entry no longer says no mark cites one.
+- A stray space and a wrong count in `NOTES.md` are fixed.
+
+`run.sh` grows from 25 to 31 assertions. A copy with each fix undone failed four of them: the
+chain, the markless sweep, the entity, and the mode. The mode check uses 0640, because 0644 is
+also what the umask fallback produces and would have hidden the regression.
+`test-fixtures.sh --strict`: 17 passed. pr acceptance: 42 passed.

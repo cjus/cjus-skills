@@ -199,6 +199,13 @@ exit 2.
   * With no file, the summary says so and the entry checks are skipped. This
     script never creates the file, because a backfill needs judgement; the
     skills stop and create it.
+  * A book whose marks are not read, because it declares no `provenance` or no
+    `sources`, still has its file checked and its superseded premises swept.
+    The sweep needs no marks, and the books written before marks existed are
+    the ones a backfill is likeliest to meet. Only the uncited report, which
+    does need marks, is skipped, and the summary says so.
+  * "now:" in a report names the end of the supersession chain, not the next
+    link, so a premise that changed twice points at its current value.
 
 The sweep and the uncited report run over the whole book whatever --chapters
 says, for the reason the tag list does: each is a claim about the book, and a
@@ -1479,6 +1486,9 @@ def sweep_text(path):
     if path.suffix == ".svg":
         text = re.sub(r"<[^>]*>",
                       lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+        # After the markup is gone, so `&lt;` cannot open a tag. No entity
+        # spans a newline, so the line numbers reported stay true.
+        text = html.unescape(text).replace("\u2019", "'").replace("\u2018", "'")
     return text
 
 
@@ -1507,7 +1517,6 @@ def sweep(book, reg):
     texts = [(p, sweep_text(p)) for p in sweep_files(book)]
     hits = 0
     for e in old:
-        now = reg[e["superseded_by"]]
         for phrase in e["search"]:
             pat = phrase_pattern(phrase)
             for p, text in texts:
@@ -1517,9 +1526,57 @@ def sweep(book, reg):
                     said = " ".join(re.sub(r"[*_`]", "", m.group()).split())
                     flag(f"{p.relative_to(book)}:{ln}: "
                          f"\"{said}\" matches assertion "
-                         f"{e['id']}, a premise superseded by {now['id']}",
-                         f"was: {e['statement']}  now: {now['statement']}")
+                         f"{e['id']}, a premise superseded by "
+                         f"{e['superseded_by']}",
+                         f"was: {e['statement']}  {now_said(reg, e)}")
     return len(old), hits
+
+
+def current(reg, e):
+    """Where a supersession chain ends: what the claim says now.
+
+    A link names only the next entry, so a premise that changed twice would
+    otherwise send a reader to rewrite prose to a value that is itself
+    superseded. The walk ends because `check` requires every replacement to be
+    newer than what it replaces.
+    """
+    while e["status"] == "superseded":
+        e = reg[e["superseded_by"]]
+    return e
+
+
+def now_said(reg, e):
+    n = current(reg, e)
+    if n["status"] == "retired":
+        return f"now: assertion {n['id']} is retired: {n['retired_reason']}"
+    return f"now: assertion {n['id']}: {n['statement']}"
+
+
+def without_marks(book, reg, reg_state):
+    """The entry checks that need no marks, for a book whose marks are not read.
+
+    The sweep needs only the file and the folder, so it runs here too. The
+    uncited report needs marks, so it does not, and the summary says so rather
+    than printing a count nothing produced.
+    """
+    print()
+    if reg_state == "missing":
+        print(f"assertions NOT CHECKED: this book has no {register.FILE}. The "
+              f"book skills create it; this script never does")
+        return 0
+    if reg_state == "invalid":
+        print(f"assertions NOT CHECKED: {register.FILE} fails its own check, "
+              f"above")
+        return 1
+    swept, passages = sweep(book, reg)
+    holds = sum(1 for e in reg.values() if e["status"] == "holds")
+    print(f"assertions {len(reg)} entries, {holds} hold   superseded premises "
+          f"swept {swept}, passages found {passages}   (no marks were read, so "
+          f"no citation was checked)")
+    if review:
+        print(f"OK*   nothing failed, and {review} REVIEW item(s) above are "
+              f"still unread.")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -1601,17 +1658,43 @@ def main(argv):
             print(f"error: {cf} is not valid JSON: {e}", file=sys.stderr)
             return 2
 
+    # assertions.json, read through its own helper and never parsed here. Three
+    # states, because the entry checks below have to tell "nothing to read"
+    # from "nothing to trust": a file that fails its own check has failed this
+    # run already, and resolving marks against it would add verdicts built on
+    # the entries that made it fail.
+    #
+    # Read before either early exit below, because the sweep needs no marks and
+    # a backfill fires on any book with a book.json: the books written before
+    # provenance marks existed are the ones most likely to need one.
+    reg, reg_state = {}, "missing"
+    reg_path = book / register.FILE
+    if reg_path.exists():
+        try:
+            doc, probs = register.load(reg_path)
+        except register.TooNew as e:
+            print(f"error: {register.too_new(reg_path, e.args[0])}",
+                  file=sys.stderr)
+            return 2
+        if doc is None or probs:
+            for p in probs:
+                problem(f"{register.FILE}: {p}")
+            reg_state = "invalid"
+        else:
+            reg = {e["id"]: e for e in doc["entries"]}
+            reg_state = "ok"
+
     if conf.get("provenance") is not True:
         print(f"note: {book}/book.json does not declare \"provenance\": true;")
-        print("      this book carries no marks to check. Nothing was asserted.")
-        return 0
+        print("      this book carries no marks to check. Nothing was asserted about them.")
+        return without_marks(book, reg, reg_state)
 
     declared = conf.get("sources") or {}
     if not declared:
         print(f"note: {book}/book.json declares \"provenance\": true but no \"sources\" map,")
-        print("      so no mark can be resolved to a file. Nothing was asserted.")
+        print("      so no mark can be resolved to a file. Nothing was asserted about them.")
         print("      Add a \"sources\" object mapping each shorthand a mark uses to its path.")
-        return 0
+        return without_marks(book, reg, reg_state)
 
     sources = {}
     for name, val in declared.items():
@@ -1662,28 +1745,6 @@ def main(argv):
                     f"citing an entry in {register.FILE}; rename the label")
         else:
             unsourced.append(label)
-
-    # assertions.json, read through its own helper and never parsed here. Three
-    # states, because the entry checks below have to tell "nothing to read"
-    # from "nothing to trust": a file that fails its own check has failed this
-    # run already, and resolving marks against it would add verdicts built on
-    # the entries that made it fail.
-    reg, reg_state = {}, "missing"
-    reg_path = book / register.FILE
-    if reg_path.exists():
-        try:
-            doc, probs = register.load(reg_path)
-        except register.TooNew as e:
-            print(f"error: {register.too_new(reg_path, e.args[0])}",
-                  file=sys.stderr)
-            return 2
-        if doc is None or probs:
-            for p in probs:
-                problem(f"{register.FILE}: {p}")
-            reg_state = "invalid"
-        else:
-            reg = {e["id"]: e for e in doc["entries"]}
-            reg_state = "ok"
 
     # Chapters, skipping what /makebook skips.
     skip = {"OUTLINE.md", "glossary.md", "about-this-book.md"}
@@ -1787,8 +1848,8 @@ def main(argv):
                             problem(f"{where}: the mark cites assertion {aid}, "
                                     f"which is superseded by "
                                     f"{e['superseded_by']}",
-                                    f"was: {e['statement']}  now: "
-                                    f"{reg[e['superseded_by']]['statement']}")
+                                    f"was: {e['statement']}  "
+                                    f"{now_said(reg, e)}")
                         elif e["status"] == "retired":
                             problem(f"{where}: the mark cites assertion {aid}, "
                                     f"which is retired", e["retired_reason"])
@@ -1923,7 +1984,7 @@ def main(argv):
 
     # ----------------------------------------------------------------------
     print()
-    unreadable =[s for s in sources.values() if not s.missing and s.text is None]
+    unreadable = [s for s in sources.values() if not s.missing and s.text is None]
     if unreadable:
         print("NOTE  sources nothing can search, so no quotation attributed to one was checked:")
         for s in unreadable:
@@ -2011,6 +2072,9 @@ def main(argv):
     if review:
         print(f"OK*   nothing failed, and {review} REVIEW item(s) above are still unread.")
         print("      This is not an all-clear until someone has been through them.")
+        if reg_state == "missing":
+            print(f"      This book has no {register.FILE}, so no entry was "
+                  f"checked and no premise swept.")
         return 0
 
     # The OK line names only what this run actually examined. Claiming the

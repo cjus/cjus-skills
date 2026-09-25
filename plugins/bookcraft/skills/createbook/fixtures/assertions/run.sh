@@ -206,6 +206,71 @@ out=$("$scripts/check-provenance.sh" "$tmp/reserved" 2>&1); rc=$?
 expect "check-provenance: a source named with the reserved word fails" "$rc" "$out" 1 \
   'declares a source named "assertions log"'
 
+# The worklist is a second output with a different consumer: /check-claims
+# gives each agent one chapter file and nothing else, so the entries have to
+# travel inside it.
+out=$("$scripts/check-provenance.sh" --emit-worklist "$tmp/wl" "$here" 2>&1); rc=$?
+if [ "$rc" -eq 0 ]; then
+  python3 - "$tmp/wl/assertions-fixture-01-entries-that-hold.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert [e["id"] for e in d["settled"]] == [7], d["settled"]
+assert d["settled"][0]["answers"][0]["was"] == "B", d["settled"]
+cited = {e["id"] for u in d["units"] for e in u["entries"]}
+assert cited == {3}, cited  # the one unit resting on a source as well; the rest are not emitted
+PY
+  report $? "check-provenance --emit-worklist: a unit carries its entries, the chapter file the settled one"
+else
+  report 1 "check-provenance --emit-worklist exits $rc"; printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+
+# A premise that changes twice: "now" is the end of the chain, not the next link.
+rm -rf "$tmp/chain"; cp -R "$here" "$tmp/chain"; rm -f "$tmp/chain/run.sh"
+"$A" supersede "$tmp/chain" 2 --statement "The roster is twelve students." --by operator \
+  --date 2026-09-24 --search "roster of twelve" --citation legacy >/dev/null
+out=$("$scripts/check-provenance.sh" "$tmp/chain" 2>&1); rc=$?
+expect "check-provenance: a premise changed twice names the end of the chain" "$rc" "$out" 1 \
+  "the mark cites assertion 2, which is superseded by 10" \
+  "now: assertion 10: The roster is twelve students." \
+  '"room of twenty" matches assertion 1, a premise superseded by 2' \
+  "!now: assertion 2:"
+
+# A book whose marks are not read is still swept: the backfill fires on any
+# book with a book.json, and the oldest books are the likeliest to need one.
+rm -rf "$tmp/nomarks"; cp -R "$here" "$tmp/nomarks"; rm -f "$tmp/nomarks/run.sh"
+python3 - "$tmp/nomarks/book.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d["provenance"] = False; json.dump(d, open(p, "w"))
+PY
+out=$("$scripts/check-provenance.sh" "$tmp/nomarks" 2>&1); rc=$?
+expect "check-provenance: with no marks read, the file is still checked and the premise swept" "$rc" "$out" 0 \
+  "superseded premises swept 1, passages found 2   (no marks were read" \
+  '"Twenty seats" matches assertion 1' "OK*   nothing failed, and 2 REVIEW item(s)"
+
+# A figure spelling a space as an entity is still swept.
+rm -rf "$tmp/entity"; cp -R "$here" "$tmp/entity"; rm -f "$tmp/entity/run.sh"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><text>a room of&#32;twenty</text></svg>\n' \
+  > "$tmp/entity/diagrams/entity.svg"
+out=$("$scripts/check-provenance.sh" "$tmp/entity" 2>&1); rc=$?
+expect "check-provenance: an XML entity in a figure is decoded before the sweep" "$rc" "$out" 0 \
+  'diagrams/entity.svg:1: "room of twenty" matches assertion 1'
+
+# init --how createbook marks a file as written before any prose, so it refuses
+# a folder that already holds a book; that folder is backfilled instead.
+rm -rf "$tmp/old"; cp -R "$here" "$tmp/old"; rm -f "$tmp/old/run.sh" "$tmp/old/assertions.json"
+out=$("$A" init "$tmp/old" --how createbook --argument=x --reader r \
+  --reader-origin argument --profile-origin argument 2>&1); rc=$?
+expect "assertions.sh init: --how createbook refuses a folder that already holds a book" "$rc" "$out" 1 \
+  "already holds markdown"
+
+# A write keeps the file's mode rather than leaving it owner-only. 0640 is what
+# neither mkstemp's 0600 nor a umask default of 0644 would produce by accident.
+chmod 640 "$tmp/chain/assertions.json"
+"$A" expect "$tmp/chain" 4 >/dev/null
+mode=$(python3 -c 'import os, stat, sys; print(oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode)))' "$tmp/chain/assertions.json")
+[ "$mode" = "0o640" ]
+report $? "assertions.sh: a write keeps the file's mode (got $mode)"
+
 # ---------------------------------------------------------------------------
 # check-book.sh reads book.json through jq, so without a working one this half
 # would grade the folder in a different mode (scripts/test-fixtures.sh says why).

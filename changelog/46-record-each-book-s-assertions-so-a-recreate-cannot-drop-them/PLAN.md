@@ -284,7 +284,7 @@ The skill stops and creates the file before doing what it was asked.
 - [x] Phase 6: Fixtures and release. Add the fixture cases the ticket lists, confirm the
       missing-file note breaks no exact-output fixture, record the reasoning in `NOTES.md`, bump
       bookcraft's version, and run `scripts/test-fixtures.sh`.
-      Done 2026-09-25. `createbook/fixtures/assertions/run.sh` makes 25 assertions, and
+      Done 2026-09-25. `createbook/fixtures/assertions/run.sh` makes 31 assertions, and
       every case the ticket lists is among them. `provenance`'s manifest row asserts the
       missing-file note. bookcraft goes from 1.7.1 to 1.8.0. `test-fixtures.sh --strict`
       passes: 17 passed, 0 failed, 0 skipped.

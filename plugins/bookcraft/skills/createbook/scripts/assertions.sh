@@ -67,7 +67,8 @@ is reported as the key it would have written: `add --kind premise` with no
       Appends the replacement and writes both links in one step: the old
       entry becomes `superseded` with `superseded_by`, and the new one
       carries `supersedes`. The kind, applies_to and a premise's `reaches`
-      carry over unless given again. A premise's `search` never carries over,
+      carry over unless given again. `citation` does not: it defaults to
+      `expected`, as `add`'s does, so a backfill passes --citation legacy. A premise's `search` never carries over,
       because those phrases find prose built on the OLD value, and the sweep
       for a superseded premise depends on the two sets differing.
 
@@ -136,7 +137,7 @@ YYYY-MM-DD and default to today.
 means the file fails. 2 on bad usage, or when there is nothing to work on: no
 such folder, no assertions.json, or a format newer than this script knows.
 """
-import sys, os, re, json, pathlib, argparse, datetime, difflib, tempfile
+import sys, os, re, json, stat, pathlib, argparse, datetime, difflib, tempfile
 
 FILE = "assertions.json"
 FORMAT = 1
@@ -453,8 +454,8 @@ def problems_in(doc):
                 bad(f"{where}: citation is legacy, but /createbook started this "
                     f"file, so no paragraph was written before it")
         elif applies == "book" and "citation" in e:
-            bad(f"{where}: citation is for a prose entry; this one governs the "
-                f"whole book, so no mark cites it")
+            bad(f"{where}: citation is for a prose entry, whose paragraphs "
+                f"are expected to cite it; this one governs the whole book")
 
         status = e.get("status")
         if status not in STATUSES:
@@ -616,11 +617,19 @@ def dump(doc):
 def _write(path, doc):
     # Through a temporary file in the same folder and a rename, so an
     # interrupted write leaves the old file whole rather than half a new one.
+    # mkstemp creates the file owner-only and the rename keeps that, so the
+    # mode is set first: the old file's, or what the umask gives a new one.
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".assertions.",
                                suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(dump(doc))
+        if path.exists():
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        else:
+            um = os.umask(0)
+            os.umask(um)
+            os.chmod(tmp, 0o666 & ~um)
         os.replace(tmp, str(path))
     except BaseException:
         if os.path.exists(tmp):
@@ -723,6 +732,13 @@ def cmd_init(args):
     if path.exists():
         raise Refused(f"{path} already exists; init starts a file and never "
                       f"replaces one")
+    if args.how == "createbook" and any(book.glob("*.md")):
+        # /createbook runs init before OUTLINE.md exists. A folder already
+        # holding markdown is a book written before the file, and marking its
+        # file as /createbook's would pass a presence check without a search.
+        raise Refused(f"{book} already holds markdown, so it is an existing "
+                      f"book: backfill it with --how backfill "
+                      f"(createbook/SKILL.md § Backfilling the assertions file)")
     created = {"date": args.date or _today(), "how": args.how}
     if args.how == "backfill" or args.sources or args.candidates is not None \
             or args.confirmed is not None:
