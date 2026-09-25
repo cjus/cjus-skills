@@ -70,8 +70,10 @@ Beyond the automated suites, "testing" means manual verification of the objectiv
 ## Step 5. Report CI if it has finished, then name the next command
 
 ```bash
-gh pr checks --repo "$REPO" --json name,bucket,link 2>/dev/null || echo "no PR / no runs yet"
+gh pr checks "$BRANCH" --repo "$REPO" --json name,bucket,link
 ```
+
+**Pass the branch, and keep gh's own error.** With `--repo`, `gh pr checks` does not infer the PR. With no argument it fails with "argument required when using the --repo flag", and a blanket `2>/dev/null || echo "no PR / no runs yet"` used to turn that into a false "no runs" on a branch whose CI had already passed. "No pull requests found for branch" means no PR, and "no checks reported on the … branch" means no runs yet. Report any other error as CI unreadable, not as no runs.
 
 **Read `bucket`, not `state`.** It is the documented categorization of a raw state into `pass`, `fail`, `pending`, `skipping` or `cancel`, so it survives a renamed raw state.
 
