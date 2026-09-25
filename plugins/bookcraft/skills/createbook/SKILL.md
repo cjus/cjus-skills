@@ -700,7 +700,7 @@ Read these, in this order, and write down each candidate as you find it:
 | `OUTLINE.md`: any section recording measurements, decisions, names or exclusions, and the house rules | `measured`, `ruling` and `settled` candidates |
 | The source ledger's rows, for asides that rule on a source: which one wins, what to leave out | `ruling` |
 | The revision notes on the outline's chapter rows | Whatever each revision established. Often a `premise` that changed, or a `given` |
-| Marks naming an `unsourced` label (`book.json`), where the label stands for a fact, not a method: an email, a page behind sign-in, a live site read on a date | One `given` per fact the label stands for, never one per mark |
+| Marks naming an `unsourced` label (`book.json`), where the label stands for a fact, not a method: an email, a page behind sign-in, a live system behind sign-in read on a date | One `given` per fact the label stands for, never one per mark |
 | `claim-checks/*.md` | `settled`: a finding the operator ruled on, especially one raised on every run |
 | `git log -p` of the chapters and the outline | What a revision put only into the prose, and every correction to a derived answer. Start with the commits that changed a chapter and left `OUTLINE.md` alone, since those facts reached nowhere else |
 
@@ -733,7 +733,7 @@ Ask these one at a time, or four to a call with AskUserQuestion, because each ne
 
 - **Every possibly reversed candidate**: keep, drop, or the value it holds now.
 - **Every ruling whose author the evidence does not settle.** Was it the operator's call or the book's own judgement? That is `origin.by`.
-- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one. **Propose them from a sweep of the bare value word, never from memory.** Grep the folder for the value itself (`twenty`, not `room of twenty`), sort what it finds into the phrasings that are about the premise, and show the operator which of those lines the proposed phrases would still leave unmatched. Arithmetic built on a premise rarely repeats its canonical phrase. A written entry's phrases cannot be amended later, so this is the one time to get them right.
+- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one. **Propose them from a sweep of the bare value word, never from memory.** Grep the folder for the value itself, in words and in figures (`twenty` and `20`, not `room of twenty`), sort what it finds into the phrasings that are about the premise, and show the operator which of those lines the proposed phrases would still leave unmatched. Arithmetic built on a premise rarely repeats its canonical phrase. A written entry's phrases cannot be amended later, so this is the one time to get them right.
 - **The original `/createbook` argument.** A book written before this file existed never saved it in the book folder. Look first for a saved copy beside it, such as a prompts or notes file holding the invocation, and confirm it with the operator. Where nobody has it, it is written `null`, never as the outline's paraphrase.
 - **The persona's and the profile's origins**, where the outline does not record them. `unrecorded` is an honest answer.
 

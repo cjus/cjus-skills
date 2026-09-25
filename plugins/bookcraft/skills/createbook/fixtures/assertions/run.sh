@@ -267,6 +267,7 @@ expect "assertions.sh init: --how createbook refuses a folder that already holds
 # neither mkstemp's 0600 nor a umask default of 0644 would produce by accident.
 chmod 640 "$tmp/chain/assertions.json"
 "$A" expect "$tmp/chain" 4 >/dev/null
+report $? "assertions.sh: the write the mode check relies on happened"
 mode=$(python3 -c 'import os, stat, sys; print(oct(stat.S_IMODE(os.stat(sys.argv[1]).st_mode)))' "$tmp/chain/assertions.json")
 [ "$mode" = "0o640" ]
 report $? "assertions.sh: a write keeps the file's mode (got $mode)"

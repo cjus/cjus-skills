@@ -1486,9 +1486,12 @@ def sweep_text(path):
     if path.suffix == ".svg":
         text = re.sub(r"<[^>]*>",
                       lambda m: re.sub(r"[^\n]", " ", m.group()), text)
-        # After the markup is gone, so `&lt;` cannot open a tag. No entity
-        # spans a newline, so the line numbers reported stay true.
-        text = html.unescape(text).replace("\u2019", "'").replace("\u2018", "'")
+        # After the markup is gone, so `&lt;` cannot open a tag. One entity at
+        # a time, and one that decodes to a line break (`&#10;`) becomes a
+        # space, so every later line number stays the line in the file.
+        text = re.sub(r"&#?\w+;", lambda m: html.unescape(m.group())
+                      .replace("\n", " ").replace("\r", " "), text)
+        text = text.replace("\u2019", "'").replace("\u2018", "'")
     return text
 
 
