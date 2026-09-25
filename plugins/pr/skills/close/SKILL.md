@@ -66,8 +66,10 @@ Prefer GitHub's own verdict where a PR exists:
 
 ```bash
 git fetch origin "$DEFAULT_BRANCH"
-gh pr view --repo "$REPO" --json mergeable,mergeStateStatus,baseRefName,headRefName
+gh pr view "$BRANCH" --repo "$REPO" --json mergeable,mergeStateStatus,baseRefName,headRefName
 ```
+
+**Every `gh pr view`, `gh pr checks` and `gh pr edit` call in this skill that takes `--repo` also passes the branch.** With `--repo`, `gh pr view` and `gh pr checks` refuse to infer the PR ("argument required when using the --repo flag"), while `gh pr edit` silently falls back to the checkout. "No pull requests found for branch" here means no PR exists yet. Use the local check.
 
 - `mergeable: "CONFLICTING"`, or `mergeStateStatus: "DIRTY"` → **stop.** The branch must be rebased or merged before the close continues.
 - `mergeable: "UNKNOWN"` → GitHub is still computing. Fall back to the local check.
@@ -140,12 +142,12 @@ $LINT && $TYPECHECK && $TEST
 **Then read CI, because local commands cannot see jobs that only run on the remote:**
 
 ```bash
-gh pr checks --repo "$REPO" --json name,bucket --jq '[.[] | "\(.name)=\(.bucket)"] | join("  ")'
+gh pr checks "$BRANCH" --repo "$REPO" --json name,bucket --jq '[.[] | "\(.name)=\(.bucket)"] | join("  ")'
 ```
 
 - **Any `fail`** → **stop**, naming the job. A red CI is not a close-time judgment call.
 - **`pending`** → report and proceed. Waiting would make every close as slow as the slowest job, and step 8b runs after the push anyway.
-- **No PR or no runs** → report plainly. That is expected on a branch whose PR this close is about to create, and it means no CI verdict exists for this work.
+- **No PR or no runs** ("no pull requests found for branch", or "no checks reported on the … branch") → report plainly. That is expected on a branch whose PR this close is about to create, and it means no CI verdict exists for this work. **Any other error is not "no runs".** It means CI could not be read, so stop rather than report the gate clear.
 - **A failure you believe is a flake is still a stop.** Prove it by re-running the job and watching it pass on unchanged code, then re-run the close. Talking past a red gate inside the close is how a gate stops being read.
 
 ## Step 2. Review gate
@@ -198,34 +200,52 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 | **No PR** | Create from the step-1 summary, then append the link as its own line |
 | **Open, real description** | Keep it and append the link, unless GitHub already resolves one |
 | **Open, empty or placeholder body** | **Replace** the whole body with the summary, then add the link |
+| **Open, body starts with the `pr:close:summary` marker** | An earlier run of this skill wrote it. **Replace** it with the current summary, then add the link |
 | **Draft** | Handle the body as above, then `gh pr ready` |
 | **Closed but unmerged** | **Stop.** Let the operator reopen or explain. |
 | **Merged** | **Stop.** Nothing left to do. |
 
 ```bash
-gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
-  --title "<resolved issue title>" \
-  --body-file "<changelogRoot>/<slug>/pr-summary-<date>.md"
+SUMMARY="<changelogRoot>/<slug>/pr-summary-<date>.md"
 
-gh pr edit --repo "$REPO" --body "$(gh pr view --repo "$REPO" --json body --jq .body)
+# No PR: create from the summary, marker first
+[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
+  | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
+      --title "<resolved issue title>" --body-file -
+
+# Or, on a replace row: overwrite the body with the summary, marker first
+[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
+  | gh pr edit "$BRANCH" --repo "$REPO" --body-file -
+
+# Then, on every path that appends: add the link as its own line
+BODY=$(gh pr view "$BRANCH" --repo "$REPO" --json body --jq .body) && [ -n "$BODY" ] \
+  && gh pr edit "$BRANCH" --repo "$REPO" --body "$BODY
 
 Closes #$N"
 ```
+
+**Check the summary exists and is non-empty before piping it.** A pipe's exit status is `gh`'s, so a missing or unreadable summary would still send the marker alone as the body, and the link and the verification below would then pass it. If the check fails, **stop**: step 1 did not produce the summary this step needs.
+
+**Read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: at this point the body is never legitimately empty, because it was just created or replaced from the summary.
 
 The title comes from the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
 
 **Do not assume the summary supplies the link.** It is a document, not a PR body, and any closing keyword inside it is likely to sit in a code fence, which GitHub ignores. Creating from it and going straight to verification is how this path fails.
 
-Before appending to an existing description, ask the **same** question the assertion below asks:
+Before appending to a **kept** description, ask the **same** question the assertion below asks:
 
 ```bash
-gh pr view --repo "$REPO" --json closingIssuesReferences \
+gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
   --jq "[.closingIssuesReferences[].number] | index($N) != null"
 ```
 
 `false` appends the link. `true` leaves the body alone, since re-adding duplicates it on every run.
 
+**After a create or a replace in this run, skip that check and append.** The body was just written from the summary, which carries no link, so there is nothing to check. A read taken this soon after an edit is not reliable anyway: `closingIssuesReferences` lags a body edit by a moment. **Keep literal closing keywords with an issue number out of the summary**, even in inline code. That way the appended line is the body's only link.
+
 **An empty body or one carrying the `pr:pre-test:draft-placeholder` marker is a stub, not a description.** Appending to either leaves a merged PR whose body explains nothing. Replace it wholesale.
+
+**A body that starts with the `pr:close:summary` marker is this skill's own output, not the operator's description.** A close that halted and was re-run after more commits would otherwise keep that body, because it already carries the link, and the PR would merge describing the branch as it stood before those commits. Replace it on every run. Whenever this skill writes a body, the marker goes on its first line, anchored to the start as the placeholder is.
 
 **`gh pr create` fails when the branch has no commits ahead of the default branch.** That happens when the whole branch is still uncommitted here, since step 7 is what commits the closing artifacts. Do not halt: record the resolved number, state that creation is deferred, carry the requirement into step 8b, and **do not report this step green.**
 
@@ -234,11 +254,13 @@ gh pr view --repo "$REPO" --json closingIssuesReferences \
 This assertion is the point of the step, and it runs whether the PR was just created or already existed:
 
 ```bash
-gh pr view --repo "$REPO" --json body,closingIssuesReferences \
+gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences \
   --jq "[(.body | length), ([.closingIssuesReferences[].number] | index($N) != null)]"
 ```
 
 Require a non-zero length **and** `true`. Either failing is a **stop**, reported as "PR body is empty" or "the PR does not close #N", never as a warning appended to an otherwise successful report.
+
+**A `false` straight after an edit is not yet a verdict.** `closingIssuesReferences` lags a body edit by a moment, so re-read it, up to three reads in all, before reporting the stop. A zero length needs no re-read.
 
 > **Assert on `closingIssuesReferences`, never on a string match.** That field is GitHub's own resolution of the closing keywords, so it is true exactly when the merge will close the issue. A string match returns true for the keyword inside a code fence, inside a blockquote, or inside a sentence that negates it, and GitHub acts on none of those. A PR has merged with a body that satisfied a string check while closing nothing, and the run that produced it reported success.
 
