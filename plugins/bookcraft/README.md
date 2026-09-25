@@ -166,6 +166,8 @@ Writes a whole book from a one-line description.
 
 It plans the outline first and stops for your approval before narrating anything. That gate shows you the reader it settled on, and says where it came from — your argument, your answer to the question it asked, or its own inference — because an inferred persona reaches every chapter looking exactly like one you supplied.
 
+**What the book stands behind without a source is recorded as it goes**, in `assertions.json` beside `book.json`. That covers your argument word for word, anything it measured, anything the book is to keep out, which source wins where two disagree, and every answer you give at the gate. The gate shows those entries next to the source ledger. Chapters cite them in their marks, so when one changes, `check-provenance.sh` finds the prose still built on the old value.
+
 ### Two profiles
 
 The gate also shows you the **profile**, which is the rule set the whole book is written under. It is one word in `book.json` at that point and a rewrite of every chapter afterwards.

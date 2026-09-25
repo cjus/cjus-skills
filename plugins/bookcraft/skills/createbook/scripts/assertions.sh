@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write a book's assertions.json, list it, and define its format.
 
-    assertions.sh {init,add,supersede,retire,correct,expect,list,check} <book-folder> [options]
+    assertions.sh {init,brief,add,supersede,retire,correct,expect,list,check} <book-folder> [options]
 
 A book rests on its sources and on everything it was told or settled along the
 way. `book.json` records the sources, and any later run can open them again.
@@ -40,6 +40,15 @@ is reported as the key it would have written: `add --kind premise` with no
       `unrecorded`. A book written before this file existed never saved its
       /createbook argument, and a paraphrase recorded as the verbatim argument
       is exactly what the field exists to prevent.
+
+  brief <book> [--reader TEXT] [--reader-origin O] [--profile-origin O]
+        [--reader-inferred TEXT | --no-reader-inferred] [--argument TEXT]
+
+      Records a correction to the brief, which is what /createbook's outline
+      gate is for: a persona the operator restated, or an origin that changed.
+      --argument fills an argument a backfill left null and never replaces
+      one, because the argument is verbatim and a second version of it is a
+      paraphrase.
 
   add <book> --kind K --statement TEXT --by B [--how TEXT] [--date D]
       --applies-to prose|book [--citation expected|legacy]
@@ -733,6 +742,34 @@ def cmd_init(args):
     _commit(path, doc, f"{path}: started by {args.how}, with no entries")
 
 
+def cmd_brief(args):
+    path, doc = _read(pathlib.Path(args.book))
+    b = doc["brief"]
+    changed = []
+    if args.argument is not None:
+        if b["argument"] is not None:
+            raise Refused("brief.argument is already recorded, verbatim, and "
+                          "is never replaced")
+        b["argument"] = args.argument
+        changed.append("argument")
+    for key in ("reader", "reader_origin", "profile_origin"):
+        v = getattr(args, key)
+        if v is not None:
+            b[key] = v
+            changed.append(key)
+    if args.no_reader_inferred:
+        if b.pop("reader_inferred", None) is not None:
+            changed.append("reader_inferred")
+    elif args.reader_inferred is not None:
+        b["reader_inferred"] = args.reader_inferred
+        changed.append("reader_inferred")
+    if not changed:
+        raise Refused("nothing to change; give the brief's new values", code=2)
+    # Rebuilt in key order, so a key added here sits where dump() writes it.
+    doc["brief"] = {k: b[k] for k in BRIEF_KEYS if k in b}
+    _commit(path, doc, f"{path}: brief changed: {', '.join(changed)}")
+
+
 def cmd_add(args):
     path, doc = _read(pathlib.Path(args.book))
     eid = doc["next_id"]
@@ -982,6 +1019,18 @@ def parser():
     p.add_argument("--confirmed", type=int)
     p.add_argument("--date", type=_date_arg, help="created.date; default today")
     p.set_defaults(run=cmd_init)
+
+    p = sub.add_parser("brief", help="correct the persona or an origin")
+    p.add_argument("book")
+    p.add_argument("--argument",
+                   help="only where a backfill left the argument null")
+    p.add_argument("--reader")
+    p.add_argument("--reader-origin", choices=ORIGINS)
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--reader-inferred")
+    g.add_argument("--no-reader-inferred", action="store_true")
+    p.add_argument("--profile-origin", choices=ORIGINS)
+    p.set_defaults(run=cmd_brief)
 
     p = sub.add_parser("add", help="append one entry under the next ID")
     p.add_argument("book")

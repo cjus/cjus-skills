@@ -182,10 +182,10 @@ The skill stops and creates the file before doing what it was asked.
 
 ### `/createbook`
 
-- [ ] Step 1: create the file with the brief, using `init`.
-- [ ] Steps 2 and 3: every answer, ruling, exclusion or measurement becomes an entry before it reaches the outline. Show `list`'s table at the gate, next to the ledger.
-- [ ] Move what the outline keeps today that is really register material into entries: the measurements, the settled decisions, the exclusions. The outline points at the entries. A recreate writes a new outline, so anything kept only in the old one is lost.
-- [ ] Step 5: each outline row lists the entry IDs its chapter carries, the way `Draws on` lists its sources. The chapter agent gets those entries and is told that they outrank its own `fill` and are cited as `assertion <id>`.
+- [x] Step 1: create the file with the brief, using `init`.
+- [x] Steps 2 and 3: every answer, ruling, exclusion or measurement becomes an entry before it reaches the outline. Show `list`'s table at the gate, next to the ledger.
+- [x] Move what the outline keeps today that is really register material into entries: the measurements, the settled decisions, the exclusions. The outline points at the entries. A recreate writes a new outline, so anything kept only in the old one is lost.
+- [x] Step 5: each outline row lists the entry IDs its chapter carries, the way `Draws on` lists its sources. The chapter agent gets those entries and is told that they outrank its own `fill` and are cited as `assertion <id>`.
 
 ### `/updatebook`
 
@@ -258,14 +258,23 @@ The skill stops and creates the file before doing what it was asked.
       gate. Outline rows list the entry IDs their chapter carries. Move register material out of
       the outline. Start a recreate from an existing folder: carry every entry that holds, turn
       `legacy` into `expected`, and report carried entries and conflicts at the gate.
+      Done 2026-09-25 except the recreate. The stop for an existing folder with no file
+      moves to Phase 5, which writes the backfill that stop runs; pointing at a procedure
+      that does not exist yet would ship a dangling instruction.
+      Remaining: the recreate, now unblocked, as `/createbook --recreate <old> <new>` per
+      `## Decision: a recreate is a /createbook flag, into a new folder` below.
 - [ ] Phase 4: `/updatebook` and `/check-claims`. Step 0 stops on a missing file: backfill,
       confirm, commit, then step 0 again. Add the classification row, the `legacy` to `expected`
       rule, the carry, and `check` at step 5. The rewrite and recreate sections read the file,
       not `git log -p`. `/check-claims` stops and backfills too, and reads `settled` entries.
       `/makebook`'s exemption is stated.
+      Per the recreate decision below, the "Recreate the book" level and `§ Recreating the
+      book` name the `/createbook --recreate` command and do not run the recreate.
 - [ ] Phase 5: The backfill procedure. Candidate sources, operator confirmation, the `created`
       block, `legacy` marking, the premise sweep on a superseded premise, and derived keys as one
       `answers` entry with corrected dates taken from the commits that made them.
+      Confirmation follows `## Decision: a backfill confirms by triage` below. Also carries the
+      stop for an existing folder with no file, moved here from Phase 3.
 - [ ] Phase 6: Fixtures and release. Add the fixture cases the ticket lists, confirm the
       missing-file note breaks no exact-output fixture, record the reasoning in `NOTES.md`, bump
       bookcraft's version, and run `scripts/test-fixtures.sh`.
@@ -276,7 +285,108 @@ The skill stops and creates the file before doing what it was asked.
 
 ## Open Questions
 
-- How is a recreate started: a flag on `/createbook` naming the old book folder, or a route from
-  `/updatebook`'s "Recreate the book" level into `/createbook`?
-- How does a backfill present dozens of candidates for confirmation: one at a time, or grouped by
-  kind with the operator striking the ones to drop?
+- ~~How is a recreate started: a flag on `/createbook` naming the old book folder, or a route
+  from `/updatebook`'s "Recreate the book" level into `/createbook`?~~ **Resolved 2026-09-25 by
+  operator decision: a flag, `/createbook --recreate <old-folder> <new-folder>`, into a new
+  folder.** See `## Decision: a recreate is a /createbook flag, into a new folder` below.
+- ~~How does a backfill present dozens of candidates for confirmation: one at a time, or grouped
+  by kind with the operator striking the ones to drop?~~ **Resolved 2026-09-25 by operator
+  decision: by triage.** Solid candidates are grouped by kind for striking, and doubtful ones are
+  asked one by one. See `## Decision: a backfill confirms by triage` below.
+
+## Deferred
+
+- **A review file for a backfill too large to confirm in chat.** Candidates written to a file in
+  a subfolder of the book, such as `<book>/backfill/`, never a `*.md` at the top level, where
+  `/makebook` would bind it and the sweep would report the old premises it quotes. The operator
+  edits the file, and a helper `import` validates and writes the confirmed ones. Not built,
+  because the expected 30 to 50 candidates fit the triage. Revisit if a real backfill does not.
+
+## Decision: a recreate is a /createbook flag, into a new folder
+
+Settled 2026-09-25 by operator decision.
+
+**`/createbook --recreate <old-folder> <new-folder>` runs a recreate. `/updatebook` never
+runs one.** Its "Recreate the book" level and `§ Recreating the book` stop and name that
+command.
+
+- **It lives in `/createbook`, because the skills already divide the work that way.**
+  `updatebook/SKILL.md` says it "does not recreate a book. It says when one is due, and
+  `/createbook` does the work". A recreate reruns `/createbook`'s own procedure: outline, gate,
+  chapter agents, checks. A route through `/updatebook` would have one skill drive another's
+  steps, or duplicate them.
+- **It is a flag, not a second argument naming an existing folder.** That form already means
+  "add chapters to this book" (`createbook § Adding to a book that already exists`). If the same
+  command could append or rewrite every chapter depending on what it found in the folder, one
+  misread would replace a whole book.
+- **It writes into a new folder and refuses the old one.** A recreate is due when chapter
+  boundaries or order change, so the filenames change too. In place, the old chapter files
+  would sit beside the new ones, and `/makebook` binds every `*.md` in the folder. The old book
+  also stays readable, for repointing outside citations
+  (`createbook § When the book supersedes one that already exists`). The operator deletes it
+  once satisfied.
+- **It takes no book description.** The brief in `assertions.json` is the request, and a
+  different request is a new book, not a recreate. A brief whose argument a backfill left `null`
+  is said so at the gate, and the operator can supply the argument through
+  `assertions.sh brief --argument`.
+- **What it does**, from the ticket:
+  - It copies `assertions.json` across with its IDs unchanged, and starts `book.json` from the
+    old one. The profile can still change at the gate, because changed rules are the usual
+    reason for a recreate.
+  - It carries every entry that holds through the outline's Carries rows.
+  - The gate reports how many entries were carried, which chapter carries each, and which
+    conflict with a source. The operator settles each conflict.
+  - After drafting, `expect --all` runs, and then `check-provenance.sh`'s uncited report names
+    exactly what the new book dropped.
+- **An old folder with no `assertions.json` stops and backfills first**, as `/createbook` does
+  for any existing folder (Phase 5).
+
+## Decision: a backfill confirms by triage
+
+Settled 2026-09-25 by operator decision, choosing among four options: one at a time, grouped by
+kind with striking, a review file, and triage.
+
+**The skill checks every candidate against the current prose and git before asking anything.
+It then shows the solid ones grouped by kind, for the operator to strike, and asks the doubtful
+ones one by one.** Every candidate is still shown, so the operator confirms each, as the ticket
+requires, but their attention goes where the evidence is weakest.
+
+What shaped it:
+
+- **A backfill arrives uninvited.** It fires on the first `/updatebook`, `/createbook` or
+  `/check-claims` run after this ships, even a one-word fix, so its cost lands on an operator
+  who came to do something else. One at a time means about ten AskUserQuestion calls at roughly
+  40 candidates, and fatigue waves the late ones through.
+- **Nothing written can be deleted.** The helper only retires and never reuses an ID. So
+  confirmation finishes before the first `add`, and candidates live in the session until then.
+- **AskUserQuestion takes at most four questions per call, with two to four options each.** It
+  can carry individual questions but not a list to strike from.
+- **A uniform table invites rubber-stamping**, the failure `createbook § 3` names for the persona:
+  "a label reads as something already settled". Grouping alone makes solid and doubtful
+  candidates look the same.
+
+The procedure Phase 5 writes:
+
+1. **Gather candidates** from the sources the ticket lists. Each gets a proposed kind, a full
+   sentence, a proposed origin with its date taken from the commit that introduced it, and its
+   evidence: an outline section, a commit, or a mark's location.
+2. **Check each against the current state.** A revision note whose change is still in the
+   chapter text is current. One whose text is gone is "possibly reversed", which is the ticket's
+   stated reason for confirming at all, found mechanically instead of from memory.
+3. **Ask individually, always:**
+   - every possibly-reversed candidate
+   - every ruling whose author the evidence does not settle (`origin.by`)
+   - `search` phrases for both values of each superseded premise, after which the sweep runs at
+     once and shows the passages still built on the old value
+   - the original argument, which is written `null` where it is lost
+4. **Show everything else grouped by kind for striking**, each with its evidence and proposed
+   origin, never as a bare label.
+5. **Ask what the backfill missed.** It reads only what reached the repo.
+6. **Write in one pass:** `init` with `from`, `candidates` and `confirmed`; each premise before its
+   replacement; a corrected answer key added as first derived, then corrected, dated to the commit
+   that fixed it. Every `prose` entry is `legacy`.
+7. **Show `list` as the final confirmation**, before the commit that `/updatebook`'s step 0
+   requires.
+
+A review file (option C) is kept under `## Deferred` for a book whose candidates will not fit in
+a message.

@@ -85,7 +85,7 @@ reason a rebuild that changes one line finishes in two seconds...
 
 [3-4] ...
 
-<!-- src: docker build output, measured 2026-09-10 -->
+<!-- src: assertion 3 (the docker build output) -->
 
 ## Suggested reading
 
@@ -167,6 +167,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<b
 | Command | What it does |
 |---|---|
 | `init` | Creates the file with its `created` and `brief` blocks and no entries. Refuses a folder that already has one |
+| `brief` | Records a correction to the persona or to where it or the profile came from. Fills an argument a backfill left `null`, and never replaces one |
 | `add` | Appends one entry under the next ID |
 | `supersede <id>` | Appends the replacement and writes both links in one step |
 | `retire <id>` | Takes an entry out of force, with the reason |
@@ -175,7 +176,9 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<b
 | `list` | The table to show the operator at a gate. Show this, never the raw JSON |
 | `check` | Every rule of the format. Exits 0 when the file passes, 1 when it does not, 2 when there is nothing to check |
 
-`assertions.sh <command> --help` lists the flags, and each flag writes the key of the same name, with a hyphen for the underscore. **Every write checks the whole file before and after**, so the helper cannot leave a file `check` rejects, and a flag left off comes back as the key it would have written. A file declaring a newer `format` than this bookcraft knows stops every command with a message to update bookcraft.
+`assertions.sh <command> --help` lists the flags, and each flag writes the key of the same name, with a hyphen for the underscore. Pass a value that may begin with a hyphen, such as the argument, as `--flag="value"`. **Every write checks the whole file before and after**, so the helper cannot leave a file `check` rejects, and a flag left off comes back as the key it would have written. A file declaring a newer `format` than this bookcraft knows stops every command with a message to update bookcraft.
+
+**One writer at a time, and it is the session running the skill.** Each write reads the whole file, changes it and writes it back, so two writers at once lose one of the changes with nothing saying so. That is why a chapter agent never writes the file (§ 5).
 
 **The file never names a chapter number or a paragraph tag**, because a recreate renumbers both. An entry says what is true, never where the book says it.
 
@@ -239,6 +242,19 @@ From the argument, settle the title, the slug, the reader, and the angle. The re
 
 **Choose `narration` where the book really is read start to finish** — an explainer, a primer, a long-form argument whose chapters build one case. Say so at the gate the same way.
 
+**Then start `assertions.json`, before the outline exists** (§ The assertions file):
+
+```bash
+mkdir -p books/<book-slug>
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-slug> \
+  --how createbook --argument="<the whole argument, verbatim>" \
+  --reader "<the persona, as one sentence>" --reader-origin <argument|operator|inferred> \
+  [--reader-inferred "<the part of a given persona you supplied>"] \
+  --profile-origin <argument|operator|inferred>
+```
+
+**The argument goes in verbatim, flags and all.** It is the only record of what was asked for. The outline paraphrases it, and a recreate that starts from a paraphrase starts from a different book. The origins are what § 3 states at the gate, so write them the way § 3 will say them, and when the gate corrects the persona or an origin, record the correction with `assertions.sh brief`.
+
 ### Sizing the book
 
 **Nothing caps a chapter's length** (`reference/chapter-prose.md § Length`), so sizing is an estimate made for the operator at step 3 and never a budget handed to a chapter agent. The only book-scale evidence is the reference book: eighteen chapters running 1,675 to 1,984 words of prose, averaging 1,895, measured with `check-book.sh` on 2026-09-13. At the 175 words a minute the spec assumes, that is about eleven minutes a chapter.
@@ -294,12 +310,24 @@ Then, below it, two things the ledger produces:
 
 **Read every source before writing the ledger.** A ledger built from filenames is a guess, and every chapter brief below inherits it. This is the step that costs real time and the one that pays for itself: a claim the sources do not actually support is cheapest to catch here, before twenty chapters rest on it.
 
+**Record each claim no source holds as an entry before it reaches the outline.** Reading the sources is where most of them turn up, and each is one `assertions.sh add`:
+
+| What turned up | Kind | `applies_to` |
+|---|---|---|
+| Something you measured: a command run on this machine, a count taken by hand | `measured` | `prose` |
+| A fact the plans will rest on that no source states, such as a class size you had to assume. Give `search` the phrases the prose will use for it | `premise`, by `book` | `prose` |
+| Two sources that disagree, and which one the book follows, or that it states the conflict and leaves it open | `ruling`, by `book` | `book` |
+| Something the book keeps out: a name, a figure, a code | `ruling`, by `book` | `book` |
+
+Each of these is yours to propose and the operator's to settle at § 3. **The outline holds no register of its own.** Measurements, rulings, exclusions and settled decisions live in the file and nowhere else, and an outline row cites one by its ID where it needs to. A recreate writes a new outline, so a decision kept only in the old one goes with it.
+
 For every chapter the outline then carries:
 
 - **Number, title, and filename.**
 - **The brief:** two or three sentences on what this chapter explains, specific enough that someone else could write it.
 - **Draws on:** the ledger rows this chapter pays, which become the chapter header's Draws-on row.
 - **Fills in:** what this chapter supplies that the sources do not, which becomes its Fills-in row.
+- **Carries:** the IDs of the `prose` entries this chapter rests on, the way Draws on lists its sources. The chapter agent is given them and cites them (§ 5). A `book` entry governs every chapter and goes on no row.
 - **Concept list:** the gaps this chapter ends on, taken from the ledger and checked against the term ledger so no item names something a later chapter teaches.
 - **Scope** (`guide` only): where this chapter sits in the book or the course, such as the week, the session or the stage. The opening paragraph and the first sentence of `## In short` both name it, for a reader who opens the book at this chapter (`reference/guide.md § Opening`). A guide outline records no handoff nouns: its chapters do not chain.
 - **Opens on** (`narration` only): the exact noun this chapter's first paragraph starts from. For chapter 1 this is the book's hook. For every later chapter it is the noun the previous chapter closed on. **Check it against the term ledger.** Where the noun is a technical term no earlier chapter's row glosses, record on this chapter's row that it glosses the noun on arrival, at no cost against its six (`reference/narration.md § What the reader arrives with, under narration`): the handoff grants the word and never the definition, and an outline that hands forward an unglossed term is how a chapter comes to open on a definite noun phrase the reader has never met. Measured on the reference book's own outline: of sixteen handoff nouns, one was glossed on an earlier row before being handed forward and six are technical terms glossed on nobody's row, the rest ordinary words bar one technical term covered by an adjacent gloss a chapter earlier. Those six are what the gate at § 3 counts, so count technical terms rather than nouns.
@@ -332,11 +360,15 @@ It reads `OUTLINE.md` alone: every row marked re-openable names a file that is o
 
 **What it does not reach:** a row whose prose is wrong about a source it correctly names, and a row that contradicts a note elsewhere in `OUTLINE.md`. Both need a reader. Resolving the ledger narrows what the gate has to be read for; it does not replace reading it.
 
-Then show the source ledger, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
+Then show the source ledger, **the entries beside it as `assertions.sh list` prints them**, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
 
 **Lead with the ledger, not the chapter list.** The chapter list is what the operator expects to review and the ledger is what they can actually correct: a source you were not given, a source you read wrongly, a gap you propose to fill that they would rather you left open. A wrong chapter list costs twenty chapters, and a wrong ledger costs the same twenty plus every claim inside them.
 
-**State the reader as a sentence, and say where it came from.** "Written for a second-year apprentice electrician who has wired domestic circuits but never opened a three-phase board" invites the correction. `Reader: apprentice electricians` does not, because a label reads as something already settled. In the same breath, say where that persona came from: the argument, the operator's answer to the ask at § 1, or your own inference from the subject and the sources. **A persona can be part given and part inferred**, and that case is the quiet one: an argument naming "apprentice electricians" and nothing else fires no ask, because a reader was named, while what they can be assumed to know is still yours to guess. Say which part you supplied rather than calling the whole persona given. All of this is on the outline's top line (§ 2), so read it from there rather than from memory.
+**Show the entries next, and never as raw JSON.** They are what the book will stand behind with no source to check them against, so the operator sees every one before a chapter rests on it.
+
+**Every answer the gate produces becomes an entry before it reaches the outline.** A fact the operator supplies that no source holds is `given`. A call on which source wins, a conflict to leave open, or something to include or keep out is a `ruling` by the `operator`. A recommendation of yours they accept is `adopted`, with `acted_on` saying what they did with it. A premise of yours they correct is superseded, never edited: `assertions.sh supersede <id>`, with `search` phrases for the new value. An entry you proposed and they reject is retired, with their reason. Then update the outline rows that cite them. A correction that reached only the outline is lost at the first recreate.
+
+**State the reader as a sentence, and say where it came from.** "Written for a second-year apprentice electrician who has wired domestic circuits but never opened a three-phase board" invites the correction. `Reader: apprentice electricians` does not, because a label reads as something already settled. In the same breath, say where that persona came from: the argument, the operator's answer to the ask at § 1, or your own inference from the subject and the sources. **A persona can be part given and part inferred**, and that case is the quiet one: an argument naming "apprentice electricians" and nothing else fires no ask, because a reader was named, while what they can be assumed to know is still yours to guess. Say which part you supplied rather than calling the whole persona given. All of this is on the outline's top line (§ 2), so read it from there rather than from memory. Whatever the operator corrects here, the persona or where it or the profile came from, goes into the file with `assertions.sh brief` and onto the outline's top line in the same pass.
 
 **An inferred persona is what this line is for.** Checking that a persona exists fires only when the field is empty, and from a subject plus a folder of sources a plausible reader is almost always available, so the failure that costs a book is a confident wrong persona rather than a missing one. By the time chapters exist it is at the top of the outline (§ 2) and in every chapter agent's prompt (§ 5), reading exactly like a persona the operator supplied. A wrong reader is not a wrong chapter. It is every chapter pitched at the wrong person, which is the one defect a rewrite cannot localise.
 
@@ -367,7 +399,6 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
   "glossary": true,
   "edition": "reading",
   "exclude": ["OUTLINE.md"],
-  "unsourced": ["measured"],
   "sources": {
     "syllabus": {"path": "../sources/data-modeling-syllabus.pdf", "display": "the syllabus"},
     "Week 5 deck": "../sources/week-5-deck.pptx",
@@ -407,7 +438,7 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
 }
 ```
 
-The bare string form stays valid and unchanged, for every source whose key already reads as something a reader could be told. Add a `display` only where the key does not. `check-book.sh` flags a source key that looks like a repo path appearing in a chapter's prose, which is the case the display name exists to fix. Write it from the step 2 ledger, in the same pass that fixes the citation spellings, because the ledger already holds every re-openable source and its path. Without it a mark can be checked for grammar and nothing else, and `check-provenance.sh` says so rather than printing OK. `unsourced` extends the built-in `fill` with any other word the book uses for a component that names no external source.
+The bare string form stays valid and unchanged, for every source whose key already reads as something a reader could be told. Add a `display` only where the key does not. `check-book.sh` flags a source key that looks like a repo path appearing in a chapter's prose, which is the case the display name exists to fix. Write it from the step 2 ledger, in the same pass that fixes the citation spellings, because the ledger already holds every re-openable source and its path. Without it a mark can be checked for grammar and nothing else, and `check-provenance.sh` says so rather than printing OK. `unsourced` extends the built-in `fill` with any other word the book uses for a component that names no external source. **Use it for a method, never for a fact.** A measurement, an email, a page behind a sign-in: each is a claim no later run can reopen, so each is an entry in `assertions.json` cited as `assertion <id>`, which `check-provenance.sh` resolves. It never opens anything behind an `unsourced` label.
 
 **`provenance` and `suggested_reading` declare the resource-first format**: every unit carries a `<!-- src: ... -->` mark, and every chapter ends with its concept list. Both default to absent, which means a book written before the format existed still passes; `check-book.sh` holds a book to each only where it declares it, with no inference and no flag. Set both `true` for any book written against sources, which is every book this skill now writes by default.
 
@@ -435,13 +466,16 @@ Each agent's prompt carries, in full:
 6. The exact output path, and the file format above: `# Title` as the first line, the header table, the prose with its per-part H2s, and the concept list last. **Where the book declares `overview`, say that `## In short` is added at step 6 and that this agent does not write it.** The section is read off the finished chapter and takes its words from a glossary that does not exist yet, so an agent that writes it here invents the definitions the section exists to avoid inventing.
 7. **When the book is tagged, this chapter's number and the instruction to tag every paragraph.** The rule itself is at `reference/chapter-prose.md § Paragraph tags`, but the chapter number is not in that file and the agent cannot infer it, so the prompt has to supply it. Under `--no-tags`, say the book carries no tags rather than leaving the item out, since the spec describes tagging as the normal case.
 8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since the second kind is filled-in tier however confident it feels.
-9. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
-10. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
-11. **The findings path, `<book>/outline-findings/<chapter file stem>.md`, and the instruction to write anything wrong with the outline there rather than in the reply.** Say that nothing to report means no file. An agent told to report a problem and given nowhere to put it will put it in the return, which is where it is lost.
+9. **The entries this chapter carries, and every `book` entry**, each with its ID and statement as `assertions.sh list` prints them. Say that they outrank the agent's own `fill`, that a unit resting on one cites it as `assertion <id>` (`reference/chapter-prose.md § Provenance`), and that a `book` entry binds every chapter, so nothing an exclusion keeps out appears in any of them. Say too that the agent never writes `assertions.json`: a measurement it makes, or an entry it finds a source contradicting, goes in its findings file.
+10. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
+11. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
+12. **The findings path, `<book>/outline-findings/<chapter file stem>.md`, and the instruction to write anything wrong with the outline there rather than in the reply.** Say that nothing to report means no file. An agent told to report a problem and given nowhere to put it will put it in the return, which is where it is lost.
 
 **Findings go to a file, never into the return message.** An agent that opens its sources will sometimes find the outline wrong: a ledger row that contradicts the source, a page locator off by one, an anchor attributed to the wrong document. Those are worth more than the chapter that found them, because one bad ledger row is paid by every chapter drawing on it. They must not travel in the reply. A return carrying prose can exceed the harness's return cap, and a truncated return arrives empty rather than short, so the findings are lost with nothing saying they ever existed. Three agents' findings went that way on the reference book, had to be chased afterwards, and some were never recovered. Give each agent a path of its own, `<book>/outline-findings/<chapter file stem>.md`, and say that an agent with nothing to report writes no file. One path per agent rather than one shared file, because the batch drafts in parallel and four agents appending to one file interleave. The folder is invisible to everything that reads the book: `check-book.sh`, `check-provenance.sh` and `/makebook` each glob the book folder one level deep, which is why `claim-checks/` can already sit there.
 
 **Read that folder when the batches finish, before step 6. An absent folder is the all-clear**, since an agent with nothing to report writes no file. Most of what would otherwise land there is already gone, because § 3 resolved the ledger before the gate; what reaches this folder is what only a reader could have found. A ledger row that is wrong is wrong in `OUTLINE.md` and in `book.json` too, so fixing it only in the chapter that noticed leaves it in place for every later run and for `/updatebook`.
+
+**A finding about an entry is written to the file here, by this session.** A measurement an agent made becomes an entry, and the mark on the paragraph resting on it changes to cite the new ID. An entry a source contradicts goes to the operator: the entry and the source are both authorities, and neither wins without their say. Their answer supersedes the entry or retires it, and the outline rows that cite it follow.
 
 **Every claim in a chapter is written from the source, not from the prompt.** The agent opens what it was given. A brief is a plan for a chapter, and a chapter that rests on the brief rather than on the material is a chapter of confident paraphrase with nothing behind it. This is why chapter agents get paths.
 
@@ -586,7 +620,7 @@ Fix by rewriting the paragraph, not by regenerating the chapter.
 
 ### 9. Report
 
-Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), how many chapters are mostly filled in, the glossary term count where there is one, anything the checker flagged, and the `/makebook` command to bind it:
+Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), how many chapters are mostly filled in, the glossary term count where there is one, how many entries `assertions.json` holds, anything the checkers flagged, and the `/makebook` command to bind it:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \

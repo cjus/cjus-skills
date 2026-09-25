@@ -83,3 +83,59 @@ Tested on a scratch book under Python 3.9 and 3.14 with every shape above. Hits 
 across a line break and emphasis, in `OUTLINE.md` and in an SVG split across tspans; there
 were none in `claim-checks/`, "twenty-first" or "plenty". `check-book.sh` raises nothing
 about the new marks. `scripts/test-fixtures.sh`: 16 passed, 0 failed.
+
+### 2026-09-25 11:07:58 MDT — Phase 3: /createbook writes the file (the recreate waits)
+
+`createbook/SKILL.md` now starts `assertions.json` at step 1, before the outline exists, with
+the argument verbatim, flags included, passed as `--argument="..."` so a leading flag is not
+read as the helper's own. At step 2, a table maps what reading the sources turns up to a kind:
+a measurement, an assumed premise, a conflict between sources, an exclusion. **The outline keeps
+no register of its own.** Measurements, rulings, exclusions and settled decisions live in the
+file, and a row cites an ID where it needs one. Each chapter row gains **Carries**, the `prose`
+entries it rests on. At step 3 the gate shows `list` beside the ledger, and every answer becomes
+an entry before it reaches the outline: `given`, `ruling`, `adopted`, a supersede for a
+corrected premise, or a retire for a rejected proposal. Step 5's prompt gains an item, now 9,
+giving each agent its carried entries and every `book` entry, and telling it to cite them as
+`assertion <id>` and never to write the file. Items 1 to 5, which the text cites by number, did
+not move.
+
+- **`brief`, a helper command the ticket did not list.** Step 1 writes the persona and its
+  origins before the gate, and the gate exists to correct them, so they had to be changeable. It
+  never replaces a recorded argument, since a second version of a verbatim argument is a
+  paraphrase. It only fills one that a backfill left `null`.
+- **One writer at a time, stated as a rule.** Each write rewrites the whole file, so two
+  parallel chapter agents adding entries would lose one silently. Agents report a measurement or
+  a contradicted entry in their findings file, and the session adds or supersedes the entry
+  after the batch and re-points the mark.
+- **`"unsourced": ["measured"]` is out of the `book.json` template**, and `unsourced` is
+  documented as "for a method, never for a fact". A measurement is now an entry. The chapter-format
+  example's measured mark reads `assertion 3 (the docker build output)`.
+- The README's `/createbook` section says what the file records and that the gate shows it.
+
+Deferred, as recorded in `PLAN.md`: starting a recreate from an existing folder (the first Open
+Question), and the stop for an existing folder with no file (Phase 5, with the backfill).
+Tested by running the documented step 1 to 3 commands against a scratch book, and every `brief`
+refusal. `scripts/test-fixtures.sh`: 16 passed, 0 failed.
+
+### 2026-09-25 11:44:03 MDT — Decision: how a recreate is started
+
+The operator settled the first Open Question: **`/createbook --recreate <old-folder>
+<new-folder>`**, written into a new folder, and `/updatebook` only names the command. This
+matches the split both skills already document (`/updatebook` "does not recreate a book").
+It keeps "point `/createbook` at an existing folder" meaning "add chapters", so the command
+never has to guess between appending and rewriting. It also keeps the old chapter files out
+of the new folder, where `/makebook` would otherwise bind them. The reasoning, and what the
+flag does, are in `PLAN.md § Decision: a recreate is a /createbook flag, into a new folder`.
+It unblocks the rest of Phase 3 and fixes how Phase 4's recreate sections read.
+
+### 2026-09-25 11:49:37 MDT — Decision: how a backfill is confirmed
+
+The operator settled the second Open Question: **by triage.** The skill checks each candidate
+against the current prose and git. Solid ones are shown grouped by kind for striking. Doubtful
+ones are asked individually: a possibly reversed revision note, a ruling with an unclear author,
+the `search` phrases for a superseded premise, and the argument. All four options were weighed
+against when a backfill arrives (uninvited, on the first run after this ships), the rule that
+nothing written can be deleted, AskUserQuestion's limit of four questions per call, and the
+rubber-stamping a uniform table invites. The procedure is in
+`PLAN.md § Decision: a backfill confirms by triage`, and a review file for oversized backfills
+is under `## Deferred`. Both Open Questions are now closed.
