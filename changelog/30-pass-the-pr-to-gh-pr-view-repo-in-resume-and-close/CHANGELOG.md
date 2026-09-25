@@ -75,6 +75,11 @@ when using the --repo flag".
   are now guarded by `[ -s "$SUMMARY" ]`.
 - **Fourth close run:** the re-review approved (`pr-review-2026-09-25-phase7-fix.md`), and the
   run continued from step 3.
+- **Step 8b finding:** after the step 7 push (`8832ca2`), #38's `closingIssuesReferences` read `[]`
+  on three reads and again a minute later. The body was unchanged at 11,754 characters and
+  still ended with the closing line. Re-saving the identical body brought back `[30]` within one
+  read. That is either a body that never resolved, where the pre-push `true` was lag, or a push
+  that drops the resolution. The step 8 housekeeping push re-tests which one.
 - **Finding:** a clean test on #38 showed the lag only after the append (`false`, then `true`).
   The earlier stale-looking `true` after a replace came from an inline `Closes #30` in the
   summary, since removed. The skill now says to keep such literals out of the summary.
