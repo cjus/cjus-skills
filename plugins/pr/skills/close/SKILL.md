@@ -27,14 +27,15 @@ The sequence, one row each:
 - **2** review gate
 - **3** `/pr:condense`
 - **4** PR exists, and the issue is linked by a **verified** closing reference
+- **4b** PR title starts with the ticket ID, **verified**
 - **5** `/pr:commitmsg`
 - **6** continuity entry and the assertion audit
 - **6b** deferred-work triage
 - **7** arm the sentinel, stage, commit, push
 - **8** terminal `/pr:cp` until the tree is clean
-- **8b** PR body verified non-empty and carrying a resolved closing reference
+- **8b** PR body verified non-empty and carrying a resolved closing reference, and the title verified prefixed
 
-**If a gate halts the run** (1b conflicts, 1c unaccepted drift, 1d a failing check, step 2 requesting changes, step 4 finding no exact match or a closed or merged PR, or the default-branch stop), report the rows you reached, name the halt, and **stop**. Do not write rows for steps you never got to.
+**If a gate halts the run** (1b conflicts, 1c unaccepted drift, 1d a failing check, step 2 requesting changes, step 4 finding no exact match or a closed or merged PR, 4b a title that cannot be read or does not verify, or the default-branch stop), report the rows you reached, name the halt, and **stop**. Do not write rows for steps you never got to.
 
 **Nothing here is a permission stop.** On a feature branch the run goes end to end through 7, 8 and 8b without asking. See `${CLAUDE_PLUGIN_ROOT}/reference/git-conventions.md`.
 
@@ -44,7 +45,7 @@ The sequence, one row each:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-lifecycle-state.mjs" --text
 ```
 
-Take the branch, slug, repo, default branch, ticket number and plan folder from that. Read `.claude/pr-config.json` for `checks`, `docs`, `migrations` and `closeGate`.
+Take the branch, slug, repo, default branch, ticket number and plan folder from that. Read `.claude/pr-config.json` for `checks`, `docs`, `migrations`, `closeGate` and `ticketPrefix`. Derive the ticket ID as the PR title writes it, from the number and `ticketPrefix`, per `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`: `#32` with no prefix, `ABC-32` with one. Step 4 and step 4b use it as `$ID`, so the title prefix is `[$ID] `.
 
 ## Step 0. Clear a stale close sentinel
 
@@ -211,7 +212,7 @@ SUMMARY="<changelogRoot>/<slug>/pr-summary-<date>.md"
 # No PR: create from the summary, marker first
 [ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
   | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
-      --title "<resolved issue title>" --body-file -
+      --title "[$ID] <resolved issue title>" --body-file -
 
 # Or, on a replace row: overwrite the body with the summary, marker first
 [ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
@@ -228,7 +229,7 @@ Closes #$N"
 
 **Read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: at this point the body is never legitimately empty, because it was just created or replaced from the summary.
 
-The title comes from the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
+A created title is `[$ID] ` followed by the title of the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
 
 **Do not assume the summary supplies the link.** It is a document, not a PR body, and any closing keyword inside it is likely to sit in a code fence, which GitHub ignores. Creating from it and going straight to verification is how this path fails.
 
@@ -247,18 +248,40 @@ gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
 
 **A body that starts with the `pr:close:summary` marker is this skill's own output, not the operator's description.** A close that halted and was re-run after more commits would otherwise keep that body, because it already carries the link, and the PR would merge describing the branch as it stood before those commits. Replace it on every run. Whenever this skill writes a body, the marker goes on its first line, anchored to the start as the placeholder is.
 
-**`gh pr create` fails when the branch has no commits ahead of the default branch.** That happens when the whole branch is still uncommitted here, since step 7 is what commits the closing artifacts. Do not halt: record the resolved number, state that creation is deferred, carry the requirement into step 8b, and **do not report this step green.**
+**`gh pr create` fails when the branch has no commits ahead of the default branch.** That happens when the whole branch is still uncommitted here, since step 7 is what commits the closing artifacts. Do not halt: record the resolved number, state that creation is deferred, carry the requirement into step 8b, and **do not report this step green.** Step 4b's title check is deferred with it.
+
+### Step 4b. Prefix the title
+
+The title is what carries the ticket into the squash commit on the default branch. GitHub appends only the PR number, so an unprefixed title lands as `<title> (#41)` with the ticket nowhere in it. See `${CLAUDE_PLUGIN_ROOT}/reference/ticketing.md § PR numbers are not ticket numbers`.
+
+A PR this run just created already has the prefix. For a PR that already existed, read the title, and **stop if the read fails or comes back empty**, for the same reason as the body read above:
+
+```bash
+TITLE=$(gh pr view "$BRANCH" --repo "$REPO" --json title --jq .title) && [ -n "$TITLE" ]
+```
+
+| Title | Action |
+|---|---|
+| Starts with exactly `[$ID] ` | Leave it. |
+| Starts with a different ID of the same shape, `[#<digits>] `, or `[<PREFIX>-<digits>] ` with a prefix configured | Replace that token with `[$ID]` and keep the rest. Name the old token in the report: the PR was titled for a different ticket or the number was mistyped, and step 4 has just confirmed this branch's ticket by exact number. |
+| Anything else | Prepend `[$ID] ` and keep the rest. The operator's wording stays. The prefix is added, and the words are not replaced with the issue title. |
+
+```bash
+gh pr edit "$BRANCH" --repo "$REPO" --title "[$ID] <title without any old prefix>"
+```
+
+**Only a leading ticket-shaped token is ever replaced.** Everything else in the title stays as written. That includes a leading tag that is not ticket-shaped, such as `[WIP]`: it belongs to the operator, so the prefix goes in front of it, as `[$ID] [WIP] …`.
 
 ### Verify on every path, and halt on failure
 
 This assertion is the point of the step, and it runs whether the PR was just created or already existed:
 
 ```bash
-gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences \
-  --jq "[(.body | length), ([.closingIssuesReferences[].number] | index($N) != null)]"
+gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences,title \
+  --jq "[(.body | length), ([.closingIssuesReferences[].number] | index($N) != null), (.title | startswith(\"[$ID] \"))]"
 ```
 
-Require a non-zero length **and** `true`. Either failing is a **stop**, reported as "PR body is empty" or "the PR does not close #N", never as a warning appended to an otherwise successful report.
+Require a non-zero length, then `true`, then `true`. Any one failing is a **stop**, reported as "PR body is empty", "the PR does not close #N" or "the PR title does not start with [$ID]", never as a warning appended to an otherwise successful report.
 
 **A `false` straight after an edit is not yet a verdict.** `closingIssuesReferences` lags a body edit by a moment, so re-read it, up to three reads in all, before reporting the stop. A zero length needs no re-read.
 
@@ -340,12 +363,13 @@ pr:close report
   2  review gate .............. VERDICT: APPROVE, pr-review-<date>.md
   3  /pr:condense ............. condensed PLAN.md + CHANGELOG.md
   4  PR + issue link .......... PR #<n> created | already open | draft marked ready; closes #<n> "<title>" verified
+  4b PR title ................. "[<id>] <title>" verified; created prefixed | already prefixed | prefixed this run | replaced [<old id>]
   5  /pr:commitmsg ............ wrote COMMITMSG.md
   6  continuity + assertions .. <date>-<slug>.md added; A-<nnn> added | no invariant change (stated)
-  6b deferred triage ......... N items: N dropped, N ticketed (#<n>) | none found
+  6b deferred triage ......... N items: N dropped, N ticketed (issue #<n>) | none found
   7  commit + push ........... <sha> pushed to origin/<branch>
   8  terminal /pr:cp ......... tree clean | <sha> housekeeping commit
-  8b PR body verified ........ PR #<n> body <len> chars, closing ref to #<n> present
+  8b PR verified ............. PR #<n> title "[<id>] …", body <len> chars, closing ref to issue #<n> present
 ```
 
 Use `skipped, <reason>` for anything not done. **Never report a step you did not perform.** Rows 7, 8 and 8b are filled after those steps run, so print them in the final message rather than this one.
@@ -387,12 +411,12 @@ The close itself writes files that can land **after** the step-7 commit, most of
 - **Logging can fire more than once**, so re-check `git status --porcelain` after it returns and invoke it again while the tree is non-empty.
 - End only when `git status --porcelain` reports clean.
 
-## Step 8b. Backstop: assert the PR exists and closes the issue
+## Step 8b. Backstop: assert the PR exists, closes the issue and carries the ticket
 
 Step 4 owns this; here its one deferral is settled. The branch is pushed now, so the "no commits ahead" case that blocks creation at step 4 cannot still apply.
 
-- **Creation was deferred** → create the PR now exactly as step 4 describes, **including the edit that appends the closing reference.** The create alone does not add it.
-- **Then, unconditionally**, re-run step 4's verification against the final pushed state. A zero length or a `false` is a **stop**, reported as a failed close.
+- **Creation was deferred** → create the PR now exactly as step 4 describes, with the `[$ID] ` title, **including the edit that appends the closing reference.** The create alone does not add it.
+- **Then, unconditionally**, re-run step 4's verification against the final pushed state, title included. A zero length or a `false` is a **stop**, reported as a failed close.
 
 The duplication with step 4 is deliberate. Step 4 runs before the closing artifacts are committed, so its verdict describes a PR that step 7 then changes. This check describes what actually merges.
 

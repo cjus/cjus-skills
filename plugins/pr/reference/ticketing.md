@@ -2,7 +2,7 @@
 
 Tickets are **GitHub issues** on the repo `.claude/pr-config.json` names. There is no external tracker, and the issue number **is** the ticket number.
 
-See `config.md` for how `repo`, `ticketPrefix` and `branchPrefix` resolve, and for the slug rule every skill shares.
+See `config.md` for how `repo`, `ticketPrefix` and `branchPrefix` resolve, and for the slug and PR-title rules every skill shares.
 
 ## The lifecycle
 
@@ -45,6 +45,27 @@ gh issue view 412 --repo "$REPO" --json number,title,state,labels,url
 ```
 
 **Resolve by number, never by searching titles.** A search over title and body readily returns a *different* issue that merely mentions the one you want: a follow-up, a spin-off, a duplicate report. Linking the wrong number closes someone else's ticket on merge, and unlike a missing link that failure is invisible afterward.
+
+## PR numbers are not ticket numbers
+
+The same shared sequence means **a PR's number never matches its ticket's.** The PR and its issue are two objects, and each takes its own number from the one sequence. Ticket #32 merged as PR #41, and without the title prefix its squash commit landed as `Bind a fixture book in CI so makebook changes get a signal (#41)`, with 32 appearing nowhere in it.
+
+Each surface shows one number or both:
+
+| Surface | Number shown | Put there by |
+|---|---|---|
+| Branch name and plan folder | ticket | `/pr:start` |
+| PR title | ticket, as the `[#32]` prefix | `/pr:pre-test` on create, `/pr:close` on every run |
+| PR URL, and every `gh pr` argument | PR | GitHub |
+| PR body's closing reference, `Closes #32` | ticket | `/pr:close` |
+| Squash commit subject on the default branch | both, as `[#32] <title> (#41)` | GitHub, from the PR title plus the PR number it appends |
+| Lifecycle state line | both, as `PR #41 → closes #32` | `pr-lifecycle-state.mjs` |
+
+**The squash subject carries the ticket only when GitHub takes that subject from the PR title.** Under the repo setting `squash_merge_commit_title: COMMIT_OR_PR_TITLE`, a PR with a single commit lands with that commit's subject instead, and the prefix never reaches the default branch. `PR_TITLE` closes that hole. `/pr:init` checks the setting and offers the change.
+
+**The squash body does not reliably carry either number.** Under `squash_merge_commit_message: COMMIT_MESSAGES` it is the branch's own commit messages, so the PR body's `Closes #32` does not land in it.
+
+**In a report, write a PR number as `PR #41`, never as a bare `#41`.** A bare `#N` is read as the ticket. Where both appear together, name the relationship, as in `PR #41 → closes #32`, so the reader never has to work out which one is which.
 
 ## Reporting a ticket
 

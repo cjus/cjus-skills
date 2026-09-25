@@ -1,6 +1,6 @@
 ---
 name: init
-description: Set a repo up for the pr plugin. Detects the GitHub repo, the package manager and the check commands, asks about the choices it cannot detect, writes .claude/pr-config.json, and creates the status and priority labels the queue runs on. Use when the user says "/pr:init", when a skill reports a no-config gap, or when setting up a repo to use this workflow for the first time.
+description: Set a repo up for the pr plugin. Detects the GitHub repo, the package manager and the check commands, asks about the choices it cannot detect, writes .claude/pr-config.json, creates the status and priority labels the queue runs on, and checks that squash merges take the PR title. Use when the user says "/pr:init", when a skill reports a no-config gap, or when setting up a repo to use this workflow for the first time.
 allowed-tools: Bash(git:*), Bash(gh:*), Bash(node:*), Bash(ls:*), Bash(cat:*), Read, Write, AskUserQuestion
 argument-hint: "[--force]"
 ---
@@ -9,7 +9,7 @@ argument-hint: "[--force]"
 
 Prepare the current repo for this plugin. Runs **once per repo**, not once per branch.
 
-It writes `.claude/pr-config.json` and creates the labels the queue depends on. Everything else in the plugin runs on defaults until it does, so `/pr:init` is a convenience for recording what differs, plus the one step that touches GitHub's label set.
+It writes `.claude/pr-config.json` and creates the labels the queue depends on. Everything else in the plugin runs on defaults until it does, so `/pr:init` is a convenience for recording what differs, plus the two steps that touch GitHub: its label set, and, only with a yes, the repo's squash-merge title setting.
 
 | Invocation | Effect |
 |---|---|
@@ -120,7 +120,34 @@ gh label list --repo "$REPO" --limit 60 --json name --jq '.[].name'
 
 **The status and priority labels are the whole ticket lifecycle**, so a missing one silently drops an issue out of the queue rather than erroring. That is why this step verifies instead of trusting.
 
-## Step 6. Tell the operator the hooks just went live
+## Step 6. Check how squash merges are titled
+
+`/pr:pre-test` and `/pr:close` prefix every PR title with its ticket ID, `[#32] <title>`, so a squash merge lands as `[#32] <title> (#41)` with both numbers in its subject. That holds only when GitHub builds the squash subject from the PR title. See `${CLAUDE_PLUGIN_ROOT}/reference/ticketing.md § PR numbers are not ticket numbers`.
+
+```bash
+gh api "repos/$REPO" --jq '[.allow_squash_merge, .squash_merge_commit_title, .squash_merge_commit_message] | @tsv'
+```
+
+| Result | Action |
+|---|---|
+| `allow_squash_merge` is `false` | Report `squash merging off` and move on. There is no squash subject to fix. |
+| `squash_merge_commit_title` is `PR_TITLE` | Report it as already set. |
+| `squash_merge_commit_title` is `COMMIT_OR_PR_TITLE` | Ask, below. |
+| A field is empty or the call fails | Report `could not read` and move on. These fields may need admin access to read, and an unread setting is not evidence of either value. |
+
+Under `COMMIT_OR_PR_TITLE`, **a PR with a single commit lands with that commit's subject, not its title**, so the ticket prefix silently fails to reach the default branch on exactly the small PRs that are easiest to merge without looking. Ask with `AskUserQuestion`, carrying `PR_TITLE` as the recommended option, and say plainly that it changes a setting on the GitHub repo, not a file in it. **Never change it without a yes.** It is a repo-wide setting, and it applies to PRs that never went through this plugin.
+
+On a yes, send the current message setting back unchanged. GitHub requires the title whenever the message is sent, and sending both makes the call change the title and nothing else:
+
+```bash
+gh api -X PATCH "repos/$REPO" \
+  -f squash_merge_commit_title=PR_TITLE \
+  -f squash_merge_commit_message="$CURRENT_MESSAGE"
+```
+
+Then re-run the read and report the value it returns rather than the value you sent. A `403` or `404` from the `PATCH` means the token lacks admin on the repo. Report that as `left as COMMIT_OR_PR_TITLE (needs repo admin)`. It does not fail the run, since everything else this skill set up still stands.
+
+## Step 7. Tell the operator the hooks just went live
 
 **The hooks arrive with the plugin and need no `.claude/settings.json` edit.** They are declared in `${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json`, which is the scope where `${CLAUDE_PLUGIN_ROOT}` resolves. Do not offer a settings fragment, and do not write one: earlier versions of this step did, and the result was hooks that never ran and failed silently.
 
@@ -139,17 +166,18 @@ Name the two per-repo off switches, since they are the answer to "I want the res
 
 There is no switch for the session-context hook; it is silent unless the branch has a plan folder. To turn all three off, the plugin itself is what gets disabled. `${CLAUDE_PLUGIN_ROOT}/hooks/README.md` has the detail.
 
-## Step 7. Report
+## Step 8. Report
 
 ```
 pr plugin ready in <owner/name>
 
   Config:    .claude/pr-config.json (<n> keys written)
   Default:   <branch> (detected each run, not stored)
-  Tickets:   feature/<number>-<slug>, ticket ID is the issue number
+  Tickets:   feature/<number>-<slug>, ticket ID is the issue number, PR titles read [#<number>] <title>
   Worktrees: enabled -> <root> | disabled
   Checks:    lint <cmd> | none, test <cmd> | none, ...
   Labels:    <n> present, <n> created this run
+  Squash:    PR_TITLE | set to PR_TITLE this run | left as COMMIT_OR_PR_TITLE (declined | needs repo admin) | squash merging off | could not read
   Hooks:     active with the plugin - session context, main guard <on | off>, close gate <on | off>
 
 Next: /pr:ticket <description> to file the first ticket.

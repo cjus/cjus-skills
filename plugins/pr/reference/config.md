@@ -109,7 +109,7 @@ git remote get-url origin \
 
 **If `origin` is absent or the result does not look like `owner/name`, stop and ask.** Guessing here targets `gh` at the wrong repo, and the failure is silent: `gh issue view 1` succeeds against whatever repo it resolved.
 
-## Deriving the ticket ID and the branch slug
+## Deriving the ticket ID, the branch slug and the PR title
 
 With `ticketPrefix` empty, issue `123` titled "Fix the blank render" yields:
 
@@ -117,13 +117,22 @@ With `ticketPrefix` empty, issue `123` titled "Fix the blank render" yields:
 - Branch `feature/123-fix-the-blank-render`
 - Branch slug `123-fix-the-blank-render`
 - Changelog folder `changelog/123-fix-the-blank-render/`
+- PR title `[#123] Fix the blank render`
 
 With `ticketPrefix` set to `abc`:
 
 - Ticket ID `ABC-123`
 - Branch `feature/abc-123-fix-the-blank-render`
+- PR title `[ABC-123] Fix the blank render`
 
 **The slug is the title lowercased, non-alphanumerics collapsed to single hyphens, then trimmed.** Every skill that derives a slug uses that one rule, so two skills asked about the same issue produce the same branch name.
+
+**The PR title is the ticket ID in square brackets, one space, then the title.** A bare issue number keeps its `#` inside the brackets, so it still reads as a GitHub reference. A prefixed ID has no `#`, because `#ABC-123` is not a GitHub reference. `/pr:pre-test` builds the title from PLAN.md's H1, and `/pr:close` builds it from the issue title. `/pr:start` wrote the first from the second, so they normally agree.
+
+- **A title counts as prefixed only when it starts with exactly `[<ticket ID>] `.** A matching ID later in the title does not count. GitHub appends the PR number to the end of a squash subject, so only the start of the title keeps the ticket at a fixed position.
+- **A branch that carries no ticket gets no prefix.** It has no ID to put there, and inventing one is worse than leaving the title unprefixed.
+
+The prefix exists because a PR's number never matches its ticket's. `ticketing.md § PR numbers are not ticket numbers` explains why, and how the prefix reaches the commit that lands on the default branch.
 
 **Recovering the issue number from a branch name** is the reverse, and it is what most skills actually need:
 

@@ -201,6 +201,30 @@ git checkout -q main
 OUT=$(echo '{"source":"startup"}' | CLAUDE_PROJECT_DIR="$R" "$P/hooks/on-session-start.sh")
 chk_empty "emits nothing on the default branch" "$OUT"
 
+echo "== phase 8: the pr line names both numbers, against a stub gh =="
+# GitHub numbers issues and PRs from one sequence, so PR 57 closing ticket 42 is the
+# normal case, and a line showing only "#57" leaves the reader to guess. A stub gh
+# first on PATH stands in for GitHub; GIT_SSH_COMMAND=false makes the script's fetch
+# fail fast instead of reaching for a remote that does not exist.
+FAKE=$(mktemp -d)
+cat > "$FAKE/gh" <<'SH'
+#!/bin/bash
+case "$1 $2" in
+  "issue view") echo '{"number":42,"title":"Add a widget","state":"OPEN","labels":[{"name":"status:in-progress"}]}' ;;
+  "pr list")    echo "[{\"number\":57,\"state\":\"OPEN\",\"isDraft\":true,\"body\":\"x\",\"closingIssuesReferences\":${FAKE_CLOSES:-[]}}]" ;;
+  "pr checks")  echo '[]' ;;
+  *)            exit 1 ;;
+esac
+SH
+chmod +x "$FAKE/gh"
+git checkout -q feature/abc-42-add-a-widget
+OUT=$(FAKE_CLOSES='[{"number":42}]' PATH="$FAKE:$PATH" GIT_SSH_COMMAND=false node "$S" --text)
+chk "a linked PR reads PR #n -> closes #ticket"  "pr       PR #57 → closes #42"   "$OUT"
+OUT=$(PATH="$FAKE:$PATH" GIT_SSH_COMMAND=false node "$S" --text)
+chk "an unlinked PR names the missing ref"       "PR #57 → no closing ref to #42" "$OUT"
+git checkout -q main
+rm -rf "$FAKE"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]
