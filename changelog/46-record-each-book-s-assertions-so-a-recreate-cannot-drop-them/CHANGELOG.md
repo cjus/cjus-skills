@@ -268,3 +268,11 @@ Other changes:
 - bookcraft goes from 1.7.1 to 1.8.0.
 
 `test-fixtures.sh --strict`: 17 passed, 0 failed, 0 skipped.
+
+### 2026-09-25 12:22:13 MDT — Synced main, and pr moves to 0.2.7
+
+`main` gained #45, which carries the ticket number into PR titles and squash commits and also
+moved pr to 0.2.6. That is the number this branch had bumped to. The two identical bump lines
+merged without a conflict, which would have left this branch's `/pr:close` change without a
+version of its own, so pr is now 0.2.7. The merge was otherwise clean. Draft PR #48 is retitled
+with the `[#46]` prefix #45 introduced, since the installed pr (0.2.5) predates it.

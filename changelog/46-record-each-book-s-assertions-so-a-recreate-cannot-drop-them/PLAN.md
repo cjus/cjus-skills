@@ -314,14 +314,14 @@ The skill stops and creates the file before doing what it was asked.
 
 ## Outside the objective, by operator direction
 
-- **pr plugin 0.2.6: a standing grant can cover `/pr:close`.** Added 2026-09-25 at the
+- **pr plugin 0.2.7: a standing grant can cover `/pr:close`.** Added 2026-09-25 at the
   operator's direction, not part of #46. Four sites said `/pr:close` "is always the
   operator's to invoke": `reference/lifecycle.md`, and the `ticket`, `resume` and `pre-test`
   skills. They now make the one exception of a standing grant, recorded in the project's
   instructions or memory. Even under a grant, `/pr:close` runs as its own step and never from
   inside another skill. Under `pre-test` it runs only after the hands-on testing the verdict
   asks for. A grant never covers a merge or anything else that writes to the default branch.
-  The version goes from 0.2.5 to 0.2.6 so installed copies refresh. The pr acceptance suite
+  The version goes to 0.2.7, one past `main`'s 0.2.6 from #45, so installed copies refresh. The pr acceptance suite
   passes 39 of 39.
 
 ## Decision: a recreate is a /createbook flag, into a new folder
