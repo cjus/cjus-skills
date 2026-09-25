@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "brief": {
+    "argument": "A fixture book for assertions.json",
+    "reader": "An instructor preparing one evening session.",
+    "reader_origin": "argument",
+    "profile_origin": "unrecorded"
+  },
+  "next_id": 1,
+  "entries": []
+}

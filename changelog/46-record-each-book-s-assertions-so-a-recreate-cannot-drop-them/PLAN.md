@@ -219,15 +219,15 @@ The skill stops and creates the file before doing what it was asked.
 
 ### Fixtures and release
 
-- [ ] Add fixtures:
+- [x] Add fixtures:
   - a valid file
   - malformed files that `check` must fail: bad JSON, an unknown kind, a reused ID, a one-sided supersession, an unknown key, an empty `entries` with no `created` block, `citation` on a `book` entry, and a repeated item in an `answers` set
   - a mark citing a superseded entry, which must fail
   - an uncited `expected` entry that holds, which must be reported, and an uncited `legacy` one, which must not
   - a superseded premise whose `search` phrase appears in a chapter and in an `.svg`, where both hits must be reported and the run must still pass
   - a book with no file, which must draw the note rather than pass quietly
-- [ ] Existing fixture books have no file, and they stay that way: they are the missing-file case the scripts have to report. Make sure the new note does not break any fixture whose expected output is matched exactly.
-- [ ] Bump bookcraft's version so installed copies pick up the change.
+- [x] Existing fixture books have no file, and they stay that way: they are the missing-file case the scripts have to report. Make sure the new note does not break any fixture whose expected output is matched exactly.
+- [x] Bump bookcraft's version so installed copies pick up the change.
 
 ### Not in scope
 
@@ -281,9 +281,13 @@ The skill stops and creates the file before doing what it was asked.
       `§ Adding to a book that already exists` and `§ Recreating a book`. Written ahead of
       Phase 4 so that `/updatebook` and `/check-claims` point at a procedure that exists.
       Backfilling the reference guide itself is Phase 7.
-- [ ] Phase 6: Fixtures and release. Add the fixture cases the ticket lists, confirm the
+- [x] Phase 6: Fixtures and release. Add the fixture cases the ticket lists, confirm the
       missing-file note breaks no exact-output fixture, record the reasoning in `NOTES.md`, bump
       bookcraft's version, and run `scripts/test-fixtures.sh`.
+      Done 2026-09-25. `createbook/fixtures/assertions/run.sh` makes 25 assertions, and
+      every case the ticket lists is among them. `provenance`'s manifest row asserts the
+      missing-file note. bookcraft goes from 1.7.1 to 1.8.0. `test-fixtures.sh --strict`
+      passes: 17 passed, 0 failed, 0 skipped.
 - [ ] Phase 7: Validate on the reference guide, in its own repo. Backfill it, confirm the four
       cases are carried and that the sweep lists the passages still built on twenty. Record the
       outcome here in generic terms only: nothing from that book's sources, people or course

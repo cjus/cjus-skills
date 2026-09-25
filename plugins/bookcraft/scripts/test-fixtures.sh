@@ -52,6 +52,7 @@ ROOT=$(cd "$ROOT" 2>/dev/null && pwd) || { echo "error: no such directory: $ROOT
 
 CHECK_BOOK="$ROOT/skills/createbook/scripts/check-book.sh"
 CHECK_PROV="$ROOT/skills/createbook/scripts/check-provenance.sh"
+ASSERTIONS="$ROOT/skills/createbook/scripts/assertions.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { PASS=$((PASS+1)); printf 'ok    %s\n' "$1"; }
@@ -61,7 +62,7 @@ skip() { SKIP=$((SKIP+1)); printf 'skip  %s\n' "$1"; }
 # ---------------------------------------------------------------------------
 # The checkers have to be there, and have to be executable.
 # ---------------------------------------------------------------------------
-for c in "$CHECK_BOOK" "$CHECK_PROV"; do
+for c in "$CHECK_BOOK" "$CHECK_PROV" "$ASSERTIONS"; do
   if [ ! -f "$c" ]; then
     echo "error: cannot find $c" >&2
     echo "       pass the plugin root as the first argument." >&2
@@ -101,7 +102,7 @@ createbook/jq-unrunnable|check-book|0|structure is sound~provenance: required
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
-createbook/provenance|check-provenance|1|6 failure(s)~REVIEW provenance-fixture-02~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01
+createbook/provenance|check-provenance|1|6 failure(s)~REVIEW provenance-fixture-02~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
 ROWS
 )
 

@@ -66,6 +66,7 @@ jobs:
         run: |
           for f in plugins/bookcraft/skills/createbook/scripts/check-book.sh \
                    plugins/bookcraft/skills/createbook/scripts/check-provenance.sh \
+                   plugins/bookcraft/skills/createbook/scripts/assertions.sh \
                    plugins/bookcraft/scripts/test-fixtures.sh \
                    plugins/bookcraft/scripts/install.sh \
                    plugins/bookcraft/scripts/bookcraft-python; do

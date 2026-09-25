@@ -233,3 +233,38 @@ says facts are carried into `OUTLINE.md` by hand.
 
 Worklist tested on a scratch book: a unit citing a source and an entry carried the entry, and
 the chapter file carried the settled one. `scripts/test-fixtures.sh`: 16 passed, 0 failed.
+
+### 2026-09-25 12:21:22 MDT — Phase 6: fixtures and release
+
+**`createbook/fixtures/assertions/`** is a one-chapter book with a figure and a backfilled
+`assertions.json`. Its `run.sh` makes 25 assertions:
+
+- The committed file is rebuilt from the helper's own commands, with fixed dates, and must come
+  back byte-identical. This covers `init`, `brief`, `add`, `supersede`, `correct`,
+  `retire` and `expect`, and the layout.
+- `check` passes the file and fails the ten files in `malformed/` by name: the ticket's eight,
+  plus a repeated JSON key and a deleted entry. A refused write leaves the file byte-identical,
+  and a newer format exits 2 from both the helper and the checker.
+- `check-provenance.sh` passes the folder with exactly three REVIEW lines: the uncited
+  `expected` entry, and the superseded premise swept out of a wrapped, bolded chapter line and
+  out of a figure split across `<tspan>`s. It reports neither uncited `legacy` entry.
+- Mutated copies fail as they should: a citation of a superseded entry, a citation of a retired
+  entry, an unreadable component, a missing file, and a reserved source name.
+- `check-book.sh` passes the folder.
+
+Breaking the sweep and the `legacy` filter in a copy of the checker failed the fixture, so it
+catches both. It also passes with Python 3.9 first on `PATH`.
+
+Other changes:
+
+- `test-fixtures.sh` checks that `assertions.sh` is executable, and `provenance`'s manifest row
+  now asserts `assertions NOT CHECKED`. The existing fixture books stay without a file, as the
+  missing-file case.
+- CI's list of scripts that must be executable gains `assertions.sh`.
+- The README's fixture list is now "Eight fixtures".
+- `createbook/NOTES.md § assertions.json, 2026-09-25` separates what the ticket measured from
+  what is only asserted. The sweep's hit rate is named as unmeasured until a real backfill counts
+  it.
+- bookcraft goes from 1.7.1 to 1.8.0.
+
+`test-fixtures.sh --strict`: 17 passed, 0 failed, 0 skipped.
