@@ -80,6 +80,12 @@ when using the --repo flag".
   still ended with the closing line. Re-saving the identical body brought back `[30]` within one
   read. That is either a body that never resolved, where the pre-push `true` was lag, or a push
   that drops the resolution. The step 8 housekeeping push re-tests which one.
+- **Re-test result:** the push to `dfbacc7` kept `[30]` on every read, so a push does not drop it.
+  The likely cause is the two body edits in step 4, a replace and then an append a few seconds
+  apart. GitHub resolved them out of order, so the final state reflected the replace, which
+  had no link. The `true` read straight after the append was left over from the older body.
+  Writing the summary and the link in one edit would remove the race. Step 8b's re-read after
+  the push is what caught it.
 - **Finding:** a clean test on #38 showed the lag only after the append (`false`, then `true`).
   The earlier stale-looking `true` after a replace came from an inline `Closes #30` in the
   summary, since removed. The skill now says to keep such literals out of the summary.
