@@ -198,10 +198,10 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 
 | State | Action |
 |---|---|
-| **No PR** | Create from the step-1 summary, then append the link as its own line |
+| **No PR** | Create it with one body: the step-1 summary, then the link as its own line |
 | **Open, real description** | Keep it and append the link, unless GitHub already resolves one |
-| **Open, empty or placeholder body** | **Replace** the whole body with the summary, then add the link |
-| **Open, body starts with the `pr:close:summary` marker** | An earlier run of this skill wrote it. **Replace** it with the current summary, then add the link |
+| **Open, empty or placeholder body** | **Replace** the whole body with the summary and the link, in one edit |
+| **Open, body starts with the `pr:close:summary` marker** | An earlier run of this skill wrote it. **Replace** it with the current summary and the link, in one edit |
 | **Draft** | Handle the body as above, then `gh pr ready` |
 | **Closed but unmerged** | **Stop.** Let the operator reopen or explain. |
 | **Merged** | **Stop.** Nothing left to do. |
@@ -209,29 +209,31 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 ```bash
 SUMMARY="<changelogRoot>/<slug>/pr-summary-<date>.md"
 
-# No PR: create from the summary, marker first
-[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
-  | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
-      --title "[$ID] <resolved issue title>" --body-file -
+# No PR: create it with the whole body, marker first and the link last, in one write
+[ -s "$SUMMARY" ] \
+  && BODY=$(printf '%s\n\n' '<!-- pr:close:summary -->' && cat "$SUMMARY" && printf '\n\nCloses #%s' "$N") \
+  && printf '%s\n' "$BODY" | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
+       --title "[$ID] <resolved issue title>" --body-file -
 
-# Or, on a replace row: overwrite the body with the summary, marker first
-[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
-  | gh pr edit "$BRANCH" --repo "$REPO" --body-file -
+# Or, on a replace row: overwrite the body with the same whole body, in one edit
+[ -s "$SUMMARY" ] \
+  && BODY=$(printf '%s\n\n' '<!-- pr:close:summary -->' && cat "$SUMMARY" && printf '\n\nCloses #%s' "$N") \
+  && printf '%s\n' "$BODY" | gh pr edit "$BRANCH" --repo "$REPO" --body-file -
 
-# Then, on every path that appends: add the link as its own line
+# Or, on a kept description the check below finds unlinked: append the link, its one edit
 BODY=$(gh pr view "$BRANCH" --repo "$REPO" --json body --jq .body) && [ -n "$BODY" ] \
   && gh pr edit "$BRANCH" --repo "$REPO" --body "$BODY
 
 Closes #$N"
 ```
 
-**Check the summary exists and is non-empty before piping it.** A pipe's exit status is `gh`'s, so a missing or unreadable summary would still send the marker alone as the body, and the link and the verification below would then pass it. If the check fails, **stop**: step 1 did not produce the summary this step needs.
+**Build the body only from a summary that exists, is non-empty and was read in full.** Every part of the build is chained with `&&`, so a missing or unreadable summary stops the command before `gh` runs. That matters because the link rides in the same body: a build that carried on past a failed `cat` would send the marker and the closing line alone, and the verification below would pass that body, since it is non-empty and closes #N. If the build fails, **stop**: step 1 did not produce the summary this step needs.
 
-**Read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: at this point the body is never legitimately empty, because it was just created or replaced from the summary.
+**On the kept path, read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: a kept description is never legitimately empty, because an empty body is a stub and takes the replace row.
 
 A created title is `[$ID] ` followed by the title of the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
 
-**The summary never supplies the link.** `/pr:summary` keeps closing keywords with an issue reference out of it; that rule lives in its step 3. A body created from the summary alone closes nothing, and going straight to verification is how this path fails.
+**The summary never supplies the link.** `/pr:summary` keeps closing keywords with an issue reference out of it; that rule lives in its step 3. A body built from the summary alone closes nothing, so every body this step writes ends with the closing line.
 
 Before appending to a **kept** description, ask the **same** question the assertion below asks:
 
@@ -244,7 +246,9 @@ gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
 
 `false` appends the link. `true` leaves the body alone, since re-adding duplicates it on every run. No output is a failed read, not a `false`: stop, for the same reason as the verify below.
 
-**After a create or a replace in this run, skip that check and append.** The body was just written from the summary, which carries no link, so there is nothing to check. A read taken this soon after an edit is not reliable anyway: `closingIssuesReferences` lags a body edit by a moment. By `/pr:summary`'s rule the summary carries no closing keyword, so the appended line is the body's only link.
+**A create or a replace writes the summary and the link in one edit, never two.** GitHub can resolve two quick body edits out of order. On PR #38 a replace and an append landed seconds apart, and `closingIssuesReferences` settled on the replace, which had no link, reading `[]` for over a minute after the push while the body itself was intact and ended with the closing line. The `true` read straight after the append was left over from the older body. One edit leaves no intermediate body to win that race.
+
+**A create or a replace needs no pre-check.** The body it writes already carries the link, and by `/pr:summary`'s rule nothing else in it links an issue, so the closing line is the body's only link.
 
 **An empty body or one carrying the `pr:pre-test:draft-placeholder` marker is a stub, not a description.** Appending to either leaves a merged PR whose body explains nothing. Replace it wholesale.
 
@@ -436,7 +440,7 @@ The close itself writes files that can land **after** the step-7 commit, most of
 
 Step 4 owns this; here its one deferral is settled. The branch is pushed now, so the "no commits ahead" case that blocks creation at step 4 cannot still apply.
 
-- **Creation was deferred** → create the PR now exactly as step 4 describes, with the `[$ID] ` title, **including the edit that appends the closing reference.** The create alone does not add it.
+- **Creation was deferred** → create the PR now exactly as step 4 describes, with the `[$ID] ` title and **the closing line in the body it creates**, in the one write. The summary alone does not carry it.
 - **Then, unconditionally**, re-run step 4's verification against the final pushed state, title and stray references included. A zero length, a `false` or a stray is a **stop**, reported as a failed close, with each stray named.
 
 The duplication with step 4 is deliberate. Step 4 runs before the closing artifacts are committed, so its verdict describes a PR that step 7 then changes. This check describes what actually merges.

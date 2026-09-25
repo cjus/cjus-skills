@@ -43,3 +43,21 @@ closing-keyword rule where the summary is written, and writes the body in one ed
   keyword) instead of the old code-fence explanation.
 - README's `/pr:summary` entry says the document carries no closing keyword with an issue number,
   and that the close adds the one closing line.
+
+### 2026-09-25: Phase 3, the summary and the link go to the PR in one edit
+
+- **The create and replace paths build the whole body once**: the marker, then the summary, then
+  `Closes #N`. They send it with one `gh pr create` or one `gh pr edit`. The follow-up
+  read-and-append edit is gone from both paths, so no intermediate body without the link can
+  win the ordering race PR #38 hit.
+- **The build is chained with `&&` end to end.** Carrying the link in the same body makes a
+  partial build more dangerous than before: marker plus closing line would pass the verify.
+  Tested against a stub `gh` on `PATH`. A good summary sends one body in the expected shape. A
+  missing summary, a directory and a mode-000 file each stop before `gh` is called.
+- **The kept-description path is unchanged**: pre-check, then append. It was already a single
+  edit. Its read-and-guard paragraph is now scoped to that path.
+- The paragraph that skipped the pre-check "and appended" after a create or replace became two:
+  the one-edit rule with the PR #38 incident as its reason, and why a create or replace needs no
+  pre-check.
+- Step 8b's deferred create puts the closing line in the body it creates, rather than calling
+  for a separate append edit.
