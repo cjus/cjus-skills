@@ -453,7 +453,7 @@ const steps =
               ? [
                   "COMMITMSG.md",
                   ...requiredArtifactState().map(([k, v]) => `${k} ${v ? "yes" : "no"}`),
-                  `closing ref #${ticketNumber ?? "?"} ${pr?.hasCloses ? "present" : "absent"}`,
+                  `closing ref to #${ticketNumber ?? "?"} ${pr?.hasCloses ? "present" : "absent"}`,
                 ].join(", ")
               : "no COMMITMSG.md",
         },
@@ -626,6 +626,18 @@ if (!AS_TEXT) {
   console.log(JSON.stringify(state, null, 2));
 } else {
   const yn = (v) => (v === null ? "-" : v ? "yes" : "no");
+  // GitHub numbers issues and PRs from one sequence, so a PR never shares its ticket's
+  // number, and a bare "#41" beside "#32" leaves the reader to guess which is which.
+  // Name both, and take "closes" only from GitHub's own resolution, as hasCloses does.
+  // The missing-ref note keys on hasCloses, not on an empty list: a PR that closes some
+  // other issue still leaves this ticket open, and that is the case worth spelling out.
+  const prLink = (p) => {
+    const closes =
+      p.closesIssues?.length > 0 ? ` → closes ${p.closesIssues.map((n) => `#${n}`).join(", ")}` : "";
+    const missing =
+      p.hasCloses === false ? `${closes ? "," : " →"} no closing ref to #${ticketNumber}` : "";
+    return closes + missing;
+  };
   const lines = [
     `repo     ${repo ?? "(unresolved)"}`,
     `branch   ${branch ?? "(detached)"}`,
@@ -634,7 +646,7 @@ if (!AS_TEXT) {
       ? `ticket   #${ticket.number} ${ticket.state ?? "?"} ${(ticket.labels ?? []).join(", ")}`
       : "ticket   (none resolvable from the branch name)",
     pr?.number != null
-      ? `pr       #${pr.number} ${pr.state}${pr.isDraft ? " (draft)" : ""}, body ${pr.bodyLength} chars, ci ${pr.ci ?? "?"}`
+      ? `pr       PR #${pr.number}${prLink(pr)}, ${pr.state}${pr.isDraft ? " (draft)" : ""}, body ${pr.bodyLength} chars, ci ${pr.ci ?? "?"}`
       : pr == null
         ? `pr       not checked (${OFFLINE ? "offline" : "gh unreadable"})`
         : "pr       none",
