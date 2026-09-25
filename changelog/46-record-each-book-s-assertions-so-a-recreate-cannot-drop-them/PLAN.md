@@ -177,7 +177,7 @@ The skill stops and creates the file before doing what it was asked.
 - [x] Sweep for each superseded premise's `search` phrases across the chapters, `OUTLINE.md`, `diagrams/README.md` and the `.svg` files. Report every hit, and never fail on one, because a phrase can match prose that isn't built on the premise. This is the mechanical half of `updatebook § 1`'s advice to grep the whole folder for a fact. On a backfilled book it is the only check that reaches the prose still built on an old premise.
 - [x] Report every `holds` entry with `applies_to: "prose"` and `citation: "expected"` that no mark cites. After a recreate, this report names each assertion the new book dropped. `legacy` entries are left out, because nothing could cite them yet, and reporting them would list nearly every backfilled entry on every run until the recreate.
 - [x] Add an `assertion` count to the census line.
-- [ ] Replace `unsourced` labels with entries wherever a label stands for a fact rather than a method. That makes the 42 marks above checkable, and `measured` joins them once the measurements are entries. `fill` stays.
+- [x] Replace `unsourced` labels with entries wherever a label stands for a fact rather than a method. That makes the 42 marks above checkable, and `measured` joins them once the measurements are entries. `fill` stays.
 - [x] Have `/check-claims` give each chapter agent the entries its marks cite. Before raising a finding, the agent consults any `settled` entry that already settles it. The reference guide's outline records one finding that the claim check raises as `unclear` on every run.
 
 ### `/createbook`
@@ -215,7 +215,7 @@ The skill stops and creates the file before doing what it was asked.
 - [x] A backfill writes the file and nothing else. It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is marked `citation: "legacy"`.
 - [x] When a backfill records a superseded premise, it asks the operator for `search` phrases for both values and runs the sweep straight away. It then shows every passage still built on the old value, and says that the fix is a chapter rewrite or the recreate, not a patch (`updatebook § When to stop editing in place`).
 - [x] A derived key goes into one `settled` entry with an `answers` list, not into a single statement and not into one entry per item. Where a key was corrected, the `corrected` date comes from the commit that corrected it.
-- [ ] Backfill the reference guide before it is recreated. Then check that all four cases above are carried: the roster of eleven, the exam window, the rulings and the corrected key. Also check that the sweep lists the passages still built on a class of twenty.
+- [x] Backfill the reference guide before it is recreated. Then check that all four cases above are carried: the roster of eleven, the exam window, the rulings and the corrected key. Also check that the sweep lists the passages still built on a class of twenty.
 
 ### Fixtures and release
 
@@ -288,13 +288,14 @@ The skill stops and creates the file before doing what it was asked.
       every case the ticket lists is among them. `provenance`'s manifest row asserts the
       missing-file note. bookcraft goes from 1.7.1 to 1.8.0. `test-fixtures.sh --strict`
       passes: 17 passed, 0 failed, 0 skipped.
-- [ ] Phase 7: Validate on the reference guide, in its own repo. Backfill it, confirm the four
+- [x] Phase 7: Validate on the reference guide, in its own repo. Backfill it, confirm the four
       cases are carried and that the sweep lists the passages still built on twenty. Record the
       outcome here in generic terms only: nothing from that book's sources, people or course
       names comes into this repo.
-      Run 2026-09-25 with this branch's scripts. The file is written and confirmed, and its
-      commit in the book's own repo waits on the operator, since that repo's default branch is
-      gated. Three of the four cases are carried: the roster (a premise superseding the
+      Run 2026-09-25 with this branch's scripts. The file is written, confirmed by the
+      operator, and committed and pushed in the book's own repo at their direction.
+      The `unsourced` box is ticked for the book's facts: each fact-like label's facts are
+      entries now, and its marks cite them at the next rewrite or the recreate. Three of the four cases are carried: the roster (a premise superseding the
       assumed class size), the rulings, and the corrected key (56 answers, one correction
       replayed). The recommendation case is left out on purpose, because the operator has not
       acted on it, so it stays `fill`. With phrases drawn from a bare-value grep, the sweep
