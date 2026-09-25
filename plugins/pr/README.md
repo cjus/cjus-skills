@@ -87,9 +87,9 @@ Each step leaves something durable behind, and that artifact — not a memory of
 | `/pr:ticket` | a GitHub issue, labelled `status:todo` |
 | `/pr:start` | the plan folder, the branch pushed, the issue at `status:in-progress` |
 | `/pr:cp` | commits on the remote |
-| `/pr:pre-test` | a PR, so CI has run |
+| `/pr:pre-test` | a PR titled `[#123] …`, so CI has run |
 | `/pr:summary` | `pr-summary-<date>.md` in the plan folder |
-| `/pr:close` | `COMMITMSG.md`, the continuity entry, a resolved closing reference |
+| `/pr:close` | `COMMITMSG.md`, the continuity entry, a resolved closing reference, a verified `[#123]` title |
 | `/pr:cleanup` | worktree removed, branch deleted, `status:in-progress` cleared |
 
 `reference/lifecycle.md` carries the full map, and `scripts/pr-lifecycle-state.mjs` is what computes it:
@@ -141,6 +141,8 @@ Seven skills with a fixed place in the order — though `abort` is the exit rath
 
 Runs **once per repo**, not once per branch. Detects the GitHub repo, the package manager and the check commands, asks about the choices it cannot detect, writes `.claude/pr-config.json`, and creates eleven labels: the two `status:*` and three `priority:*` labels the queue runs on, plus the six type labels `/pr:ticket` picks from — `bug`, `feature`, `refactor`, `docs`, `infra` and `research`.
 
+It also reads the repo's squash-merge title setting and, only with a yes, changes it to `PR_TITLE`, so a single-commit PR cannot land with its commit subject in place of the `[#123]` title.
+
 It is also what arms the hooks. Until this file exists, all three are inert.
 
 ### `/pr:ticket`
@@ -171,17 +173,20 @@ Decides whether the branch is ready for hands-on testing. Refreshes `PLAN.md`, o
 
 The draft matters. A draft PR carrying a placeholder body is the state this skill exists to create, so the body checks skip drafts entirely — flagging one would fire a gap on correct behavior every run.
 
+The draft is titled `[#123] <plan title>`. A PR's number never matches its ticket's, since GitHub numbers both from one sequence, and a squash merge appends only the PR number. The prefix is what puts the ticket into the commit that lands, as `[#123] <title> (#141)`. `reference/ticketing.md` lists which number each surface shows.
+
 ### `/pr:close`
 
 ```
 /pr:close
 ```
 
-The mandatory gate before a merge, and the largest skill here. In order: `/pr:summary`, a merge-conflict check placed before the expensive work, a migration-drift check, the configured checks plus CI, a review gate, `/pr:condense`, the issue link, `/pr:commitmsg`, the continuity entry and assertion audit, deferred-work triage, then commit and push until the tree is clean.
+The mandatory gate before a merge, and the largest skill here. In order: `/pr:summary`, a merge-conflict check placed before the expensive work, a migration-drift check, the configured checks plus CI, a review gate, `/pr:condense`, the issue link and the title prefix, `/pr:commitmsg`, the continuity entry and assertion audit, deferred-work triage, then commit and push until the tree is clean.
 
-Two of those deserve calling out:
+Three of those deserve calling out:
 
 - **The issue link resolves by exact number and is then verified.** A `Closes #123` that reads correctly but did not register is the exact failure this workflow exists to prevent, so the skill asks GitHub what it actually resolved rather than trusting the string it just wrote. It halts on failure, on every path.
+- **The title carries the ticket ID, and is verified alongside the link.** An existing PR missing the `[#123]` prefix gets it, keeping the rest of its title, and a wrong ticket ID in that position is replaced.
 - **Deferred-work triage happens here, once.** `PLAN.md § Deferred` is a triage inbox, not a backlog. Most entries exit as DROP; the rest become follow-up issues through `/pr:ticket`.
 
 It arms the close sentinel before committing, which is what lets the `Stop` hook refuse to end the turn while the close is half-landed.
