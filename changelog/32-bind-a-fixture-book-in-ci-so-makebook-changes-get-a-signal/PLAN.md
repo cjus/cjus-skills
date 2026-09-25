@@ -74,16 +74,18 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       pre-#39 binder, failed both checks on both legs (the column 51pt short on macOS, 43pt
       on Linux). The branch was deleted.*
 
-**Status (2026-09-25):** all six phases are done and pushed at `8bb3b93`. Draft PR #41 has CI
-green on both legs. The pre-test review returned APPROVE with one Important finding (the
-appendix-table check trusts the binder's own warning) and two suggestions, all fixed; see
-`pr-review-2026-09-25.md`.
+**Status (2026-09-25):** all six phases are done, at `8698e74` before the close. PR #41 has CI
+green on both legs. The pre-test review (APPROVE) had one Important finding and two
+suggestions, all fixed (`pr-review-2026-09-25.md`); the close review returned APPROVE
+(`pr-review-2026-09-25-close.md`), and its finding in the summary was fixed.
 
 ## Deferred
 
 - Assert that the finished PDF's text layer carries none of the binder's page markers.
   `createbook/NOTES.md` names this as the gap a bind test would close; the plan's three
   assertions do not include it.
+  **Triage: TICKET, filed as #43.** Seven other items dropped at close: whether Linux needs
+  `install-deps` (unmeasured), and the six the reviews dropped.
 
 ## About Ticket
 
