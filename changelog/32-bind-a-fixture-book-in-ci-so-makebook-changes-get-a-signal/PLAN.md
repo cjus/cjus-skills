@@ -66,10 +66,13 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
         mid-word" warning
       *Added 2026-09-25 by the operator. Blocked until PR #39 merges: both test #39's fixes and
       fail on `main` today, measured (Contents printed `A1` twice; the table warned). Then
-      `/pr:sync` and add them. The table repro was measured on macOS only.*
+      `/pr:sync` and add them.*
       *Done 2026-09-25 after syncing `main` @ `5a4d741`. Both pass on the merged binder and
       fail on the pre-#39 binder from `75f1a0b`, each naming its cause. The comment's
       checkboxes are ticked at close.*
+      *The squeeze reproduces on Linux too: CI run 36137670848, on a throwaway branch with the
+      pre-#39 binder, failed both checks on both legs (the column 51pt short on macOS, 43pt
+      on Linux). The branch was deleted.*
 
 ## Deferred
 
@@ -123,7 +126,9 @@ to extend.
   in the `fixtures.yml` header.* The bind is the first thing CI runs that depends on a browser and
   on font rendering, which are the likeliest places for Linux to differ. The existing rule makes
   macOS blocking because it is the only platform the plugins are developed on.
-- **Cache the Playwright Chromium between runs?** A cold download on every run adds minutes. A
+- ~~**Cache the Playwright Chromium between runs?**~~ *Resolved by the operator, 2026-09-25:
+  no cache. A cold install costs 16 to 19s in CI, too little to justify one more thing in
+  the workflow to keep true.* A cold download on every run adds minutes. A
   cache keyed on the Playwright version would save them, at the cost of one more thing in the
   workflow to keep true.
   *Measured:* a cold `install.sh` took 19s on macOS and 16s on Linux in CI (plus 7s of

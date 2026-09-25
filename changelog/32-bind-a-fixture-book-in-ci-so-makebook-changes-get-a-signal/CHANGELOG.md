@@ -78,3 +78,14 @@ whose appendix table must bind with no word broken mid-word. Both pass on the me
 fail on the pre-#39 binder, which is what a revert of either fix looks like. The fixture takes
 about 9s for its four binds. The table squeeze was measured on macOS; where Linux fonts leave the
 column wide enough, that check passes without testing the repair, and the header says so.
+
+### 2026-09-25 — The table check holds on Linux
+
+A throwaway branch with the pre-#39 binder went through CI (run 36137670848) and was deleted.
+Both new checks failed on both legs, and the table's column came out 51pt short of its longest
+word on macOS and 43pt on Linux. **So the table check tests the repair on Linux as well,** which
+the earlier entry could not say. The `run.sh` header now gives the measurement in place of the
+macOS-only caveat.
+
+**No Chromium cache, per the operator:** a cold install costs 16 to 19s in CI. Every open question
+in the plan is now settled.

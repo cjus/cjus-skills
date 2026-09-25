@@ -37,8 +37,11 @@
 #                      column plan on the printed label, not the chapter's
 #                      number, left the appendix's table unrepaired.
 #
-# The table squeeze was measured on macOS. Where different font metrics leave
-# the column wide enough, the second check passes without testing the repair.
+# The table check only means something while the column still squeezes, and
+# that depends on font metrics. Measured on both CI legs with the pre-fix binder
+# (2026-09-25): the column came out 51pt short on macOS and 43pt short on Linux,
+# so both legs fail a revert. A font change wide enough to close that gap would
+# let the check pass without testing the repair.
 #
 # The binder's toolchain is optional on a laptop and required in CI. With no
 # venv from install.sh, or no pdftotext, this prints skip and exits 0, and
