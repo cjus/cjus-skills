@@ -2,9 +2,20 @@
 # verification the book checkers have and which until now ran only when someone
 # remembered to run them.
 #
+# It installs the binder's toolchain too, because one of those folders,
+# makebook/fixtures/bind, binds real books. Without install.sh's venv or poppler
+# that fixture skips, and --strict fails the run on the skip; a Chromium that
+# will not launch fails the bind outright. Either way a toolchain that did not
+# install cannot pass as a bind that did not break.
+#
 # macOS is blocking because it is the only platform the plugins are developed and
 # tested on (README § Platform support). Linux runs alongside it to produce the
 # first recorded Linux run rather than to gate on one.
+#
+# The bind stays advisory on Linux for the same reason, decided after its first
+# Linux run passed. Its checks lean on font metrics, such as whether the cover
+# fits on page 1, and a Linux-only failure there is likelier to be a font
+# difference than a binder regression.
 #
 # What continue-on-error on the Linux leg does and does not do, measured rather
 # than assumed: a Linux-only failure leaves the WORKFLOW RUN's conclusion
@@ -49,12 +60,15 @@ jobs:
 
       # check-provenance.sh is Python despite the .sh extension, and both
       # checkers are invoked through their shebangs, so the bit has to survive
-      # the checkout. It does today; this says so if that ever changes.
-      - name: Check the checkers are executable
+      # the checkout. It does today; this says so if that ever changes. The
+      # binder's installer and interpreter wrapper are run the same way below.
+      - name: Check the scripts CI runs are executable
         run: |
           for f in plugins/bookcraft/skills/createbook/scripts/check-book.sh \
                    plugins/bookcraft/skills/createbook/scripts/check-provenance.sh \
-                   plugins/bookcraft/scripts/test-fixtures.sh; do
+                   plugins/bookcraft/scripts/test-fixtures.sh \
+                   plugins/bookcraft/scripts/install.sh \
+                   plugins/bookcraft/scripts/bookcraft-python; do
             test -x "$f" || { echo "not executable: $f"; exit 1; }
           done
 
@@ -79,6 +93,64 @@ jobs:
           printf '{}' | jq -e . >/dev/null || {
             echo "jq is on PATH at $(command -v jq) but will not run"; exit 1; }
           jq --version
+
+      # The binder reads its own rendered PDF back through pdftotext to resolve
+      # page numbers, so poppler is a hard dependency of every bind. install.sh
+      # only notes its absence, because a venv cannot supply it.
+      - name: Install poppler
+        run: |
+          if ! command -v pdftotext >/dev/null 2>&1; then
+            case "${{ runner.os }}" in
+              macOS) brew install poppler ;;
+              Linux) sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils ;;
+            esac
+          fi
+
+      # The same install.sh a person runs, rather than a hand-rolled pip install,
+      # so the path users take is exercised on every run: the venv at
+      # ~/.cache/bookcraft/venv, the packages in makebook/requirements.txt, and
+      # Playwright's Chromium.
+      - name: Install the binder's toolchain
+        run: plugins/bookcraft/scripts/install.sh
+
+      # install.sh fetches the browser but not the system libraries it loads,
+      # since on a laptop that means sudo and a distro-specific package list.
+      # The runner has passwordless sudo, and Playwright's CI guidance is to
+      # install them. macOS needs none.
+      - name: Install Chromium's system libraries
+        if: runner.os == 'Linux'
+        run: plugins/bookcraft/scripts/bookcraft-python -m playwright install-deps chromium
+
+      # Assert that the toolchain RUNS, for the reason jq's step gives. A
+      # Chromium that is downloaded but will not launch, or a pdftotext that is
+      # on PATH but cannot read a PDF, fails every bind. So this does what a
+      # bind does in miniature: Chromium prints a page to PDF through the venv
+      # the binder uses, and pdftotext has to read the page's text back out.
+      - name: Assert the binder's toolchain runs
+        run: |
+          command -v pdftotext || { echo "pdftotext is not on PATH"; exit 1; }
+          probe="$RUNNER_TEMP/toolchain-probe.pdf"
+          if ! plugins/bookcraft/scripts/bookcraft-python - "$probe" <<'EOF'
+          import sys
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              print(f"chromium {browser.version}")
+              page = browser.new_page()
+              page.set_content("<p>bookcraft toolchain probe</p>")
+              page.pdf(path=sys.argv[1])
+              browser.close()
+          EOF
+          then
+            echo "the binder's venv cannot launch Playwright's Chromium and print a PDF;"
+            echo "the error above says which of the two is missing"; exit 1
+          fi
+          text=$(pdftotext "$probe" -) || {
+            echo "pdftotext is on PATH at $(command -v pdftotext) but will not run"; exit 1; }
+          printf '%s\n' "$text" | grep -q 'bookcraft toolchain probe' || {
+            echo "pdftotext ran but did not read back the probe page's text:"
+            printf '%s\n' "$text"; exit 1; }
+          pdftotext -v
 
       # --strict turns a skipped check into a failure. A skip is reasonable on a
       # laptop that is missing an optional tool; in CI it is a silent hole, and

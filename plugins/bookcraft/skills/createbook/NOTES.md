@@ -1018,7 +1018,9 @@ before and after: 13 pages both times, 9 markers in the text layer before and no
 and the two texts identical once the markers were stripped. Bound `fixtures/guide-reports/`
 in both editions: the header row read "the course calendar § Week 3" in the default
 edition, the endnote read the same in the reading edition and its EPUB, and
-`notes/policy.md`, which has no display name, printed as written. The suite does not bind,
-because CI installs Python and `jq` and not the Chromium the binder drives, and a skipped
-fixture fails under `--strict`. The display-name swap is covered anyway, by the fixture
-above; the hidden markers are not, and a bind test is the gap to close if that changes.
+`notes/policy.md`, which has no display name, printed as written. The suite did not bind
+then, because CI installed Python and `jq` and not the Chromium the binder drives. The
+display-name swap was covered anyway, by the fixture above. Since #32 it binds
+`fixtures/guide/` on every run (`makebook/fixtures/bind/`), but asserts only that both
+formats are written, the cover fits on page 1, the EPUB has rasterised cover art and the
+two stamps agree. The hidden markers are still checked by nothing.

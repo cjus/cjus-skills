@@ -2,10 +2,11 @@
 #
 # build-book.py's display-name swap (swap_display_names), tested without a bind.
 #
-# The fixture suite cannot bind a book, because CI installs Python and jq and
-# not the Chromium the binder drives. The swap is a pure function of text, so
-# this lifts it and its two patterns out of build-book.py by source position and
-# runs it under plain python3. Importing the binder would pull in Playwright.
+# The swap is a pure function of text, so this lifts it and its two patterns
+# out of build-book.py by source position and runs it under plain python3.
+# Importing the binder would pull in Playwright. bind/ binds a whole book, but
+# only where the binder's toolchain is installed, and asserts on the covers and
+# contents; this pins every case of the swap exactly, and runs everywhere.
 #
 # What it pins down:
 #   - a key in the Draws-on or Fills-in row becomes its display name, whether it
