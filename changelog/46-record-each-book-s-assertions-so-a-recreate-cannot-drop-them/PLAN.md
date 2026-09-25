@@ -167,16 +167,16 @@ The skill stops and creates the file before doing what it was asked.
 
 - [x] The helper's `check` is the only definition of the format. No JSON Schema file ships, and no validator library is added to `bookcraft-python`. `createbook/SKILL.md` documents the fields for a reader, and where the two ever disagree, `check` is right.
 - [x] Add a helper, `createbook/scripts/assertions.sh`, in Python 3 with the standard library only, with `init`, `add`, `supersede`, `retire`, `correct`, `list` and `check`. It allocates IDs and writes both links of a supersession in one step. `correct` changes one item of an `answers` set in place and stamps its `corrected` date. Superseding a whole answer set to change one answer would copy every other answer for no reason. Its output is always formatted the same way (two-space indent, fixed key order), so each change shows up in a diff as the lines of one entry. Skills write the file through the helper, never by hand, and the gate shows the operator `list`'s table, not raw JSON.
-- [ ] `check` enforces the whole format: the file parses, the `format` is known, required fields are present, kinds and statuses are from the fixed sets, IDs are unique and never reused, supersession links agree, `citation` appears only on `prose` entries, `answers` items are unique within their set, and no key is unknown (a misspelt key is the likeliest error). `check-provenance.sh` calls the helper's `check` instead of parsing the file itself, so the file is never parsed two different ways.
+- [x] `check` enforces the whole format: the file parses, the `format` is known, required fields are present, kinds and statuses are from the fixed sets, IDs are unique and never reused, supersession links agree, `citation` appears only on `prose` entries, `answers` items are unique within their set, and no key is unknown (a misspelt key is the likeliest error). `check-provenance.sh` calls the helper's `check` instead of parsing the file itself, so the file is never parsed two different ways.
 - [x] Add the file to the book-folder layout in `createbook/SKILL.md § Notes` and in the plugin README.
 
 ### Marks cite entries
 
-- [ ] Add a reserved mark component, `assertion <id>`, that resolves against `assertions.json` in the way `fill` is built in. The file's name is fixed, so it needs no `sources` entry. `check-book.sh`'s mark grammar already accepts any text after `src:`, so only `check-provenance.sh` changes. Refuse any `sources` key that starts with the reserved word.
-- [ ] Fail a mark that cites an entry that does not exist, or one that is `superseded` or `retired`. For a premise, this finds every paragraph still built on the old value. The twenty-to-eleven change needed that check and did not have it. **This check only sees prose whose marks cite entries.** In a book that was backfilled, that means prose written after the backfill, so the sweep below covers the rest.
-- [ ] Sweep for each superseded premise's `search` phrases across the chapters, `OUTLINE.md`, `diagrams/README.md` and the `.svg` files. Report every hit, and never fail on one, because a phrase can match prose that isn't built on the premise. This is the mechanical half of `updatebook § 1`'s advice to grep the whole folder for a fact. On a backfilled book it is the only check that reaches the prose still built on an old premise.
-- [ ] Report every `holds` entry with `applies_to: "prose"` and `citation: "expected"` that no mark cites. After a recreate, this report names each assertion the new book dropped. `legacy` entries are left out, because nothing could cite them yet, and reporting them would list nearly every backfilled entry on every run until the recreate.
-- [ ] Add an `assertion` count to the census line.
+- [x] Add a reserved mark component, `assertion <id>`, that resolves against `assertions.json` in the way `fill` is built in. The file's name is fixed, so it needs no `sources` entry. `check-book.sh`'s mark grammar already accepts any text after `src:`, so only `check-provenance.sh` changes. Refuse any `sources` key that starts with the reserved word.
+- [x] Fail a mark that cites an entry that does not exist, or one that is `superseded` or `retired`. For a premise, this finds every paragraph still built on the old value. The twenty-to-eleven change needed that check and did not have it. **This check only sees prose whose marks cite entries.** In a book that was backfilled, that means prose written after the backfill, so the sweep below covers the rest.
+- [x] Sweep for each superseded premise's `search` phrases across the chapters, `OUTLINE.md`, `diagrams/README.md` and the `.svg` files. Report every hit, and never fail on one, because a phrase can match prose that isn't built on the premise. This is the mechanical half of `updatebook § 1`'s advice to grep the whole folder for a fact. On a backfilled book it is the only check that reaches the prose still built on an old premise.
+- [x] Report every `holds` entry with `applies_to: "prose"` and `citation: "expected"` that no mark cites. After a recreate, this report names each assertion the new book dropped. `legacy` entries are left out, because nothing could cite them yet, and reporting them would list nearly every backfilled entry on every run until the recreate.
+- [x] Add an `assertion` count to the census line.
 - [ ] Replace `unsourced` labels with entries wherever a label stands for a fact rather than a method. That makes the 42 marks above checkable, and `measured` joins them once the measurements are entries. `fill` stays.
 - [ ] Have `/check-claims` give each chapter agent the entries its marks cite. Before raising a finding, the agent consults any `settled` entry that already settles it. The reference guide's outline records one finding that the claim check raises as `unclear` on every run.
 
@@ -243,15 +243,16 @@ The skill stops and creates the file before doing what it was asked.
       `check`. `check` is the only definition of the format. Document the fields in
       `createbook/SKILL.md`, and add the file to the book-folder layout there and in the plugin
       README.
-      Done 2026-09-25. `check` covers every rule the ticket lists. Its last sentence,
-      `check-provenance.sh` calling the helper, lands in Phase 2, so that ticket box
-      stays open.
-- [ ] Phase 2: Marks cite entries. Add the reserved `assertion <id>` component to
+      Done 2026-09-25.
+- [x] Phase 2: Marks cite entries. Add the reserved `assertion <id>` component to
       `check-provenance.sh`, which calls the helper's `check` rather than parsing the file itself.
       Fail a mark citing a missing, superseded or retired entry. Sweep superseded premises'
       `search` phrases across chapters, `OUTLINE.md`, `diagrams/README.md` and `.svg` files as
       reports. Report uncited `expected` entries, add the census count, and print a note when a
       book has no file.
+      Done 2026-09-25. The two ticket boxes left open under "Marks cite entries" are not
+      checker work: replacing `unsourced` labels with entries is done to a book by its
+      backfill (Phases 5 and 7), and `/check-claims` reading entries is Phase 4.
 - [ ] Phase 3: `/createbook`. Create the file at step 1 with the brief. Turn operator answers,
       rulings, exclusions and measurements into entries at steps 2 and 3, and show `list` at the
       gate. Outline rows list the entry IDs their chapter carries. Move register material out of

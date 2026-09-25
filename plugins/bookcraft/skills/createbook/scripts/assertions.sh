@@ -180,6 +180,12 @@ class TooNew(Exception):
     """The file declares a format newer than this script knows."""
 
 
+def too_new(path, fmt):
+    """What every reader says on a newer file. One wording, so none drifts."""
+    return (f"{path} is format {fmt}, and this bookcraft reads format {FORMAT}. "
+            f"Update bookcraft; a newer file is never guessed at")
+
+
 # --------------------------------------------------------------------------
 # Reading
 # --------------------------------------------------------------------------
@@ -634,9 +640,7 @@ def _read(book, writing=True):
     try:
         doc, probs = load(path)
     except TooNew as e:
-        raise Refused(f"{path} is format {e.args[0]}, and this bookcraft reads "
-                      f"format {FORMAT}. Update bookcraft; a newer file is never "
-                      f"guessed at", code=2)
+        raise Refused(too_new(path, e.args[0]), code=2)
     if doc is None or probs:
         said = ("already fails check, so nothing was written" if writing
                 else "fails check, so it is not listed")
@@ -911,9 +915,7 @@ def cmd_check(args):
     try:
         doc, probs = load(path)
     except TooNew as e:
-        raise Refused(f"{path} is format {e.args[0]}, and this bookcraft reads "
-                      f"format {FORMAT}. Update bookcraft; a newer file is never "
-                      f"guessed at", code=2)
+        raise Refused(too_new(path, e.args[0]), code=2)
     for p in probs:
         print(f"FAIL  {p}")
     if probs:

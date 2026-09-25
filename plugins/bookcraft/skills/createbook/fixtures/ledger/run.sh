@@ -119,6 +119,7 @@ if [ "$rc" -ne 0 ]; then printf '%s
 # committing a PDF or a .pptx, which fixtures/provenance already declines to do.
 cp "$checker" "$tmp/probe.py"
 cp "$here/../../scripts/check-references.sh" "$tmp/check-references.sh"
+cp "$here/../../scripts/assertions.sh" "$tmp/assertions.sh"
 python3 - "$tmp" <<'PROBE'
 import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")

@@ -15,10 +15,11 @@ here because their absence let a green line be printed over a file nothing had
 opened, not because they prove much on their own.
 
   1. Source existence. Every component of every mark names a source `book.json`
-     declares, or is `fill`, or is a reference back into the book. A component
-     that names none of those is a source the book does not have: a typo, an
-     undeclared file, or an invented name. This is the only check that can
-     catch a hallucinated source, and it is cheap.
+     declares, or is `fill`, or is a reference back into the book, or cites an
+     entry in `assertions.json` that holds. A component that names none of
+     those is a source the book does not have: a typo, an undeclared file, or
+     an invented name. This is the only check that can catch a hallucinated
+     source, and it is cheap.
 
   2. Locator resolution. `p. 4` is within the PDF's page count, `slide 9` within
      the deck's slide count, `§ Join Algorithms` is a heading the file carries,
@@ -167,6 +168,36 @@ neither can be judged against anything here; both are still listed on the unit
 under `unchecked`, because a paragraph resting half on a source and half on the
 book's own knowledge must not be read as though the source owed all of it.
 
+## Marks citing assertions.json
+
+`assertions.json` holds what the book was told or settled that no source holds
+(createbook/SKILL.md § The assertions file). A mark cites an entry as
+`assertion 7`, one entry to a component, with an optional gloss the way
+`fill (the framing)` takes one. The file is read through assertions.sh's
+`load` and never parsed here, so it has one definition. A file that fails its
+own check fails this run, and a file declaring a newer format stops it with
+exit 2.
+
+  * A mark citing an entry the file does not have, or one that is superseded
+    or retired, FAILS. For a premise that changed, this finds every paragraph
+    still built on the old value, but only where the paragraph's mark cites
+    the entry. On a backfilled book that is prose written after the backfill.
+  * Each superseded premise's `search` phrases are swept across every markdown
+    file in the book folder, `diagrams/README.md` and every figure under
+    `diagrams/`, and each hit is a REVIEW. Never a FAIL, because a phrase can
+    match a sentence that is not built on the premise. On a backfilled book
+    this is the only check that reaches the older prose.
+  * An entry that holds, rests in the prose and is `expected` but that no mark
+    cites is a REVIEW. After a recreate, this names each entry the new book
+    dropped. A `legacy` entry is left out: its prose predates the file.
+  * With no file, the summary says so and the entry checks are skipped. This
+    script never creates the file, because a backfill needs judgement; the
+    skills stop and create it.
+
+The sweep and the uncited report run over the whole book whatever --chapters
+says, for the reason the tag list does: each is a claim about the book, and a
+superseded premise in a chapter outside the scope is what the sweep is for.
+
 ## What book.json must declare
 
     "provenance": true,
@@ -189,6 +220,9 @@ component that names no external source. The reference book adds `measured`,
 which introduces a measurement it made itself and records in
 `OUTLINE.md § Anchor ledger`.
 
+Neither a `sources` key nor an `unsourced` label may start with `assertion`,
+which is reserved for citing an entry. Either one fails the run by name.
+
 A book with `"provenance": true` and no `sources` map is reported as
 undeclared and exits 0 without claiming anything. Nothing is asserted about it,
 and the summary says so rather than printing OK.
@@ -201,33 +235,37 @@ import importlib.util, importlib.machinery
 HERE = pathlib.Path(__file__).resolve().parent
 
 
-def _load_refs():
-    """Borrow check-references.sh's quote pairing rather than re-deriving it.
+def _borrow(filename, modname, what):
+    """Borrow a sibling script as a module rather than re-deriving what it does.
 
-    `quoted_spans` carries three rounds of review and a measured account of what
-    each round fixed, and re-implementing it here would give this script a
-    second, worse copy that drifts from the first. The import is by path because
-    the file is named `.sh` while being Python, which is the convention the
-    folder already uses. `check-references.sh` guards its entry point with
-    `if __name__ == "__main__"`, so importing it runs nothing.
+    Two are borrowed. check-references.sh's `quoted_spans` carries three rounds
+    of review and a measured account of what each round fixed, and
+    re-implementing it here would give this script a second, worse copy that
+    drifts from the first. assertions.sh is the only definition of
+    assertions.json's format, and a second parser here would be a second
+    definition. The import is by path because each file is named `.sh` while
+    being Python, which is the convention the folder already uses. Both guard
+    their entry points with `if __name__ == "__main__"`, so importing one runs
+    nothing.
 
     The loader is named explicitly because `spec_from_file_location` infers one
     from the suffix and hands back None for `.sh`. That then fails a line later
     as an AttributeError on NoneType, which says nothing about the file.
     """
-    path = HERE / "check-references.sh"
+    path = HERE / filename
     if not path.exists():
-        print(f"error: {path} is missing; this script borrows its quote pairing",
+        print(f"error: {path} is missing; this script borrows {what} from it",
               file=sys.stderr)
         sys.exit(2)
-    loader = importlib.machinery.SourceFileLoader("check_references", str(path))
+    loader = importlib.machinery.SourceFileLoader(modname, str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
 
 
-refs = _load_refs()
+refs = _borrow("check-references.sh", "check_references", "its quote pairing")
+register = _borrow("assertions.sh", "assertions", "the assertions.json format")
 MIN_QUOTE = refs.MIN_QUOTE
 
 MARK = re.compile(r"<!--\s*src:\s*(.*?)\s*-->")
@@ -277,6 +315,16 @@ QUALIFIER = re.compile(
     r"(?:,?\s*item\s+\d+"
     r"|\s+\d+(?:\s*(?:,|and)\s*\d+)*"
     r"|,?\s*first paragraph)\s*$", re.I)
+
+# A component citing an entry in assertions.json: `assertion 7`, one entry to a
+# component, with an optional gloss the way `fill (the framing)` takes one. The
+# word is reserved: any component starting with it is read as a citation and
+# fails if it is not one, and book.json may not declare a source or an
+# `unsourced` label that starts with it. Without the reservation, a book
+# declaring a source called "assertions log" would have its citations read two
+# ways depending on which check reached them first.
+RESERVED = "assertion"
+ASSERTION = re.compile(r"^assertion\s+(\d+)$", re.I)
 
 fail = 0
 review = 0
@@ -1364,6 +1412,93 @@ def write_worklist(emit_dir, book, by_chapter, scoped):
 
 
 # --------------------------------------------------------------------------
+# Marks citing assertions.json, and the premise sweep
+# --------------------------------------------------------------------------
+
+def cited_entry(component):
+    """The entry ID a component cites, None when it cites none, or -1 when it
+    starts with the reserved word and still cannot be read as a citation."""
+    if not component.lower().startswith(RESERVED):
+        return None
+    m = ASSERTION.match(strip_gloss(component))
+    return int(m.group(1)) if m else -1
+
+
+def sweep_files(book):
+    """Everything a superseded premise can survive in.
+
+    Every markdown file in the book folder, which is the chapters, the outline
+    and the front and back matter, plus `diagrams/README.md` and every figure
+    under `diagrams/`. One level deep for the markdown, deliberately:
+    `claim-checks/` and `outline-findings/` quote the book's old prose back, and
+    sweeping them would report the book's history as though it were the book.
+    """
+    files = sorted(book.glob("*.md"))
+    d = book / "diagrams"
+    if (d / "README.md").is_file():
+        files.append(d / "README.md")
+    if d.is_dir():
+        files += sorted(d.rglob("*.svg"))
+    return files
+
+
+def sweep_text(path):
+    """A file's text, ready to search, with every offset where it was.
+
+    Curly apostrophes fold to straight ones, which is a one-for-one swap. In a
+    figure the markup is blanked character for character, newlines kept, so a
+    phrase split across two `<tspan>` elements still matches and the line
+    number reported is the line in the file.
+    """
+    text = path.read_text(errors="replace")
+    text = text.replace("’", "'").replace("‘", "'")
+    if path.suffix == ".svg":
+        text = re.sub(r"<[^>]*>",
+                      lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    return text
+
+
+def phrase_pattern(phrase):
+    """A search phrase as a pattern: case folded, any whitespace or line break
+    between its words, and the markdown emphasis a sentence may wrap one word
+    in. Whole words only, so "twenty" does not match "twenty-first"."""
+    words = phrase.replace("’", "'").replace("‘", "'").split()
+    body = r"[\s*_`]+".join(re.escape(w) for w in words)
+    return re.compile(r"(?<![A-Za-z0-9-])" + body + r"(?![A-Za-z0-9-])", re.I)
+
+
+def sweep(book, reg):
+    """REVIEW every passage matching a superseded premise's search phrases.
+
+    Never FAIL, because a phrase can match a sentence that is not built on the
+    premise at all. On a book that was backfilled, this is the only check that
+    reaches prose written before its marks could cite an entry. Each hit names
+    what the premise says now, since that is what the passage has to become.
+    Returns the number of premises swept and the number of passages found.
+    """
+    old = [e for _, e in sorted(reg.items()) if e["kind"] == "premise"
+           and e["status"] == "superseded"]
+    if not old:
+        return 0, 0
+    texts = [(p, sweep_text(p)) for p in sweep_files(book)]
+    hits = 0
+    for e in old:
+        now = reg[e["superseded_by"]]
+        for phrase in e["search"]:
+            pat = phrase_pattern(phrase)
+            for p, text in texts:
+                for m in pat.finditer(text):
+                    hits += 1
+                    ln = text.count("\n", 0, m.start()) + 1
+                    said = " ".join(re.sub(r"[*_`]", "", m.group()).split())
+                    flag(f"{p.relative_to(book)}:{ln}: "
+                         f"\"{said}\" matches assertion "
+                         f"{e['id']}, a premise superseded by {now['id']}",
+                         f"was: {e['statement']}  now: {now['statement']}")
+    return len(old), hits
+
+
+# --------------------------------------------------------------------------
 
 def main(argv):
     mode = "both"
@@ -1456,6 +1591,11 @@ def main(argv):
 
     sources = {}
     for name, val in declared.items():
+        if name.lower().startswith(RESERVED):
+            problem(f"book.json declares a source named \"{name}\", and a mark "
+                    f"component starting with \"{RESERVED}\" is reserved for "
+                    f"citing an entry in {register.FILE}; rename the source")
+            continue
         # Three forms. A bare string is one path; a list is several under one
         # shorthand; an object carries a reader-facing `display` name beside the
         # path or paths (createbook/SKILL.md § 4).
@@ -1490,7 +1630,36 @@ def main(argv):
             problem(f"book.json declares \"{s.name}\" at a path that does not exist",
                     "; ".join(str(p) for p in s.missing))
 
-    unsourced = ["fill"] + list(conf.get("unsourced") or [])
+    unsourced = ["fill"]
+    for label in conf.get("unsourced") or []:
+        if label.lower().startswith(RESERVED):
+            problem(f"book.json declares \"{label}\" as unsourced, and a mark "
+                    f"component starting with \"{RESERVED}\" is reserved for "
+                    f"citing an entry in {register.FILE}; rename the label")
+        else:
+            unsourced.append(label)
+
+    # assertions.json, read through its own helper and never parsed here. Three
+    # states, because the entry checks below have to tell "nothing to read"
+    # from "nothing to trust": a file that fails its own check has failed this
+    # run already, and resolving marks against it would add verdicts built on
+    # the entries that made it fail.
+    reg, reg_state = {}, "missing"
+    reg_path = book / register.FILE
+    if reg_path.exists():
+        try:
+            doc, probs = register.load(reg_path)
+        except register.TooNew as e:
+            print(f"error: {register.too_new(reg_path, e.args[0])}",
+                  file=sys.stderr)
+            return 2
+        if doc is None or probs:
+            for p in probs:
+                problem(f"{register.FILE}: {p}")
+            reg_state = "invalid"
+        else:
+            reg = {e["id"]: e for e in doc["entries"]}
+            reg_state = "ok"
 
     # Chapters, skipping what /makebook skips.
     skip = {"OUTLINE.md", "glossary.md", "about-this-book.md"}
@@ -1513,6 +1682,17 @@ def main(argv):
             if m:
                 defined.add(refs.tag_key(m.group(1), m.group(2)))
     n_chapters = len(chapters)
+
+    # Every entry some mark cites, from every chapter, for the same reason and
+    # never from the scoped subset: `--chapters 3` must not report an entry
+    # chapter 9 cites as one nothing cites.
+    cited = set()
+    for p in chapters:
+        for _, _, comps in units_of(p):
+            for c in comps:
+                aid = cited_entry(c)
+                if aid is not None and aid > 0:
+                    cited.add(aid)
 
     scan = chapters
     if want_chapters is not None:
@@ -1557,6 +1737,36 @@ def main(argv):
             wl_unchecked = []   # fill and in-book components, named not judged
 
             for c in comps:
+                # Ahead of `unsourced`, so the reserved word wins over any
+                # label; book.json may not declare one starting with it.
+                aid = cited_entry(c)
+                if aid is not None:
+                    census["assertion"] += 1
+                    wl_unchecked.append(c)
+                    if aid < 0:
+                        problem(f"{where}: this component starts with "
+                                f"\"{RESERVED}\" and does not read as one; an "
+                                f"entry is cited as `assertion <id>`, one to a "
+                                f"component", c)
+                    elif reg_state == "missing":
+                        problem(f"{where}: the mark cites assertion {aid}, and "
+                                f"the book has no {register.FILE}")
+                    elif reg_state == "ok":
+                        e = reg.get(aid)
+                        if e is None:
+                            problem(f"{where}: the mark cites assertion {aid}, "
+                                    f"which {register.FILE} does not have")
+                        elif e["status"] == "superseded":
+                            problem(f"{where}: the mark cites assertion {aid}, "
+                                    f"which is superseded by "
+                                    f"{e['superseded_by']}",
+                                    f"was: {e['statement']}  now: "
+                                    f"{reg[e['superseded_by']]['statement']}")
+                        elif e["status"] == "retired":
+                            problem(f"{where}: the mark cites assertion {aid}, "
+                                    f"which is retired", e["retired_reason"])
+                    continue
+
                 # Both spellings, because the book writes `fill (the gloss)` and
                 # `the simulator search of 2026-09-12`, and the article belongs
                 # to the prose rather than to the word being declared.
@@ -1663,9 +1873,29 @@ def main(argv):
         if emit_dir:
             worklist.append((p, wl_units, wl_used))
 
+    # The entries against the book as a whole. Both run over every chapter
+    # whatever --chapters says, for the reason `cited` is built from every
+    # chapter: each is a claim about the book, and a superseded premise hiding
+    # in a chapter outside the scope is exactly what the sweep is for.
+    #
+    # An uncited entry is reported only when it holds, rests in the prose and
+    # is `expected`. A `legacy` entry was backfilled over prose written before
+    # any mark could cite it, so reporting it would list nearly every
+    # backfilled entry on every run until the recreate. After a recreate every
+    # entry is `expected`, and this report names each one the new book dropped.
+    n_uncited = swept = passages = 0
+    if reg_state == "ok":
+        for aid, e in sorted(reg.items()):
+            if (e["status"] == "holds" and e["applies_to"] == "prose"
+                    and e["citation"] == "expected" and aid not in cited):
+                n_uncited += 1
+                flag(f"assertion {aid} holds and rests in the prose, and no "
+                     f"mark in the book cites it", e["statement"])
+        swept, passages = sweep(book, reg)
+
     # ----------------------------------------------------------------------
     print()
-    unreadable = [s for s in sources.values() if not s.missing and s.text is None]
+    unreadable =[s for s in sources.values() if not s.missing and s.text is None]
     if unreadable:
         print("NOTE  sources nothing can search, so no quotation attributed to one was checked:")
         for s in unreadable:
@@ -1677,10 +1907,12 @@ def main(argv):
         print()
 
     total = sum(census[k] for k in
-                ("fill", "in-book", "unknown", "missing-file", "locator-ok",
-                 "locator-review", "locator-fail", "locator-skipped"))
+                ("fill", "in-book", "assertion", "unknown", "missing-file",
+                 "locator-ok", "locator-review", "locator-fail",
+                 "locator-skipped"))
     print(f"sources declared {len(sources)}   components {total}   "
-          f"fill {census['fill']}   in-book {census['in-book']}")
+          f"fill {census['fill']}   in-book {census['in-book']}   "
+          f"assertion {census['assertion']}")
     if mode == "quotes":
         print(f"locators NOT CHECKED ({census['locator-skipped']}): --quotes-only was given")
     else:
@@ -1693,6 +1925,21 @@ def main(argv):
     if unverifiable_by_source:
         for name, n in unverifiable_by_source.most_common():
             print(f"      {n} naming {name} (a mark may name more than one)")
+    # Said on the summary rather than left to the absence of a line. A book
+    # with no file passes every entry check vacuously, and a summary that
+    # stayed silent would read exactly like one whose entries all held.
+    if reg_state == "ok":
+        holds = sum(1 for e in reg.values() if e["status"] == "holds")
+        print(f"assertions {len(reg)} entries, {holds} hold   cited "
+              f"{len(cited & set(reg))}   uncited {n_uncited}   superseded "
+              f"premises swept {swept}, passages found {passages}"
+              + ("   (whole book)" if want_chapters is not None else ""))
+    elif reg_state == "invalid":
+        print(f"assertions NOT CHECKED: {register.FILE} fails its own check, "
+              f"above")
+    else:
+        print(f"assertions NOT CHECKED: this book has no {register.FILE}. The "
+              f"book skills create it; this script never does")
     print()
 
     if census["unparsed"]:
@@ -1727,7 +1974,8 @@ def main(argv):
 
     if fail:
         print(f"{fail} failure(s). A mark naming a source the book does not have, a locator")
-        print("outside its source, or a quotation in none of the sources its mark names.")
+        print("outside its source, a quotation in none of the sources its mark names, or a")
+        print("citation of an entry that does not hold.")
         return 1
 
     if review:
@@ -1740,6 +1988,8 @@ def main(argv):
     # would be the whole point of the script asserted over a check that never
     # ran.
     did = []
+    if reg_state == "ok":
+        did.append("every entry a mark cites holds")
     if mode != "quotes":
         did.append("every locator resolves")
     if mode != "locators":
@@ -1747,6 +1997,9 @@ def main(argv):
     print("OK    every mark names a declared source, and " + ", and ".join(did) + ".")
     if mode != "both":
         print(f"      Only part of the check ran: {mode}-only.")
+    if reg_state == "missing":
+        print(f"      This book has no {register.FILE}, so no entry was checked "
+              f"and no premise swept.")
     return 0
 
 

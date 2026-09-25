@@ -46,3 +46,40 @@ Tested in a scratch folder under both Pythons: the ticket's four-entry example b
 through the helper, every malformed case the ticket lists plus ten more, and every write
 refusal, each leaving the file byte-identical. `scripts/test-fixtures.sh`: 16 passed, 0
 failed. The fixture folders themselves are Phase 6.
+
+### 2026-09-25 11:03:00 MDT — Phase 2: marks cite entries
+
+`check-provenance.sh` reads `assertions.json` through `assertions.sh`'s `load`, imported
+by path the way it already borrows from `check-references.sh`, so the file still has one
+parser. A file that fails its own check fails the run, and entries are not resolved against
+it. A newer format exits 2 with the helper's own wording.
+
+- **`assertion <id>`**, one entry to a component, with an optional gloss. It fails when the
+  entry is missing, superseded or retired, or when the book has no file at all. A component
+  starting with the reserved word that does not parse fails by name instead of falling
+  through as an unknown source. A `sources` key or `unsourced` label starting with it fails.
+- **The sweep** reports each superseded premise's `search` phrases as REVIEW, never FAIL.
+  It matches case-insensitively across line breaks and markdown emphasis, whole words only,
+  and a figure's markup is blanked in place, so a phrase split across `<tspan>`s matches and
+  keeps its line number. **It covers every markdown file in the book folder, not only the
+  chapters and `OUTLINE.md` the ticket names**, because `about-this-book.md` and the
+  glossary are bound into the book too. `claim-checks/` and `outline-findings/` stay out:
+  they quote old prose back.
+- **Uncited `expected` entries** are REVIEW, and `legacy` ones are left out.
+- **Both reports run over the whole book under `--chapters`**, the way the tag list already
+  does. A scoped run that hid a superseded premise in another chapter would defeat the
+  sweep's purpose, and the summary line marks them `(whole book)`.
+- **Summary:** an `assertion` count on the census line, and an `assertions` line with
+  entries, holds, cited, uncited, premises swept and passages found. A book with no file
+  gets `assertions NOT CHECKED` there and a sentence under the OK line, so a vacuous pass
+  cannot read as a real one.
+
+Two fixture runners, `createbook/fixtures/ledger/run.sh` and
+`check-claims/fixtures/appendix/run.sh`, import a copy of `check-provenance.sh` from a temp
+folder, and failed until they also copied `assertions.sh` beside it, as they already copy
+`check-references.sh`. The missing-file note itself broke no exact-output fixture.
+
+Tested on a scratch book under Python 3.9 and 3.14 with every shape above. Hits were found
+across a line break and emphasis, in `OUTLINE.md` and in an SVG split across tspans; there
+were none in `claim-checks/`, "twenty-first" or "plenty". `check-book.sh` raises nothing
+about the new marks. `scripts/test-fixtures.sh`: 16 passed, 0 failed.

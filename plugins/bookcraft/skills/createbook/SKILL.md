@@ -212,6 +212,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<b
 
 **No other key is allowed anywhere in the file.** A misspelt key is the likeliest error, and `check` names the nearest key that exists.
 
+**Marks cite entries.** A unit resting on an entry names it in its provenance mark as `assertion <id>`, one entry to a component (`reference/chapter-prose.md § Provenance`). The link runs one way, from the prose to the file, and `check-provenance.sh` reads it at step 7. No `sources` key or `unsourced` label may start with `assertion`, because the word is reserved.
+
 ## Procedure
 
 ### 1. Derive the book
@@ -554,6 +556,8 @@ It resolves every component of every mark through `book.json`'s `sources` map an
 **The quotation check reports REVIEW rather than failing, and that was measured.** Against the reference book a hard failure fired ten times and was wrong ten times: four quotations differed from the source in punctuation alone, because this book bans the em dash its sources use; three were the book quoting a reader's imagined sentence; one quoted the book's own recommendation; one was a substitution the mark itself declares in a parenthetical no script can read. None is separable from a real misquotation by machine, so it prints them and leaves the judgment to a person.
 
 **Read the last three census lines, not the exit code.** They report how many components were `fill`, how many locators went unparsed, and how many quotations could not be searched at all. A source with no text layer is the case that matters: the reference book's syllabus, Canvas setup guide and CSC220 syllabus are images of text, so 28 of its quotations are unverifiable by any tool and the run names the number rather than passing them. An absence found in a document nothing can read is not evidence. **A quotation counts as unverifiable when *any* source its mark names is unreadable, not only when all of them are** — 12 of those 28 name a readable source too, and a search that could not open one of the named sources cannot tell "not there" from "not readable".
+
+**Read the `assertions` line too.** A mark citing an entry that is missing, superseded or retired fails the run. Two things are reported rather than failed, as REVIEW lines. The first is every passage matching a superseded premise's `search` phrases, in any markdown file in the book folder, `diagrams/README.md` or a figure. The second is every entry that holds, rests in the prose, is `expected`, and has no mark citing it; after a recreate, that list is what the new book dropped. Both run over the whole book even under `--chapters`. A book with no `assertions.json` reads `assertions NOT CHECKED` there, and the OK line says so too. The script never creates the file.
 
 **A page locator that resolves is not a page locator that is right.** The assertion is that the number falls inside the PDF's page count, which is the most a script can settle without reading the page. Where a PDF's printed page numbers differ from its page index, and one cover page is enough to cause that, a citation to the wrong page resolves clean. Three did on the reference book, each landing the reader a page early: the mark reads `p. 6`, the checker counts to the PDF's sixth page, and the page printed `6` is the seventh. Nothing in the folder records which of the two a mark meant, so the check cannot be tightened. Open the source when writing the mark, and prefer a locator the file carries in its own text, such as a heading or a numbered item, wherever the source offers one.
 

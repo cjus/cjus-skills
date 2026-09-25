@@ -317,7 +317,7 @@ Four checks run over a book, in ascending order of what they are worth. The firs
 | Checker | Direction | Answers |
 |---|---|---|
 | `check-book.sh` | Inside the book | Filenames, ordering, the H1, the H2 per part, the paragraph tags, the markdown a chapter may not carry |
-| `check-provenance.sh` | Marks pointing **out** | Is the named source declared and present? Does the locator resolve? Does every quotation of 25+ characters appear in a source the mark names? |
+| `check-provenance.sh` | Marks pointing **out** | Is the named source declared and present? Does the locator resolve? Does every quotation of 25+ characters appear in a source the mark names? Does every `assertion <id>` a mark cites still hold, and is any prose still built on a superseded premise? |
 | `check-references.sh` | Citations pointing **in** | Do `ch. N` and `[N-M]` citations from other files resolve to chapters and paragraphs that exist? Does a quotation attributed to a chapter appear in *that* chapter? |
 | `/check-claims` | Both, with a reader | Does the source actually support the paraphrase beside the mark? |
 
@@ -330,7 +330,7 @@ render-report.py <findings-dir> <book-folder> [--worklist <dir>] [--command "<th
 
 All of them live under `${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/`, except `render-report.py`, which is `/check-claims`'s and sits under that skill.
 
-**Read the census lines, not only the exit code.** `check-provenance.sh` reports how many components were `fill`, how many locators went unparsed, and how many quotations could not be verified. Those numbers move without moving the exit code, and a rise in them is worth a sentence even though neither fails a run.
+**Read the census lines, not only the exit code.** `check-provenance.sh` reports how many components were `fill`, how many locators went unparsed, how many quotations could not be verified, and how many `assertions.json` entries no mark cites, or `assertions NOT CHECKED` for a book without the file. Those numbers move without moving the exit code, and a rise in them is worth a sentence even though neither fails a run.
 
 **A `REVIEW` item is not a failure and not an all-clear.** The tools report `OK*` when nothing failed but review items are still unread, which is deliberate: it is not a pass until someone has been through them.
 
