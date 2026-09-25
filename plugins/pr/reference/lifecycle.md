@@ -82,4 +82,4 @@ Every skill with a position on the map carries a **Lifecycle position** section 
 - Report each entry in `gaps` with its remedy, most consequential first.
 - An empty `gaps` list is **one clause**, never a section and never a table. Being mid-cycle is the normal state, and a check that narrates it at length trains the reader to skip the one time it matters.
 - Name `next` as the recommended next command, unless the skill's own steps reached a different one, in which case say which and why.
-- **A skill never runs `next` itself.** It is a recommendation, and `/pr:close` in particular is always the operator's to invoke.
+- **A skill never runs `next` itself.** It is a recommendation. `/pr:close` in particular is the operator's to invoke, **unless the operator has granted standing permission to run it**, in the project's instructions or in memory. Even then it runs as its own step, once the current skill's report is done, never from inside another skill. A standing grant covers only the commands it names. It never covers a merge, or anything else that writes to the default branch, because those stay the operator's every time.

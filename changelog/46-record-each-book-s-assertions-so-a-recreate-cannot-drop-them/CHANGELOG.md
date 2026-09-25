@@ -139,3 +139,13 @@ nothing written can be deleted, AskUserQuestion's limit of four questions per ca
 rubber-stamping a uniform table invites. The procedure is in
 `PLAN.md § Decision: a backfill confirms by triage`, and a review file for oversized backfills
 is under `## Deferred`. Both Open Questions are now closed.
+
+### 2026-09-25 12:03:59 MDT — pr plugin: a standing grant can cover /pr:close (outside #46)
+
+This change is operator-directed and outside the ticket. It is recorded in
+`PLAN.md § Outside the objective, by operator direction`. The operator granted standing
+permission to run `/pr:cp` and `/pr:close` on feature branches, with `main` kept gated, and
+asked for the pr plugin's own text to allow that. Four sentences said `/pr:close` is always
+the operator's to invoke, and each now allows a standing grant. A grant still runs the close
+as its own step, never from inside another skill, and after the hands-on testing `/pr:pre-test`
+asks for. It never extends to a merge. pr is now 0.2.6. The acceptance suite passes 39 of 39.
