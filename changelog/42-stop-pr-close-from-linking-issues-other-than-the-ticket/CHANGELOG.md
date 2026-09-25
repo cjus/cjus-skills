@@ -61,3 +61,13 @@ closing-keyword rule where the summary is written, and writes the body in one ed
   pre-check.
 - Step 8b's deferred create puts the closing line in the body it creates, rather than calling
   for a separate append edit.
+
+### 2026-09-25: Phase 4, version bump and tests
+
+- `plugins/pr/.claude-plugin/plugin.json` 0.2.7 → 0.2.8, so installed copies refresh.
+- `plugins/pr/scripts/test-acceptance.sh plugins/pr`: 42 passed, 0 failed. The suite does not
+  cover skills, so it checks for regressions here rather than testing the change. The skill
+  changes were tested with the jq fixtures (Phase 1) and the stub-`gh` body build (Phase 3).
+- `plugins/pr/hooks/test-guard-default-branch.sh`: 73 passed. The hook is untouched; the suite
+  was run anyway because it is cheap.
+- A lifecycle-script gap for stray closing references went under `PLAN.md § Deferred`.

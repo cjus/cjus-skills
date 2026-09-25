@@ -60,7 +60,7 @@ Surfaced by PR #38's Phase 7 close review and its step 8b.
       have close step 4 refer to it rather than carry it alone.
 - [x] Phase 3: Write the summary and the closing line as one body in a single edit, on the create
       path and the replace path alike, then verify with the existing re-reads.
-- [ ] Phase 4: Bump the pr plugin's version so installed copies refresh, and run
+- [x] Phase 4: Bump the pr plugin's version so installed copies refresh, and run
       `plugins/pr/scripts/test-acceptance.sh`.
 
 ## Open Questions
@@ -74,3 +74,9 @@ Surfaced by PR #38's Phase 7 close review and its step 8b.
   `/pr:pre-test` or `/pr:close` opens the PR, override its title with
   `[#42] Stop /pr:close from linking issues other than the ticket`, and check it again at
   `/pr:close`.
+
+## Deferred
+
+- `pr-lifecycle-state.mjs` could raise a gap when an open PR's `closingIssuesReferences` holds an
+  issue other than the ticket. Out of scope: this branch's objective is close's verify. #44 made
+  the same call for its title check and left it to `/pr:close`.
