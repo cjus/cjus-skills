@@ -68,3 +68,13 @@ CI run 36134364045 on `fafa000` passed 16 of 16 on both legs, the bind included.
 stays advisory, per the operator**: the bind's checks lean on font metrics, where a Linux-only
 failure is likelier a font difference than a regression. The reason sits in the `fixtures.yml`
 header beside the macOS rationale.
+
+### 2026-09-25 — Phase 6: #37's regression books
+
+Synced `main` @ `5a4d741` (#39) with a merge commit; its binder is the one the fixture was already
+tested against. **`bind/run.sh` now binds two more books kept beside it**, copied from #37's own
+reproductions: `appendix-slug/`, whose Contents must list 1, 2 and one A1, and `appendix-table/`,
+whose appendix table must bind with no word broken mid-word. Both pass on the merged binder and
+fail on the pre-#39 binder, which is what a revert of either fix looks like. The fixture takes
+about 9s for its four binds. The table squeeze was measured on macOS; where Linux fonts leave the
+column wide enough, that check passes without testing the repair, and the header says so.

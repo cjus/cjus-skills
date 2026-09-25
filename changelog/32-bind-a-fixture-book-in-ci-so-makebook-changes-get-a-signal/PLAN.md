@@ -56,7 +56,7 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       `createbook/NOTES.md`, the root `README.md`. Local runs behave as documented in all
       three modes. CI run 36134364045 on `fafa000` is green on both legs with the bind in
       it: 16 of 16, `makebook/bind/run.sh` ok on macOS and on Linux.*
-- [ ] Phase 6: Bind the two regression books #37 asked for in its comment on #32, as books inside
+- [x] Phase 6: Bind the two regression books #37 asked for in its comment on #32, as books inside
       `makebook/fixtures/bind/`, and tick that comment's checkboxes at close:
       - the look-alike appendix slug (#35): `sql-01-intro.md`,
         `sql-02-appendix-1-of-the-standard.md` and `sql-appendix-1-answer-key.md` print as 1, 2
@@ -67,6 +67,9 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       *Added 2026-09-25 by the operator. Blocked until PR #39 merges: both test #39's fixes and
       fail on `main` today, measured (Contents printed `A1` twice; the table warned). Then
       `/pr:sync` and add them. The table repro was measured on macOS only.*
+      *Done 2026-09-25 after syncing `main` @ `5a4d741`. Both pass on the merged binder and
+      fail on the pre-#39 binder from `75f1a0b`, each naming its cause. The comment's
+      checkboxes are ticked at close.*
 
 ## Deferred
 

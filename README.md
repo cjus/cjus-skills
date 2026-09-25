@@ -143,7 +143,7 @@ configuration and a different one, with different right answers, and it has its
 own coverage in `skills/createbook/fixtures/jq-unrunnable/run.sh`.
 
 **The suite binds a book, so the workflow installs the binder's toolchain.**
-`skills/makebook/fixtures/bind/run.sh` binds a fixture book with `build-book.py`
+`skills/makebook/fixtures/bind/run.sh` binds fixture books with `build-book.py`
 and checks the PDF and EPUB it writes. The workflow runs the same `install.sh` a
 person does, adds poppler, and asserts that Chromium can print a PDF and
 `pdftotext` can read it back. On a laptop without that toolchain the bind prints

@@ -24,6 +24,22 @@
 # rasterising path, whose failure the binder swallows and ships a book with no
 # cover art.
 #
+# Two more books sit beside this script, each a regression test for a binder
+# fix that a revert would undo without a sound:
+#
+#   appendix-slug/     sql-02-appendix-1-of-the-standard.md is a chapter whose
+#                      name only looks like an appendix's. Contents must list
+#                      1, 2 and A1, with one A1; an unanchored appendix pattern
+#                      printed the middle file as a second Appendix 1.
+#   appendix-table/    an appendix, placed after two chapters, holding a table
+#                      whose long-prose column squeezes a long word. The bind
+#                      must not warn of a word broken mid-word; keying the
+#                      column plan on the printed label, not the chapter's
+#                      number, left the appendix's table unrepaired.
+#
+# The table squeeze was measured on macOS. Where different font metrics leave
+# the column wide enough, the second check passes without testing the repair.
+#
 # The binder's toolchain is optional on a laptop and required in CI. With no
 # venv from install.sh, or no pdftotext, this prints skip and exits 0, and
 # --strict (implied by $CI) turns that skip into a failure. A toolchain that is
@@ -60,24 +76,28 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp -R "$book" "$tmp/book"
+cp -R "$here/appendix-slug" "$tmp/appendix-slug"
+cp -R "$here/appendix-table" "$tmp/appendix-table"
 
-# bind <label> <out.pdf>: binds the copy, and stops the run if the bind fails,
-# since nothing after it has anything to read.
+# bind <label> <title> <folder> <out.pdf>: binds a copy, leaves what the binder
+# printed in $bind_out, and stops the run if the bind fails, since nothing
+# after it has anything to read.
+bind_out=""
 bind() {
-  local out rc
-  out=$("$py" "$binder" "Guide Fixture" "$tmp/book" --out "$2" 2>&1); rc=$?
+  local rc
+  bind_out=$("$py" "$binder" "$2" "$3" --out "$4" 2>&1); rc=$?
   if [ "$rc" -ne 0 ]; then
     report 1 "$1: the bind exits $rc"
-    printf '%s\n' "$out" | sed 's/^/      | /'
+    printf '%s\n' "$bind_out" | sed 's/^/      | /'
     exit 1
   fi
-  report 0 "$1: the guide fixture binds"
+  report 0 "$1: the book binds"
 }
 
 # --- as declared -----------------------------------------------------------
 pdf="$tmp/declared/guide.pdf"
 epub="$tmp/declared/guide.epub"
-bind "as declared" "$pdf"
+bind "as declared" "Guide Fixture" "$tmp/book" "$pdf"
 
 [ -s "$pdf" ];  report $? "as declared: the PDF is written"
 [ -s "$epub" ]; report $? "as declared: the EPUB is written"
@@ -117,7 +137,7 @@ json.dump(cfg, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
 EOF
 pdf="$tmp/cover-image/guide.pdf"
 epub="$tmp/cover-image/guide.epub"
-bind "cover_image" "$pdf"
+bind "cover_image" "Guide Fixture" "$tmp/book" "$pdf"
 
 # One stamp per bind, in bind_stamp's form. Matching the form, and not just the
 # word, is what catches a stamp that was printed but broken.
@@ -137,6 +157,30 @@ elif [ "$pdf_stamp" != "$epub_stamp" ]; then
   report 1 "cover_image: the stamps differ: PDF page 1 says '$pdf_stamp', EPUB/cover.xhtml says '$epub_stamp'"
 else
   report 0 "cover_image: PDF page 1 and EPUB/cover.xhtml carry the same stamp"
+fi
+
+# --- appendix-slug -----------------------------------------------------------
+pdf="$tmp/appendix-slug-out/book.pdf"
+bind "appendix-slug" "Appendix Slug" "$tmp/appendix-slug" "$pdf"
+contents=$(pdftotext -f 2 -l 2 -layout "$pdf" - 2>&1)
+has() { printf '%s\n' "$contents" | grep -qE "$1"; }
+if has '^ *1 +Intro +[0-9]+$' \
+  && has '^ *2 +Appendix One of the Standard +[0-9]+$' \
+  && has '^ *A1 +Answer Key +[0-9]+$' \
+  && [ "$(printf '%s\n' "$contents" | grep -cE '^ *A1 ')" -eq 1 ]; then
+  report 0 "appendix-slug: Contents lists 1, 2 and A1, and the look-alike stays a chapter"
+else
+  report 1 "appendix-slug: Contents should list 1 Intro, 2 Appendix One of the Standard and one A1 Answer Key"
+  printf '%s\n' "$contents" | grep -E '^ *(A?[0-9]+) ' | sed 's/^/      | /'
+fi
+
+# --- appendix-table ----------------------------------------------------------
+bind "appendix-table" "Appendix Table" "$tmp/appendix-table" "$tmp/appendix-table-out/book.pdf"
+if printf '%s\n' "$bind_out" | grep -qF 'broken mid-word'; then
+  report 1 "appendix-table: the bind warns of a word broken mid-word, so the appendix's table was not repaired"
+  printf '%s\n' "$bind_out" | grep -A3 -F 'broken mid-word' | sed 's/^/      | /'
+else
+  report 0 "appendix-table: the appendix's table is repaired, with no word broken mid-word"
 fi
 
 exit "$fails"
