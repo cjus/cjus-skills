@@ -71,3 +71,21 @@ closing-keyword rule where the summary is written, and writes the body in one ed
 - `plugins/pr/hooks/test-guard-default-branch.sh`: 73 passed. The hook is untouched; the suite
   was run anyway because it is cheap.
 - A lifecycle-script gap for stray closing references went under `PLAN.md § Deferred`.
+
+### 2026-09-25: `/pr:pre-test`, draft PR #49, review APPROVE, four review items applied
+
+- **Draft PR #49 was opened with the `[#42]` title set by hand**, as decided.
+  `pr-review-2026-09-25.md` returned APPROVE with no blocking findings.
+- **Applied 🟡 1: sidebar links.** `closingIssuesReferences` also includes issues linked by hand
+  in the PR's Development sidebar, and no body edit removes those. The stray remedy now says to
+  report such a link for the operator to remove, and not to re-run.
+- **Applied 🟢 1:** the summary rule now covers a keyword with a colon after it.
+- **Applied 🟢 2:** a stray that names this repository under another owner or name means `$REPO`
+  went stale after a rename or transfer.
+- **Review question 1, answered from the ticket:** the stop on an intentionally linked second
+  issue is deliberate, and close step 4 now says so. That issue gets closed by hand after the
+  merge.
+- **Review question 2, for this branch's close:** the installed 0.2.5 plugin runs it, and its
+  `/pr:summary` has no closing-keyword rule. Write that summary's closing-line examples with the
+  `#N` placeholder by hand. The old two-edit race can still happen one last time, and 8b should
+  catch it.
