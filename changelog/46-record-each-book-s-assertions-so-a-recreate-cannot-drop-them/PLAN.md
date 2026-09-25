@@ -203,7 +203,7 @@ The skill stops and creates the file before doing what it was asked.
 
 ### Backfill
 
-- [ ] Write the backfill procedure that the stop runs. It draws candidates from these places:
+- [x] Write the backfill procedure that the stop runs. It draws candidates from these places:
   - `OUTLINE.md`'s measured, decisions and names sections
   - the ledger-row asides that record a ruling
   - the revision notes
@@ -212,9 +212,9 @@ The skill stops and creates the file before doing what it was asked.
   - `git log -p` of the chapters
 
   The operator confirms each candidate, because a revision note can record an edit that was later reversed. The `created` block records what was read and the counts.
-- [ ] A backfill writes the file and nothing else. It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is marked `citation: "legacy"`.
-- [ ] When a backfill records a superseded premise, it asks the operator for `search` phrases for both values and runs the sweep straight away. It then shows every passage still built on the old value, and says that the fix is a chapter rewrite or the recreate, not a patch (`updatebook § When to stop editing in place`).
-- [ ] A derived key goes into one `settled` entry with an `answers` list, not into a single statement and not into one entry per item. Where a key was corrected, the `corrected` date comes from the commit that corrected it.
+- [x] A backfill writes the file and nothing else. It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is marked `citation: "legacy"`.
+- [x] When a backfill records a superseded premise, it asks the operator for `search` phrases for both values and runs the sweep straight away. It then shows every passage still built on the old value, and says that the fix is a chapter rewrite or the recreate, not a patch (`updatebook § When to stop editing in place`).
+- [x] A derived key goes into one `settled` entry with an `answers` list, not into a single statement and not into one entry per item. Where a key was corrected, the `corrected` date comes from the commit that corrected it.
 - [ ] Backfill the reference guide before it is recreated. Then check that all four cases above are carried: the roster of eleven, the exam window, the rulings and the corrected key. Also check that the sweep lists the passages still built on a class of twenty.
 
 ### Fixtures and release
@@ -269,11 +269,15 @@ The skill stops and creates the file before doing what it was asked.
       `/makebook`'s exemption is stated.
       Per the recreate decision below, the "Recreate the book" level and `§ Recreating the
       book` name the `/createbook --recreate` command and do not run the recreate.
-- [ ] Phase 5: The backfill procedure. Candidate sources, operator confirmation, the `created`
+- [x] Phase 5: The backfill procedure. Candidate sources, operator confirmation, the `created`
       block, `legacy` marking, the premise sweep on a superseded premise, and derived keys as one
       `answers` entry with corrected dates taken from the commits that made them.
       Confirmation follows `## Decision: a backfill confirms by triage` below. Also carries the
       stop for an existing folder with no file, moved here from Phase 3.
+      Done 2026-09-25: `createbook § Backfilling the assertions file`, and the stops in
+      `§ Adding to a book that already exists` and `§ Recreating a book`. Written ahead of
+      Phase 4 so that `/updatebook` and `/check-claims` point at a procedure that exists.
+      Backfilling the reference guide itself is Phase 7.
 - [ ] Phase 6: Fixtures and release. Add the fixture cases the ticket lists, confirm the
       missing-file note breaks no exact-output fixture, record the reasoning in `NOTES.md`, bump
       bookcraft's version, and run `scripts/test-fixtures.sh`.

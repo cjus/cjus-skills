@@ -637,7 +637,7 @@ Do not run `/makebook` unless asked. Binding the PDF is a separate decision, and
 
 ## Adding to a book that already exists
 
-Point the second argument at the existing folder. Read `OUTLINE.md` and every existing chapter's opening and closing paragraph before planning, so new chapters inherit the term ledger, and under `narration` the handoff nouns, rather than restarting them. Renumbering an existing chapter renames its file **and rewrites every tag inside it**, since the chapter half of a tag is the chapter number, so prefer appending; if a chapter must be inserted, renumber every file after it in one pass, retag each one, and rerun the checker, which catches a file whose tags kept the old number.
+Point the second argument at the existing folder. **A folder with no `assertions.json` stops here**: backfill it (§ Backfilling the assertions file) and commit it before planning anything. Where the file exists, run `assertions.sh list` first: the new chapters' outline rows carry entries the way § 2 describes, and every answer the operator gives becomes an entry before it reaches the outline, as at § 3. Read `OUTLINE.md` and every existing chapter's opening and closing paragraph before planning, so new chapters inherit the term ledger, and under `narration` the handoff nouns, rather than restarting them. Renumbering an existing chapter renames its file **and rewrites every tag inside it**, since the chapter half of a tag is the chapter number, so prefer appending; if a chapter must be inserted, renumber every file after it in one pass, retag each one, and rerun the checker, which catches a file whose tags kept the old number.
 
 Renumbering also breaks any tag already cited elsewhere, in a conversation, a note or another document, the same way it breaks a `ch. N` citation. That is a second reason to append rather than insert.
 
@@ -657,7 +657,7 @@ A recreate writes every chapter fresh, under the rules the book is now written t
 
 - **No first argument.** The brief in `assertions.json` is the request, and a different request is a new book rather than a recreate.
 - **`<new-folder>` is required, and it must not exist yet or must be empty. It is never the old folder.** A recreate is due when the chapters' boundaries or order change, so the filenames change too, and in place the old chapter files would sit beside the new ones for `/makebook` to bind. The old book also stays readable for repointing citations (§ When the book supersedes one that already exists). The operator deletes it once satisfied. This skill never does.
-- **The old folder must carry an `assertions.json` that passes `check`.** Without one, stop and say so: a recreate from the outline and the sources alone drops every claim the file exists to carry.
+- **The old folder must carry an `assertions.json` that passes `check`.** Without one, stop and backfill it first (§ Backfilling the assertions file), in the old folder, and commit it there. A recreate from the outline and the sources alone drops every claim the file exists to carry.
 
 **The procedure is § Procedure, with these differences:**
 
@@ -676,6 +676,100 @@ A recreate writes every chapter fresh, under the rules the book is now written t
 - **Which entries a source now contradicts**, such as a new document stating the class size an entry records. The operator settles each one, and neither the entry nor the source wins without their say. Their answer supersedes the entry, retires it, or keeps it with a `ruling` saying which one wins.
 
 **Then repoint every outside citation** through § When the book supersedes one that already exists, because a recreate renumbers every tag.
+
+## Backfilling the assertions file
+
+A book written before `assertions.json` existed has none, and the claims it would hold are scattered through the outline, the marks and the history. **A backfill gathers them into the file, once per book.** Three skills stop and run it when a book folder has a `book.json` and no `assertions.json`:
+
+- this skill, pointed at an existing folder to add chapters or to recreate
+- `/updatebook`, at its step 0
+- `/check-claims`, at its step 1, because it reads the file
+
+`/makebook` never does, because it binds any folder of markdown and reads nothing from the file. No script ever does, because a backfill needs judgement, and no flag skips it. The cost is one backfill per book, paid by the first run that touches the book, even when that run is a one-word fix.
+
+**A backfill writes `assertions.json` and nothing else.** It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is `legacy`: the prose resting on it predates the file, so no mark cites it yet. A mark keeps its `unsourced` label until its paragraph is rewritten, and the rewrite cites the entry instead.
+
+**What goes in is the test in § The assertions file**: a claim the book stands behind that a fresh run would not reproduce from the brief and the sources alone. A claim a source makes stays out, and so does the model's own `fill`, unless the operator adopted it.
+
+### 1. Gather the candidates
+
+Read these, in this order, and write down each candidate as you find it:
+
+| Where | What it yields |
+|---|---|
+| `OUTLINE.md`: any section recording measurements, decisions, names or exclusions, and the house rules | `measured`, `ruling` and `settled` candidates |
+| The source ledger's rows, for asides that rule on a source: which one wins, what to leave out | `ruling` |
+| The revision notes on the outline's chapter rows | Whatever each revision established. Often a `premise` that changed, or a `given` |
+| Marks naming an `unsourced` label (`book.json`), where the label stands for a fact, not a method: an email, a page behind sign-in, a live site read on a date | One `given` per fact the label stands for, never one per mark |
+| `claim-checks/*.md` | `settled`: a finding the operator ruled on, especially one raised on every run |
+| `git log -p` of the chapters and the outline | What a revision put only into the prose, and every correction to a derived answer. Start with the commits that changed a chapter and left `OUTLINE.md` alone, since those facts reached nowhere else |
+
+For each candidate, prepare:
+
+- a proposed kind
+- the claim as a full sentence
+- a proposed origin, with its date taken from the commit that introduced the fact:
+
+  ```bash
+  git log --reverse --format='%as %h' -S'<a phrase the fact uses>' -- "$BOOK" | head -1
+  ```
+
+- its evidence: an outline section, a commit, or a mark's location
+
+**Two shapes are gathered whole, never split:**
+
+- **A premise that changed is a pair**, the old value and the one that replaced it.
+- **A derived answer key is one `settled` entry with an `answers` set**, never one entry per item. For each item a later commit corrected, note the answer as first derived, the corrected answer, and that commit's date.
+
+### 2. Check each against the book as it stands
+
+**A revision note whose change is still in the chapter text is current. One whose text is gone is possibly reversed.** That is the case the operator's confirmation exists for, since a note can record an edit that was later undone, and checking it here settles it mechanically instead of from memory. Do the same for every candidate that names wording: find it in the chapters now, or say that it is gone.
+
+### 3. Ask the doubtful ones individually
+
+Ask these one at a time, or four to a call with AskUserQuestion, because each needs an answer only the operator has:
+
+- **Every possibly reversed candidate**: keep, drop, or the value it holds now.
+- **Every ruling whose author the evidence does not settle.** Was it the operator's call or the book's own judgement? That is `origin.by`.
+- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one.
+- **The original `/createbook` argument.** A book written before this file existed never saved it. Where nobody has it, it is written `null`, never as the outline's paraphrase.
+- **The persona's and the profile's origins**, where the outline does not record them. `unrecorded` is an honest answer.
+
+### 4. Show the rest grouped by kind, for striking
+
+One table per kind, each candidate numbered, with its full sentence, its evidence and its proposed origin, never as a bare label (§ 3, on why a label reads as settled). The operator strikes by number and corrects in words: "drop 4 and 9; 12 was mine, not the book's".
+
+### 5. Ask what it missed
+
+**A backfill reads only what reached the repo.** A ruling given in conversation and never written down is invisible to it, so ask for anything missing, and add each answer as a candidate.
+
+### 6. Write the file in one pass
+
+Nothing written can be deleted, since the helper only retires and never reuses an ID. So write only once every candidate is settled:
+
+```bash
+A=${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh
+$A init "$BOOK" --how backfill --from OUTLINE.md --from "provenance marks" \
+  --from claim-checks --from "git log" --candidates <gathered> --confirmed <kept> \
+  --reader "<the persona>" --reader-origin <origin> --profile-origin <origin> \
+  [--argument="<the argument, if the operator has it>"]
+$A add "$BOOK" --kind <kind> --statement "<sentence>" --by <by> --date <commit date> \
+  --applies-to prose --citation legacy [the kind's own flags]
+```
+
+- **`--from` names only what was actually read.**
+- **`--candidates` counts everything gathered, including what was struck. `--confirmed` counts what is written.**
+- **A premise that changed is added as the old value, then `supersede`d by the new one**, each dated to its own commit, with the `search` phrases from step 3.
+- **A corrected answer key is added with the answers as first derived, then each correction is replayed** with `correct <id> --item "<item>" --answer <answer> --date <the fixing commit's date>`. That records `was` and `corrected` exactly as the history had them.
+- **A `book` entry takes no `--citation`.**
+
+### 7. Sweep each premise that changed
+
+Run `check-provenance.sh "$BOOK"`, and show every `REVIEW` line its sweep prints for a superseded premise: each is a passage still built on the old value. **Say that the fix is a rewrite of each chapter it reaches, or the recreate, never a patch** (`updatebook § When to stop editing in place`). The backfill itself changes none of them.
+
+### 8. Confirm, then commit the file on its own
+
+Show `assertions.sh list "$BOOK"` as the final confirmation. Once the operator accepts it, commit `assertions.json` alone, before the work that stopped for it resumes. `/updatebook`'s step 0 refuses a folder with uncommitted changes, and its step 5 proves untouched chapters untouched with a `git diff` that a new file would muddy. The order is always the same: backfill, confirm, commit, then resume.
 
 ## When the book supersedes one that already exists
 

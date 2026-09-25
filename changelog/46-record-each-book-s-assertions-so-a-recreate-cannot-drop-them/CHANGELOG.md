@@ -175,3 +175,29 @@ backfill, so this commit ships no pointer to a procedure that does not exist yet
 
 Walked on a scratch copy: after `expect --all`, the uncited report named exactly the two entries
 the new chapter did not carry. `scripts/test-fixtures.sh`: 16 passed, 0 failed.
+
+### 2026-09-25 12:12:27 MDT — Phase 5: the backfill procedure
+
+`createbook § Backfilling the assertions file` holds the procedure, written ahead of Phase 4 so
+the stops in `/updatebook` and `/check-claims` point at something that exists. It follows the
+triage decision in eight steps:
+
+1. **Gather** from six places, in order: the outline's register-like sections, ledger asides,
+   revision notes, marks with a fact-like `unsourced` label (one candidate per fact, not per
+   mark), `claim-checks/`, and `git log -p`, starting with commits that changed a chapter and
+   left the outline alone. Each candidate is dated by `git log --reverse -S`. A changed premise
+   is gathered as a pair, and a derived key as one `answers` set.
+2. **Check** each against the book as it stands, so a reversed revision is caught mechanically.
+3. **Ask individually** about reversals, unclear authorship, search phrases for both values, the
+   argument, and unrecorded origins.
+4. **Strike the rest** from tables grouped by kind.
+5. **Ask** what the backfill missed.
+6. **Write** in one pass, since nothing written can be deleted. Every `prose` entry is
+   `legacy`, and key corrections are replayed through `correct --date`.
+7. **Sweep** each changed premise and name the passages still built on the old value, with the
+   rewrite or recreate as the fix.
+8. **Confirm** with `list`, then commit the file alone.
+
+`/createbook` now stops and backfills for an existing folder, whether adding chapters or
+recreating. `/makebook`'s exemption and the absence of any skip flag are stated where the
+procedure opens.
