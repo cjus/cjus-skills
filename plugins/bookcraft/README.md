@@ -108,6 +108,7 @@ books/<book-slug>/
   ...
   OUTLINE.md                      the plan each chapter was written against
   book.json                       title, byline, sources, tags on/off, front matter
+  assertions.json                 what the book was told or settled that no source holds
   about-this-book.md              where the book's material came from
   glossary.md                     derived from the outline's term ledger
   diagrams/                       hand-authored SVG figures, written by /makebook
@@ -158,12 +159,15 @@ Writes a whole book from a one-line description.
 | `--source <path>` (repeatable) | A resource the book is written against: a repo file, a folder, a PDF |
 | `--minutes <N>` | How long the reader has. Sizes the book |
 | `--no-tags` | Write without paragraph tags |
+| `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder |
 
 **The sources are the point.** A book here is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
 
 **URLs are never stored.** Web material is read at drafting time and then referenced by the terms a reader would search for. A link rots between the writing and the reading, so anything web-derived is marked `fill` by construction. What can be re-checked later is a repo file or a PDF, and the ledger records which sources are re-openable.
 
 It plans the outline first and stops for your approval before narrating anything. That gate shows you the reader it settled on, and says where it came from — your argument, your answer to the question it asked, or its own inference — because an inferred persona reaches every chapter looking exactly like one you supplied.
+
+**What the book stands behind without a source is recorded as it goes**, in `assertions.json` beside `book.json`. That covers your argument word for word, anything it measured, anything the book is to keep out, which source wins where two disagree, and every answer you give at the gate. The gate shows those entries next to the source ledger. Chapters cite them in their marks, so when one changes, `check-provenance.sh` finds the prose still built on the old value.
 
 ### Two profiles
 
@@ -264,16 +268,17 @@ Revises a book in place.
 
 **A chapter the instruction does not reach comes back byte-identical.** Not similar, and provably so: the skill diffs against the starting state to show it. That is the guarantee the whole skill exists for, because paragraph tags are addresses other files cite and a rerun would renumber them silently.
 
-Two things travel with an edit, or the record stops being one:
+Three things travel with an edit, or the record stops being one:
 
 - **`OUTLINE.md`** is what the book was written against, so a change to a chapter's scope, terms or anchors moves the outline in the same run.
 - **`glossary.md`** is derived from the outline's term ledger, so a term that arrives or retires reaches it in the same run.
+- **`assertions.json`** holds what the book stands behind with no source to check it against. An instruction that supplies such a fact, rules on the sources, adopts a recommendation or changes a premise writes an entry in the same run, before the prose changes.
 
 **A new paragraph takes a lettered tag, so nothing renumbers.** A paragraph added after `[5-12]` is `[5-12a]`, and `[5-13]` stays where it is. A paragraph grows only while it stays at 90 words, and new text never goes into a callout, table or list just because those take no tag.
 
-**Some changes are not edits.** When a fact a chapter's plans are built on changes, or a chapter needs several new paragraphs at once, the skill rewrites that one chapter, keeping its number and repointing citations into it. When the chapters' boundaries or order change, or the rules the book was written under do, it says the book is due for a recreate with `/createbook`. Either way it moves any fact a revision put only into the prose into `OUTLINE.md` first, so the rewrite does not drop it.
+**Some changes are not edits.** When a fact a chapter's plans are built on changes, or a chapter needs several new paragraphs at once, the skill rewrites that one chapter, keeping its number and repointing citations into it. When the chapters' boundaries or order change, or the rules the book was written under do, it names the command for a recreate, `/createbook --recreate`, and stops. Either way the facts the rewrite must keep are already entries in `assertions.json`, so neither one drops them.
 
-It runs both checkers before the edit as well as after, because a failure that was already there is not yours and finding that out afterwards costs an hour. It stops on uncommitted changes in the book folder, since those poison the proof that untouched chapters are untouched.
+It runs both checkers before the edit as well as after, because a failure that was already there is not yours and finding that out afterwards costs an hour. It stops on uncommitted changes in the book folder, since those poison the proof that untouched chapters are untouched. **A book with no `assertions.json` stops the first run that touches it, even a one-word fix,** for a backfill you confirm: the skill gathers what the book was told or settled from its outline, marks and history, asks about the doubtful ones, and commits the file before the edit begins.
 
 A rebind is not automatic: an in-place edit leaves the bound PDF and EPUB stale, and the skill reports that with the command to fix it rather than running it for you.
 
@@ -297,6 +302,8 @@ Three things it is not:
 
 Pass `--chapters` to scope it. An `/updatebook` run already knows which chapters its edit reached.
 
+It reads the book's `assertions.json` too, and stops for a backfill where there is none. Each agent gets the entries its chapter's marks cite, so a claim resting on one is never reported against the source beside it, and every `settled` entry, so a finding a review already ruled on is not raised again.
+
 ---
 
 ## Provenance, and the four checkers
@@ -316,7 +323,7 @@ Four checks run over a book, in ascending order of what they are worth. The firs
 | Checker | Direction | Answers |
 |---|---|---|
 | `check-book.sh` | Inside the book | Filenames, ordering, the H1, the H2 per part, the paragraph tags, the markdown a chapter may not carry |
-| `check-provenance.sh` | Marks pointing **out** | Is the named source declared and present? Does the locator resolve? Does every quotation of 25+ characters appear in a source the mark names? |
+| `check-provenance.sh` | Marks pointing **out** | Is the named source declared and present? Does the locator resolve? Does every quotation of 25+ characters appear in a source the mark names? Does every `assertion <id>` a mark cites still hold, and is any prose still built on a superseded premise? |
 | `check-references.sh` | Citations pointing **in** | Do `ch. N` and `[N-M]` citations from other files resolve to chapters and paragraphs that exist? Does a quotation attributed to a chapter appear in *that* chapter? |
 | `/check-claims` | Both, with a reader | Does the source actually support the paraphrase beside the mark? |
 
@@ -329,7 +336,7 @@ render-report.py <findings-dir> <book-folder> [--worklist <dir>] [--command "<th
 
 All of them live under `${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/`, except `render-report.py`, which is `/check-claims`'s and sits under that skill.
 
-**Read the census lines, not only the exit code.** `check-provenance.sh` reports how many components were `fill`, how many locators went unparsed, and how many quotations could not be verified. Those numbers move without moving the exit code, and a rise in them is worth a sentence even though neither fails a run.
+**Read the census lines, not only the exit code.** `check-provenance.sh` reports how many components were `fill`, how many locators went unparsed, how many quotations could not be verified, and how many `assertions.json` entries no mark cites, or `assertions NOT CHECKED` for a book without the file. Those numbers move without moving the exit code, and a rise in them is worth a sentence even though neither fails a run.
 
 **A `REVIEW` item is not a failure and not an all-clear.** The tools report `OK*` when nothing failed but review items are still unread, which is deliberate: it is not a pass until someone has been through them.
 
@@ -359,6 +366,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./fixtures/ledger/run.sh                                  # exits 0, --ledger-only still fires
 ./fixtures/paragraph-stop/run.sh                          # exits 0, the stop fails a guide and reports under narration
 ./fixtures/lettered-tags/run.sh                           # exits 0, every checker accepts [1-2a]
+./fixtures/assertions/run.sh                              # exits 0, the helper rebuilds its file and the checks read it
 ../makebook/fixtures/display-names/run.sh                 # exits 0, the binder swaps only the source rows
 ../makebook/fixtures/bind/run.sh                          # exits 0, binds three books, the guide twice; skips without install.sh's venv
 ```
@@ -371,7 +379,7 @@ Chapter 1 of the provenance fixture holds only passing marks, so a run reporting
 
 **`guide-reports` passes and draws every report.** A `REPORT` line fails nothing: it is a long sentence, a callout holding two ideas, a summary copying its chapter, a phrase recurring across chapters, or a path-like source key in a header. The manifest row names each one, so a report that stops firing fails the suite.
 
-**Seven fixtures are scripts rather than folders to check.** A book folder cannot express a `PATH` to manipulate or a mutated copy to compare against, so those carry a `run.sh` beside them and the suite runs it. `jq-unrunnable/run.sh` runs `check-book.sh` three times against its own fully-declared book: with a working `jq`, expecting the three modes to read `required`; with a `jq` that exits 126, expecting the run to stop; and with no `jq` on `PATH` at all, expecting the documented fallback, which grades in the weakest mode and says so. No one of the three passes for the right reason alone — without the second the guard could be deleted and nothing would say so, without the first a checker that rejected every book would pass, and without the third a CI runner with no `jq` would grade every folder in the weakest mode while still reporting success. `ledger/run.sh` covers `check-provenance.sh --ledger-only`, and `check-claims/fixtures/appendix/run.sh` covers the appendix rules. `paragraph-stop/run.sh` runs one chapter under both profiles, because the 90-word stop fails a guide book and only reports under narration. `lettered-tags/run.sh` runs a revised chapter through all three checkers and mutates it three ways, one broken lettering sequence each. `makebook/fixtures/display-names/run.sh` lifts the binder's display-name swap out of `build-book.py` and runs it under plain `python3`, so its cases are pinned exactly and run anywhere. `makebook/fixtures/bind/run.sh` binds a copy of `fixtures/guide` twice. As declared, it asserts that both formats are written, that page 2 is Contents so the cover did not spill, and that the EPUB's cover art is a PNG rasterised from the PDF cover. With a `cover_image` added, which keeps the EPUB's text cover page, it asserts that the PDF's cover and `EPUB/cover.xhtml` carry the same `Created:` stamp. It also binds two small books kept beside it, regression tests for two binder fixes: `appendix-slug/`, whose `sql-02-appendix-1-of-the-standard.md` must list in Contents as chapter 2 rather than a second A1, and `appendix-table/`, whose appendix table must print every long word whole, read back off its page, with no warning from the binder. It is the one fixture that needs the binder's toolchain: without `install.sh`'s venv or `pdftotext` it prints `skip`, which `--strict` and CI fail.
+**Eight fixtures are scripts rather than folders to check.** A book folder cannot express a `PATH` to manipulate or a mutated copy to compare against, so those carry a `run.sh` beside them and the suite runs it. `jq-unrunnable/run.sh` runs `check-book.sh` three times against its own fully-declared book: with a working `jq`, expecting the three modes to read `required`; with a `jq` that exits 126, expecting the run to stop; and with no `jq` on `PATH` at all, expecting the documented fallback, which grades in the weakest mode and says so. No one of the three passes for the right reason alone — without the second the guard could be deleted and nothing would say so, without the first a checker that rejected every book would pass, and without the third a CI runner with no `jq` would grade every folder in the weakest mode while still reporting success. `ledger/run.sh` covers `check-provenance.sh --ledger-only`, and `check-claims/fixtures/appendix/run.sh` covers the appendix rules. `paragraph-stop/run.sh` runs one chapter under both profiles, because the 90-word stop fails a guide book and only reports under narration. `lettered-tags/run.sh` runs a revised chapter through all three checkers and mutates it three ways, one broken lettering sequence each. `assertions/run.sh` rebuilds its `assertions.json` from the helper's own commands and requires it byte-identical to the committed one, fails `check` on each file in `malformed/` by name, and runs `check-provenance.sh` over the folder and over mutated copies: a citation of a superseded or retired entry, a missing file, a reserved source name, a premise changed twice, a book whose marks are not read, a figure spelling a space as an entity. It also checks that `--emit-worklist` carries the entries `/check-claims` agents read, that a write keeps the file's mode, and that `init --how createbook` refuses a folder that already holds a book. Its passing run carries three REVIEW lines, an uncited `expected` entry and the superseded premise swept out of a chapter and a figure, and must carry none for its two uncited `legacy` entries. `makebook/fixtures/display-names/run.sh` lifts the binder's display-name swap out of `build-book.py` and runs it under plain `python3`, so its cases are pinned exactly and run anywhere. `makebook/fixtures/bind/run.sh` binds a copy of `fixtures/guide` twice. As declared, it asserts that both formats are written, that page 2 is Contents so the cover did not spill, and that the EPUB's cover art is a PNG rasterised from the PDF cover. With a `cover_image` added, which keeps the EPUB's text cover page, it asserts that the PDF's cover and `EPUB/cover.xhtml` carry the same `Created:` stamp. It also binds two small books kept beside it, regression tests for two binder fixes: `appendix-slug/`, whose `sql-02-appendix-1-of-the-standard.md` must list in Contents as chapter 2 rather than a second A1, and `appendix-table/`, whose appendix table must print every long word whole, read back off its page, with no warning from the binder. It is the one fixture that needs the binder's toolchain: without `install.sh`'s venv or `pdftotext` it prints `skip`, which `--strict` and CI fail.
 
 ---
 
@@ -409,6 +417,7 @@ skills/
     scripts/check-book.sh           structure
     scripts/check-provenance.sh     marks pointing out
     scripts/check-references.sh     citations pointing in
+    scripts/assertions.sh           the only writer of assertions.json, and its format's definition
     fixtures/                       books that exercise the checkers, plus the run.sh
                                     fixtures for what a book folder cannot express
   makebook/

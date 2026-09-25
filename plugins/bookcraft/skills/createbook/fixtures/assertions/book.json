@@ -1,0 +1,14 @@
+{
+  "subtitle": "A fixture for assertions.json",
+  "byline": "Claude Opus 5",
+  "description": [
+    "One chapter and a backfilled assertions.json, exercising the helper that writes the file and the checks check-provenance.sh runs against it. run.sh rebuilds the file from the helper's own commands and asserts it comes back byte-identical, runs check against every file in malformed/, and runs check-provenance.sh against this folder and against mutated copies of it.",
+    "As it stands the folder passes with three REVIEW lines and no failure: entry 5 is expected and nothing cites it, and the superseded premise's search phrases match a paragraph of the chapter and the figure. Entries 4 and 9 are legacy and uncited, and must not be reported. Nothing here is course material."
+  ],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": false,
+  "sources": {
+    "handbook": "sources/handbook.md"
+  }
+}

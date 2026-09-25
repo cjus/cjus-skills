@@ -144,6 +144,7 @@ report $? "old shape: the report is still written for the chapter that was fine"
 # ---------------------------------------------------------------------------
 cp "$prov" "$tmp/probe.py"
 cp "$here/../../../createbook/scripts/check-references.sh" "$tmp/check-references.sh"
+cp "$here/../../../createbook/scripts/assertions.sh" "$tmp/assertions.sh"
 python3 - "$tmp" <<'PROBE'
 import sys, importlib.util, pathlib
 spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")

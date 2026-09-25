@@ -85,4 +85,4 @@ Fold the state check into this skill's report per the contract in that file:
 - Report each `gaps` entry with its remedy, most consequential first.
 - **An empty `gaps` list is one clause, never a section.**
 - Name `next` as the recommended next command unless this skill's own steps reached a different one, in which case give yours and say why.
-- **Never run `next` yourself.** It is a recommendation, and `/pr:close` in particular is always the operator's to invoke.
+- **Never run `next` yourself.** It is a recommendation, and `/pr:close` in particular is the operator's to invoke unless they have granted standing permission to run it, on the terms that file sets.

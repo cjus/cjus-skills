@@ -110,7 +110,7 @@ Conclude with exactly one of:
 - **"Ready to continue working on this branch."** No `❌`, every `⚠️` has a plan, and nothing blocks the next action.
 - **"Blocked on assertion violation: A-NNN. Resolve before continuing."**
 - **"Blocked on N unanswered question(s), listed above."** Repeat the single most consequential question **verbatim** on this line, so the conclusion is actionable without scrolling back. **Do not pick an answer and build on it.**
-- **"This branch looks merge-ready. Run `/pr:close`."** No open in-scope items, no `❌`, nothing outstanding in CI or review. Name the command rather than saying "ready to merge", and never invoke the close from here.
+- **"This branch looks merge-ready. Run `/pr:close`."** No open in-scope items, no `❌`, nothing outstanding in CI or review. Name the command rather than saying "ready to merge", and never invoke the close from here. Where the operator has granted standing permission to run `/pr:close`, it runs as its own step after this report (`${CLAUDE_PLUGIN_ROOT}/reference/lifecycle.md § How a skill uses this`).
 
 ## Lifecycle position
 

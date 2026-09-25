@@ -1024,3 +1024,44 @@ display-name swap was covered anyway, by the fixture above. Since #32 it binds
 `fixtures/guide/` on every run (`makebook/fixtures/bind/`), but asserts only that both
 formats are written, the cover fits on page 1, the EPUB has rasterised cover art and the
 two stamps agree. The hidden markers are still checked by nothing.
+
+## assertions.json, 2026-09-25
+
+Ticket #46. A book rests on its sources and on everything it was told or settled along the way, and until this the second kind had no home. It lived in chapter prose, in outline revision notes keyed by paragraph tag, and in commit history, so a recreate from the outline and the sources dropped it. `SKILL.md § The assertions file` is the format, and `scripts/assertions.sh` is its only definition.
+
+**Measured, by the ticket, on the reference guide** (guide profile, eighteen chapters, three appendices), and not re-measured here:
+
+- 60 commits touched the book folder, and 21 of them changed a chapter while leaving `OUTLINE.md` alone.
+- 15 revision notes sat on the outline's chapter rows, and 12 of those named the change by paragraph tag, which a recreate renumbers.
+- 755 provenance marks: 476 name `fill` and 77 name `measured`. Another 42, across four labels, name an `unsourced` label that stands for a fact rather than a method: a live site read on one date, an email, a message thread, a page behind sign-in. No check ever opened anything behind them.
+
+Each of the four cases the ticket names is something a recreate from the outline and the sources gets wrong:
+
+- a premise that changed, the class size
+- a recommendation the operator acted on, an exam window
+- rulings with no source
+- an answer key that was derived and then corrected
+
+**Asserted, with the reasoning, and not yet measured against a real backfill:**
+
+- **JSON, written by one helper whose `check` is the format.** No schema file ships and no validator joins the venv, so the file has one definition. `check-provenance.sh` imports `load` by path rather than parsing it a second way, the same way it borrows `check-references.sh`'s quote pairing.
+- **`next_id`, and no gaps below it.** Uniqueness alone lets the newest entry be deleted by hand and its ID handed to the next `add`, and a mark citing the old ID then resolves cleanly to a different claim. Entries are retired, never deleted.
+- **`legacy` beside `expected`.** A backfill writes over prose that no mark can cite yet. Reporting every uncited entry would list nearly every backfilled entry on every run until the recreate, and a report that always fires is one nobody reads. After a recreate, `expect --all` makes every carried entry `expected`, and the uncited report becomes the list of what the new book dropped.
+- **The premise sweep is REVIEW, never FAIL**, for the reason the quotation check is (§ at the top of `check-provenance.sh`). A phrase can match a sentence that is not built on the premise, and a gate that fires on false positives teaches its reader to pass it. The reference guide's backfill has since measured it; see below.
+- **The sweep and the uncited report ignore `--chapters`**, for the reason the paragraph-tag list already did. Each is a claim about the whole book, and a superseded premise in a chapter outside the scope is exactly what the sweep exists to find.
+- **One writer at a time.** Every write rewrites the whole file, so two chapter agents in one parallel batch would silently lose an entry. Agents report what they measure in their findings file, and the session writes it.
+- **`unsourced` is for a method, never a fact.** A label is never opened by any check, so a fact behind one is a claim the tooling has agreed not to see. As an entry it is resolved by every mark that cites it.
+
+**Settled by the operator, 2026-09-25**, with the options weighed in the branch's `PLAN.md`:
+
+- **A recreate is `/createbook --recreate <old-folder> <new-folder>`, into a new folder.** An existing-folder argument keeps meaning "add chapters", so one misread folder can never turn an append into a rewrite. Rewriting in place would leave the old chapter files for `/makebook` to bind beside the new ones.
+- **A backfill confirms by triage.** Solid candidates are grouped by kind for striking, and doubtful ones are asked one by one. A backfill arrives uninvited on the first run after this ships, AskUserQuestion carries at most four questions, and a uniform table invites rubber-stamping, which is the failure `SKILL.md § 3` names for a persona: "a label reads as something already settled".
+
+**The fixture** is `fixtures/assertions/`. Its `run.sh` rebuilds the committed file from the helper's own commands and requires it byte-identical, fails `check` on ten malformed files by name, and runs `check-provenance.sh` over the folder and over mutated copies: a superseded, a retired and an unreadable citation, a missing file, a reserved source name, a newer format, a premise changed twice, and a book with no marks. Breaking the sweep and the `legacy` filter in a copy of the checker failed it, so it catches both.
+
+**Measured on the reference guide's backfill, 2026-09-25**, run with this branch's scripts, before any chapter cited an entry:
+
+- **Candidates.** 41 were gathered and 40 confirmed. The one left out was the book's own recommendation, which the operator had not yet acted on, so it stays `fill`. Four were asked individually, and the other 36 were confirmed from tables grouped by kind with nothing struck. The written file holds 23 measurements (20 of the engine, 3 reads of live systems behind sign-in), 9 rulings (one of them written and then retired), 4 given facts, 2 settled entries (one an answer key of 56 items with one replayed correction), and the premise pair.
+- **Fact labels.** 49 mark components named an `unsourced` label that stands for a fact, across four labels, against 42 when the ticket counted. Their facts became 7 entries. The marks keep their labels until a rewrite cites the entries.
+- **Found only by looking.** The `/createbook` argument, which the book folder never held, survived verbatim in a prompts file beside it. One exclusion the argument states had been lifted in practice two days after the book was written, and nothing recorded that. Checking the exclusion against the prose is what found it.
+- **The sweep's precision and recall.** The four phrases the operator first approved matched 22 lines, and 21 of them were built on the old value. The one borderline hit was a ledger row. Grepping the bare value word turned up the rest, mostly arithmetic that never repeats the canonical phrase: "twenty of those", "at twenty", "above twenty", "twenty times". Ten phrases drawn from that grep raised the count to 35 lines: 33 built on the old value, the borderline row, and one false positive, "all twenty of those evenings". So the first four phrases found 21 of 33 premise lines, and backfill step 3 now proposes phrases from the bare-value sweep for that reason.

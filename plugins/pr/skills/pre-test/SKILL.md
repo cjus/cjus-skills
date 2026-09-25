@@ -86,7 +86,7 @@ Report it as one line. A run still in progress is `pending`, which is informatio
 - **Ready** ends with exactly this, and nothing softer: *"Ready for testing. Once you have verified it, run `/pr:close`. It is required before this branch can merge."*
 - **Not ready** names the blocking finding and the one next step, and does **not** mention `/pr:close`.
 
-Never describe a branch as merge-ready without naming that command, and never run the close yourself.
+Never describe a branch as merge-ready without naming that command, and never run the close from inside this skill. Where the operator has granted standing permission to run `/pr:close`, it runs as its own step after this report and after the hands-on testing the verdict asks for (`${CLAUDE_PLUGIN_ROOT}/reference/lifecycle.md § How a skill uses this`).
 
 ## Lifecycle position
 

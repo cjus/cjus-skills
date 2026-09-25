@@ -33,9 +33,12 @@ With no folder, ask for one and stop.
 
 ### 1. Validate, and emit the worklist
 
+**A book with no `assertions.json` stops here and backfills first** (`${CLAUDE_PLUGIN_ROOT}/skills/createbook/SKILL.md § Backfilling the assertions file`). This skill reads the file as a source: the worklist carries the entries each unit's mark cites and every `settled` entry, and without them an agent raises again a finding a review already ruled on. Backfill, confirm, commit, then start this step again.
+
 ```bash
 BOOK="$1"
 test -f "$BOOK/book.json" || { echo "not a /createbook book"; exit 1; }
+test -f "$BOOK/assertions.json" || { echo "no assertions.json: backfill it first"; exit 1; }
 WL="$(mktemp -d)"   # or the session scratchpad, which survives the turn
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh \
   --emit-worklist "$WL" [--chapters N,M] "$BOOK"
@@ -115,6 +118,7 @@ Findings are advisory, and most will not be worth acting on. Sort them into thre
 ## What it cannot catch
 
 - **A claim the book attributes to `fill` that is wrong.** `fill` names no source, so nothing can check it. `grep -rn 'src: fill' <book>` is the list of what goes stale, and rechecking it is a reading job with no worklist behind it.
+- **An entry that is wrong.** A claim resting on an entry in `assertions.json` is the operator's record, and `reference/judgement.md` takes it as given. A wrong entry is corrected by superseding it, which `check-provenance.sh` then enforces on every mark citing it.
 - **A source that is wrong.** This checks that the book says what its source says. Where the source is itself mistaken, a `supported` verdict is correct and the book is still wrong.
 - **A paragraph with no mark.** `check-book.sh` catches those in a book declaring `provenance`.
 - **Its own false negatives.** An agent that reads a source carelessly returns `supported`, and nothing downstream disagrees. Rerunning a chapter is the only check on a chapter's run, which is why `--chapters` exists.

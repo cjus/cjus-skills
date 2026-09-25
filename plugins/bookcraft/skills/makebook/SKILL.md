@@ -505,6 +505,7 @@ reason the ceiling is 17, and what the sweep did not cover.
 - A render takes a few seconds per pass; most of it is Chromium's cold start. The EPUB adds well under a second, since nothing renders.
 - **The page markers are out of the finished PDF's text layer.** Each pass plants an invisible white marker (`ZQCH001QZ` and similar) at every chapter, figure and section start, and reads it back through `pdftotext` to find its page. Until 2026-09-24 the markers stayed in the finished PDF, so a screen reader or a copy and paste picked them up. Now the settled book is rendered once more with the markers hidden: `visibility: hidden` keeps their boxes, so no page can move, and paints no text. The run checks that, comparing the two renders page by page with the marker strings taken out, and puts the probed PDF back with a warning if they differ. The EPUB never carried markers.
 - The EPUB is typically a fraction of the PDF's size, because it packages the SVG sources rather than a rendered page for each one.
+- **This skill neither reads nor requires `assertions.json`.** It binds any folder of markdown, including folders `/createbook` never wrote, and requiring the file would stop it binding a plain folder of notes. The file is invisible to the bind: `load_chapters` globs `*.md` only. `/createbook`, `/updatebook` and `/check-claims` are the skills that stop and backfill a book without it (`createbook/SKILL.md § Backfilling the assertions file`).
 
 ## Security
 

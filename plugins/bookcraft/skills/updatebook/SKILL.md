@@ -38,14 +38,17 @@ Three things follow, and they are the whole skill:
 ```bash
 BOOK="$1"
 test -f "$BOOK/book.json" || { echo "not a /createbook book"; exit 1; }
+test -f "$BOOK/assertions.json" || { echo "no assertions.json: backfill it first"; exit 1; }
 git status --porcelain "$BOOK"
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh check "$BOOK"
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-book.sh "$BOOK"
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 ```
 
 - **No `book.json` means stop.** `/createbook` writes one at its step 4, so a folder without it is either a `/makebook` folder that was never a book in this sense or the wrong path. Say which you suspect and ask; do not proceed on a guess.
+- **No `assertions.json` means stop and backfill** (`createbook/SKILL.md § Backfilling the assertions file`). The file records what the book was told or settled that no source holds, and this skill writes to it at step 2. The backfill needs the operator, and its file has to be committed before the edit begins, for the two reasons in the next bullet: step 0 refuses uncommitted changes, and step 5's `git diff` would carry the new file beside the edit. **So the order is backfill, confirm, commit, then step 0 again.** No flag skips it, even for a one-word fix.
 - **Uncommitted changes in the folder mean stop and surface them.** The proof in step 5 that untouched chapters are untouched is a `git diff` against the starting state, and pre-existing edits poison it. The operator decides whether to commit, stash, or continue.
-- **Both checkers run before the edit as well as after.** A failure that was already there is not yours, and finding that out afterwards costs an hour. Record `check-book.sh`'s summary line and `check-provenance.sh`'s three census lines; step 5 compares against them, and the provenance census is the half that moves without moving the exit code.
+- **Both checkers run before the edit as well as after.** A failure that was already there is not yours, and finding that out afterwards costs an hour. Record `check-book.sh`'s summary line and `check-provenance.sh`'s census lines, its `assertions` line among them; step 5 compares against them, and the provenance census is the half that moves without moving the exit code.
 - Outside a git repo, record `shasum "$BOOK"/*.md` instead and diff the two lists at step 5. `md5sum` or `cksum` does the same job.
 
 Read `book.json`'s `tags` while you are in there. **A book declaring `"tags": false` has no addresses**, which makes most of § Adding prose moot for it.
@@ -56,7 +59,7 @@ Read `book.json`'s `tags` while you are in there. **A book declaring `"tags": fa
 
 ### 1. Read the outline, then target
 
-`OUTLINE.md` is the index into the book: a brief per chapter, the handoff chain, the term ledger and the anchor ledger. Read it in full first. It is one file and it tells you which chapters an instruction can possibly reach, which is what keeps this skill from reading twenty chapters to change one.
+`OUTLINE.md` is the index into the book: a brief per chapter, the handoff chain, the term ledger and the anchor ledger. Read it in full first, and `assertions.sh list "$BOOK"` beside it, since an instruction that touches an entry is one step 2 has to classify. It is one file and it tells you which chapters an instruction can possibly reach, which is what keeps this skill from reading twenty chapters to change one.
 
 Then narrow:
 
@@ -80,7 +83,8 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 | **Rewrites a passage** | Nothing moves while the paragraph count holds | The outline's brief, if the chapter's claim moved |
 | **Adds prose** | Nothing moves: a new paragraph takes a lettered tag. See § Adding prose | A citation whose sentence moved, where a paragraph was split |
 | **Cuts prose** | The tail of that chapter renumbers. See § Cutting prose | Every citation of a moved tag |
-| **Changes a premise** | The chapter is rewritten, and its tags renumber | Every passage built on the old premise, in every chapter it reaches. See § When to stop editing in place |
+| **Changes a premise** | The chapter is rewritten, and its tags renumber | Its `premise` entry, superseded first with `search` phrases for the new value, so `check-provenance.sh` sweeps every passage built on the old one. Then every such passage, in every chapter it reaches. See § When to stop editing in place |
+| **Supplies a fact no source holds, rules on the sources or the scope, or adopts a recommendation** | As the edit it comes with | An entry in `assertions.json`: added, or superseded where it replaces one, in this run and before the prose changes (`createbook/SKILL.md § The assertions file`). A measurement re-run supersedes its `measured` entry |
 | **Adds or retires a term** | Nothing moves | The term ledger row, and `glossary.md`. See § The glossary |
 | **Adds a figure** | Nothing moves: a figure line takes no tag and advances no count (`chapter-prose.md § Paragraph tags`) | `diagrams/README.md`, and the figure numbers after it in the same chapter |
 | **Adds a chapter** | Appending is free; inserting rewrites every later filename and every tag inside it | See § Adding a chapter |
@@ -105,6 +109,7 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 - **A new paragraph, table, list or fenced block gets its own mark**, or `check-book.sh` fails the chapter.
 - **An edited unit's mark is re-read against the edit.** A paragraph that was `<!-- src: fill -->` and now rests on a source stops being `fill`, and one that has drifted past what its source says either gets re-sourced or says `fill` for the part that is.
 - **A deleted unit takes its mark with it.** An orphaned mark reads as belonging to the paragraph above it.
+- **A unit resting on an entry cites it**, as `assertion <id>` (`chapter-prose.md § Provenance`). Where the entry is `legacy`, a paragraph the edit rewrites gains that citation. Once every paragraph resting on the entry cites it, run `assertions.sh expect "$BOOK" <id>`. Until then it stays `legacy`, because an `expected` entry no mark cites is reported as one the book dropped.
 - **Open the source.** The mark is not evidence; the source is. A claim edited to match a source you did not re-read is the defect this whole format exists to prevent, and no check in step 5 can see it.
 
 **`fill` is where a book goes stale, and this is the query that finds it.** A sourced claim is fixed by its resource; a filled-in one carries a version, a default or a name the model knew at drafting time. `grep -rn 'src: fill' <book>` is the list of what to recheck when a book is picked up again, which is the reason the exhaustive mark exists at all. `check-provenance.sh` reports the same population as a count on its census line, so a `fill` figure that climbs across an edit says the book moved claims off its sources.
@@ -116,7 +121,7 @@ Whatever the change touched:
 - **The chapter's brief in `OUTLINE.md` § Chapters**, when what the chapter explains moved.
 - **The handoff chain, under `narration`**, when the noun a chapter opens or closes on moved. Both neighbours are affected, and the seam is checked by reading at step 5. A `guide` outline has no handoff chain.
 - **The term ledger and the anchor ledger**, when a term or an anchor arrived or retired.
-- **The verified-facts section**, when a measurement was re-run. Say what was measured, on what, and on what date, the way the existing entries do.
+- **`assertions.json`**, through `assertions.sh` and never by hand, when step 2 said the instruction writes an entry, or when step 3 turned a `legacy` entry `expected`. A re-run measurement supersedes its `measured` entry. An outline written before the file existed may still carry a verified-facts section, and that moves with it until a rewrite retires it.
 - **`glossary.md`**, per § The glossary.
 - **`diagrams/README.md`**, when a figure arrived, retired, or stopped being true.
 - **The chapter header's rows**, four under `narration` and three under `guide`, when the edit changed what the chapter covers, what it asks the reader to do, which sources it rests on, or what it fills in. Under `guide`, what the chapter covers lives in the first sentence of `## In short`, so that moves instead. The Draws-on row has to name every source the chapter's marks now name, and nothing they do not.
@@ -128,15 +133,16 @@ Whatever the change touched:
 
 ```bash
 git diff --stat "$BOOK"
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh check "$BOOK"
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-book.sh "$BOOK"
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-references.sh "$BOOK" <referring-file>...
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 ```
 
-1. **The file list must be the file list you intended.** This is the only proof that untouched chapters are untouched, and it is the reason step 0 demanded a clean folder. A file in the diff that you did not mean to change is the finding; go and look at it.
+1. **The file list must be the file list you intended.** This is the only proof that untouched chapters are untouched, and it is the reason step 0 demanded a clean folder. A file in the diff that you did not mean to change is the finding; go and look at it. `assertions.json` belongs in the list exactly when step 2 or step 3 wrote to it. **Read its diff beside the chapters'**, since each change there is a claim the book now stands behind, and `assertions.sh check` must pass.
 2. **`check-book.sh` must pass, and its `content-checked` count must equal its chapter count.** A run that examined fewer chapters than it found says nothing about the rest, and it says so on its own summary. Compare the `prose`, `structure`, `tagged` and `glossary` figures against the lines you recorded at step 0.
 3. **`check-references.sh` for every file that cites this book**, including the book's own `OUTLINE.md` and `diagrams/README.md`. It runs four checks and reports them separately so the weaker cannot stand in for the stronger: a cited chapter exists, a quotation attributed to a chapter is in that chapter, a cited `[N-M]` names a paragraph the book defines, and that paragraph is still the paragraph it was at the baseline. **The fourth is the one that matters here**, because it is the only check that sees the failure this skill is built around, and it needs no argument: the baseline defaults to `HEAD`, which step 0's clean-folder rule makes exactly the book as it stood before your edit.
-4. **`check-provenance.sh` reads the marks in the other direction**, out at the sources they name, which is the direction an edit breaks. A paragraph rewritten against a different page of the syllabus keeps its old `p. 4` and nothing else notices; a source re-exported from Canvas can lose the heading a mark cites. It fails on a source `book.json` does not declare and on a locator that does not resolve, and it reports quotation mismatches as `REVIEW` because against the reference book a hard failure there was wrong ten times out of ten. **Compare its census against step 0's**: a rise in `unverifiable` or `unparsed` means fewer of the book's quotations were settled than before, and neither moves the exit code. **A rise in `unverifiable` does not always mean the edit moved a claim onto unreadable ground, and reading it that way is how this number misleads.** A quotation counts as unverifiable when **any** source its mark names is unreadable, so an edit that breaks a quotation against a perfectly readable co-named source lands in the same bucket, masked by the unreadable one. That masking case is the live majority: 12 of the reference book's 28 unverifiable quotations name a readable source alongside an image-only PDF. So when the number climbs, read the named lines and find the quotation, rather than assuming a source went dark.
+4. **`check-provenance.sh` reads the marks in the other direction**, out at the sources they name, which is the direction an edit breaks. A paragraph rewritten against a different page of the syllabus keeps its old `p. 4` and nothing else notices; a source re-exported from Canvas can lose the heading a mark cites. It fails on a source `book.json` does not declare and on a locator that does not resolve, and it reports quotation mismatches as `REVIEW` because against the reference book a hard failure there was wrong ten times out of ten. **Compare its census against step 0's**: a rise in `unverifiable` or `unparsed` means fewer of the book's quotations were settled than before, and neither moves the exit code. On the `assertions` line, a new `uncited` entry is one the edit dropped, and a passage the sweep finds is prose still built on a premise the edit superseded. **A rise in `unverifiable` does not always mean the edit moved a claim onto unreadable ground, and reading it that way is how this number misleads.** A quotation counts as unverifiable when **any** source its mark names is unreadable, so an edit that breaks a quotation against a perfectly readable co-named source lands in the same bucket, masked by the unreadable one. That masking case is the live majority: 12 of the reference book's 28 unverifiable quotations name a readable source alongside an image-only PDF. So when the number climbs, read the named lines and find the quotation, rather than assuming a source went dark.
 5. **Read the seams.** No script sees continuity. Read the closing paragraph of the chapter before the one you changed, the changed chapter's opening and closing paragraphs, and the opening of the chapter after. Under `narration` the failure this catches is a handoff noun that drifted. Under `guide` it is an opening that stopped orienting a reader who arrives there first, or a close that is no longer true of the whole chapter (`createbook/SKILL.md § 8. Read the seams`). Both are invisible to everything above.
 
 **None of the five reaches a paraphrase that drifted, which is the failure step 3 warns about in its own words: "a claim edited to match a source you did not re-read".** `/check-claims` is the pass that does, sending one agent per chapter to read the sources the marks name:
@@ -159,6 +165,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 - The `check-book.sh` summary lines from both runs, before and after. A run prints two: the counts line and the `chapter prose:` line.
 - The `check-provenance.sh` census from both runs, and any line that moved. A rise in `unverifiable` or `unparsed` is worth a sentence even though neither fails a run, and a risen `unverifiable` is worth naming the quotation behind it: the count cannot tell a source going dark from a quotation breaking against a readable one that shares its mark with an unreadable source.
 - Every tag that moved, and every citation repointed to follow it.
+- Every entry the run added, superseded, retired or turned `expected`, by ID.
 - **That the bound PDF and EPUB in the folder are now stale**, with the command to rebind:
 
 ```bash
@@ -214,7 +221,7 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 |---|---|---|
 | **Edit in place** | The change is local, and the chapter's claim still holds | Only the edited passage and what § 4 carries with it |
 | **Rewrite one chapter**, keeping its number | A premise under the chapter changed, or it needs several new paragraphs at once, or it already carries several lettered tags | That chapter's tags renumber and citations into it are repointed. Every other chapter stays byte-identical |
-| **Recreate the book** | The chapters' boundaries or order change, or the rules the book was written under do | Everything, through `/createbook` and `createbook/SKILL.md § When the book supersedes one that already exists` |
+| **Recreate the book** | The chapters' boundaries or order change, or the rules the book was written under do | Everything, through `/createbook --recreate` (`createbook/SKILL.md § Recreating a book`) and `§ When the book supersedes one that already exists` |
 
 **A premise is a fact the chapter's plans are built on**: the class size, the number of sessions, the version a procedure assumes. When one changes, the passages built on it are wrong in their structure, not only in a number. Patching the number leaves plans built for the old premise with an aside about the new one. When the reference guide's class size moved from twenty to eleven, five chapters gained "your roster is eleven, so..." beside plans built for twenty, and one of them carried both four-evening schedules with the arithmetic for the outdated one. Rewrite every chapter the premise reaches, cut what no longer serves, and accept the renumber.
 
@@ -222,9 +229,9 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 
 ### Rewriting one chapter
 
-1. **Carry each revision's facts into the outline first.** A rewrite works from the outline row and the sources, so a fact a revision put only into the prose is lost unless the outline has it. `git log -p -- <chapter file>` lists every revision. Move each fact a revision added into `OUTLINE.md`, in the brief, the verified-facts list or the source ledger, before drafting.
-2. **Update the chapter's outline row** for the change: the brief, the terms and the anchors.
-3. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row and its sources. This is the one edit this skill hands to a chapter agent.
+1. **Read `assertions.json`, not `git log -p`.** A rewrite works from the outline row, the sources and the file, and the file is where every fact a revision established already sits, since step 0 would not have let this run start without it. `assertions.sh list "$BOOK"` shows each entry that holds. Where the rewrite follows a changed premise, supersede its entry before drafting (step 2).
+2. **Update the chapter's outline row** for the change: the brief, the terms, the anchors, and the Carries row naming the entries it rests on.
+3. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row, its sources, and the entries it carries along with every `book` entry. This is the one edit this skill hands to a chapter agent. Its paragraphs cite their entries, so each `legacy` entry this chapter alone rested on can now turn `expected` (step 3).
 4. **Replace the file whole.** Its tags count from 1 again, and the lettered ones are gone.
 5. **Repoint every citation into the chapter**, inside the book folder and outside it, by finding where the cited sentence now lives. A citation whose content is gone is reworded or removed. `check-references.sh`'s check 4 names each citation whose paragraph changed, so run it before committing, for the reason § Cutting prose gives.
 6. **Redo the chapter's header, `## In short` and concept list**, and the glossary entries it owns (§ The glossary).
@@ -232,7 +239,13 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 
 ### Recreating the book
 
-When the chapters' boundaries or order change, or the rules the book was written under change, rewriting chapter by chapter keeps the old book's shape under the new rules. Run `/createbook` against the same sources instead, then repoint every outside citation through `createbook/SKILL.md § When the book supersedes one that already exists`. Carry each revision's facts into the new outline first, as in step 1 above: a recreate works from the outline and the sources, and silently drops a fact that lives only in the old prose.
+When the chapters' boundaries or order change, or the rules the book was written under change, rewriting chapter by chapter keeps the old book's shape under the new rules. **Stop and name the command; this skill never runs it:**
+
+```
+/createbook --recreate "$BOOK" <new-folder>
+```
+
+It reads `assertions.json` first and carries every entry that holds, so nothing is carried into a new outline by hand. `createbook/SKILL.md § Recreating a book` has the rest, including why it writes into a new folder, and `§ When the book supersedes one that already exists` repoints the outside citations afterwards.
 
 ## Adding a chapter
 
@@ -259,7 +272,7 @@ What appending obliges here, beyond that section:
 
 - **It does not bind.** See step 6.
 - **It does not judge the prose.** `check-book.sh` checks structure; a clean run means the folder will bind, and says nothing about whether the book reads well.
-- **It does not recreate a book.** It says when one is due (§ When to stop editing in place), and `/createbook` does the work.
+- **It does not recreate a book.** It says when one is due (§ When to stop editing in place) and names the command, and `/createbook --recreate` does the work.
 - **It does not repoint references wholesale.** It repoints the citations its own edit moved. A book replacing another book is a different job, at `createbook/SKILL.md § When the book supersedes one that already exists`.
 - **It does not verify that a repointed tag now names the right paragraph.** `check-references.sh` verifies that a cited `[N-M]` resolves, and that it still names the prose it named at the baseline. Neither answers whether the paragraph supports the sentence citing it, and a tag moved by hand from one real paragraph to another real one satisfies both checks. That one is verified by reading.
 

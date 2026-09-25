@@ -140,6 +140,7 @@ A chapter records where its sentences came from in three places.
 ```
 
 - **Name the sources the unit rests on**, separated by semicolons, each specific enough to find. A unit that is the model's own knowledge is `<!-- src: fill -->`. A unit that is both names its sources and adds `fill` for the rest: `<!-- src: syllabus p. 4; fill (the consequence) -->`.
+- **A unit resting on an entry in the book's `assertions.json` cites it as `assertion <id>`**, one entry to a component: `<!-- src: syllabus p. 4; assertion 7 -->`. The entry is something the book was told or settled that no source holds, and the citation is what lets a check find this paragraph once the entry is superseded.
 - **It is stripped at bind time**, so no reader sees it. That is what lets it be exhaustive.
 - **It advances no paragraph number** and does not count as prose.
 - **It is the only comment a chapter has, and it is one line.** `check-book.sh` enforces both.

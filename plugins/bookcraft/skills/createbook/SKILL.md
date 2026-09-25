@@ -1,7 +1,7 @@
 ---
 name: createbook
 description: Write a whole book from a one-line description of what the book should be. Plans a chapter outline, then narrates every chapter into its own markdown file, named so that a plain filename sort is the reading order. The finished folder is ready for /makebook. Use when asked to "write a book on X", "create a book about X", or to turn a subject into a multi-chapter set of narrations.
-argument-hint: <what the book should be> [output-folder]
+argument-hint: <what the book should be> [output-folder] | --recreate <old-folder> <new-folder>
 ---
 
 # /createbook
@@ -21,8 +21,9 @@ A book here is a folder of markdown files, one file per chapter, named so that s
 | `--source <path>` (repeatable) | A resource the book is written against: a repo file, a folder, a PDF. See § The sources are an argument. |
 | `--minutes <N>` (optional) | How long the reader has. Sizes the book. See § Sizing the book. |
 | `--no-tags` (optional) | Write the book without paragraph tags. See § Paragraph tags; tagging is otherwise on. |
+| `--recreate <old-folder>` | Rewrite an existing book into the output folder, which is then required and must be new. Takes no description. See § Recreating a book. |
 
-With no first argument, ask what the book should be about and stop.
+With no first argument and no `--recreate`, ask what the book should be about and stop.
 
 ## The sources are an argument
 
@@ -85,7 +86,7 @@ reason a rebuild that changes one line finishes in two seconds...
 
 [3-4] ...
 
-<!-- src: docker build output, measured 2026-09-10 -->
+<!-- src: assertion 3 (the docker build output) -->
 
 ## Suggested reading
 
@@ -152,6 +153,71 @@ docker-first-year-02-images-and-layers.md
 docker-first-year-03-the-build-cache.md
 ```
 
+## The assertions file
+
+A book rests on its sources and on everything it was told or settled along the way. `book.json` records the sources, and a later run can open them again. **`assertions.json`, beside it, records the rest**: every claim the book stands behind that a fresh run of this skill would not reproduce from the brief and the sources alone. That test decides what goes in, and it keeps the file small. A claim a source makes stays out, because the source is already its record. The model's own `fill` stays out until the operator adopts it.
+
+The file is for the recreate. While a book is only patched, the prose holding those claims stays where it is and nothing is lost. A recreate writes every chapter fresh from the outline and the sources, and whatever lived only in the old prose goes with it: a premise that changed, a recommendation the operator acted on, a ruling with no source, an answer key that was derived and then corrected.
+
+**Write it through the helper, never by hand.** The helper is the file's only writer, and its `check` is the only definition of the format. Where this section and `check` disagree, `check` is right.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<book-slug> [options]
+```
+
+| Command | What it does |
+|---|---|
+| `init` | Creates the file with its `created` and `brief` blocks and no entries. Refuses a folder that already has one |
+| `brief` | Records a correction to the persona or to where it or the profile came from. Fills an argument a backfill left `null`, and never replaces one |
+| `add` | Appends one entry under the next ID |
+| `supersede <id>` | Appends the replacement and writes both links in one step |
+| `retire <id>` | Takes an entry out of force, with the reason |
+| `correct <id>` | Changes one answer in a `settled` entry's set, recording the date and the answer it replaced |
+| `expect <id>...` | Turns `legacy` entries into `expected`. `--all` turns every one that holds, which is what a recreate does |
+| `list` | The table to show the operator at a gate. Show this, never the raw JSON |
+| `check` | Every rule of the format. Exits 0 when the file passes, 1 when it does not, 2 when there is nothing to check |
+
+`assertions.sh <command> --help` lists the flags, and each flag writes the key of the same name, with a hyphen for the underscore. Pass a value that may begin with a hyphen, such as the argument, as `--flag="value"`. **Every write checks the whole file before and after**, so the helper cannot leave a file `check` rejects, and a flag left off comes back as the key it would have written. A file declaring a newer `format` than this bookcraft knows stops every command with a message to update bookcraft.
+
+**One writer at a time, and it is the session running the skill.** Each write reads the whole file, changes it and writes it back, so two writers at once lose one of the changes with nothing saying so. That is why a chapter agent never writes the file (§ 5).
+
+**The file never names a chapter number or a paragraph tag**, because a recreate renumbers both. An entry says what is true, never where the book says it.
+
+| Block | Rule |
+|---|---|
+| `format` | `1` |
+| `created` | `date` and `how`: `createbook`, or `backfill` with `from` (what it read), `candidates` and `confirmed`. Required even with no entries, because it is what tells a file that searched and found nothing from one written to get past a presence check |
+| `brief` | `argument`, the `/createbook` argument verbatim. `reader`, the persona as one sentence. `reader_origin` and `profile_origin`, each `argument`, `operator` or `inferred`. `reader_inferred`, where part of a given persona was inferred, names that part. The profile's value stays in `book.json`. A backfill may write the argument as `null` and an origin as `unrecorded`, because a book written before this file existed never saved them, and a paraphrase recorded as the argument is what the field exists to prevent |
+| `next_id` | The ID the next entry gets. Entries are retired, never deleted, so every ID below it is present and a mark citing one never comes to mean a different claim |
+| `entries` | The entries, below |
+
+| Kind | Holds | For example |
+|---|---|---|
+| `given` | A fact the operator supplied that no source file holds | A class roster, read from a portal behind sign-in |
+| `ruling` | A decision on how to treat the sources or the scope: which source wins, a conflict left open, something included or excluded | The live site outranks the older PDF. No compensation figures |
+| `premise` | A fact the book's plans are built on, sourced or not. Changing one is a rewrite (`updatebook § When to stop editing in place`), not a patch | The class size. The date of the first session |
+| `adopted` | A recommendation the book made that the operator accepted or acted on | An exam window worked back from a testing center's lead time |
+| `measured` | A live measurement: what was run, on what, and the result | A command's output on this machine |
+| `settled` | A misreading a review corrected, or a derived answer that was checked. Kept so a fresh reading does not make the same mistake | A corrected answer key. A PDF whose printed page numbers are offset from its page index |
+
+| Field | Rule |
+|---|---|
+| `id` | A whole number the helper allocates. Never reused, even after its entry is retired |
+| `kind` | One of the six above |
+| `statement` | The claim, in one sentence |
+| `origin` | `by` (`operator`, `book` or `measurement`), an optional `how`, and `date`. A `given` entry is by the `operator`, and `measurement` is a `measured` entry's origin and no other kind's |
+| `applies_to` | `prose` when sentences rest on the entry and their marks should cite it. `book` when it governs the whole book, such as an exclusion or a ruling on which source wins |
+| `citation` | On a `prose` entry only. `expected`, or `legacy` when the prose resting on the entry was written before the file existed, so no mark cites it yet. Only a backfilled file carries `legacy` |
+| `status` | `holds`, `superseded` with `superseded_by`, or `retired` with `retired_reason`. The replacement carries `supersedes`, the two links must agree, and an entry supersedes only an older one |
+| `reaches`, `search` | Required on a `premise`: what it reaches, and phrases that find prose built on it, so a superseded premise can be swept for. A replacement needs phrases of its own, since the old ones find the old value |
+| `measurement` | Required on a `measured` entry: `ran`, `on` and `result` |
+| `acted_on` | Required on an `adopted` entry: what the operator did with the recommendation |
+| `corrects`, `answers` | Optional on a `settled` entry. `corrects` holds the reading the entry replaces. `answers` is a set of `item` and `answer` pairs, no item twice. A corrected item also carries `corrected`, the date, and `was`, the answer it replaced, so the old mistake stays on record for a fresh derivation that makes it again |
+
+**No other key is allowed anywhere in the file.** A misspelt key is the likeliest error, and `check` names the nearest key that exists.
+
+**Marks cite entries.** A unit resting on an entry names it in its provenance mark as `assertion <id>`, one entry to a component (`reference/chapter-prose.md § Provenance`). The link runs one way, from the prose to the file, and `check-provenance.sh` reads it at step 7. No `sources` key or `unsourced` label may start with `assertion`, because the word is reserved.
+
 ## Procedure
 
 ### 1. Derive the book
@@ -176,6 +242,19 @@ From the argument, settle the title, the slug, the reader, and the angle. The re
 **`guide` is the default this skill writes, and `narration` is what the checker assumes when the key is absent.** Those are two different defaults and both are deliberate. A new book gets `"profile": "guide"` in `book.json` because a book built from a set of sources is nearly always opened at the chapter somebody needs, and the reader this skill is for is short on time rather than settling in. `check-book.sh` still reads an absent key as `narration`, because every book written before profiles existed has to keep passing untouched, and re-checking one under rules it was not written to would fail it on a `## In short` section nobody had asked for. So the default changes what gets **written**, never how an existing book is **read** (`NOTES.md § The guide profile`).
 
 **Choose `narration` where the book really is read start to finish** — an explainer, a primer, a long-form argument whose chapters build one case. Say so at the gate the same way.
+
+**Then start `assertions.json`, before the outline exists** (§ The assertions file):
+
+```bash
+mkdir -p books/<book-slug>
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-slug> \
+  --how createbook --argument="<the whole argument, verbatim>" \
+  --reader "<the persona, as one sentence>" --reader-origin <argument|operator|inferred> \
+  [--reader-inferred "<the part of a given persona you supplied>"] \
+  --profile-origin <argument|operator|inferred>
+```
+
+**The argument goes in verbatim, flags and all.** It is the only record of what was asked for. The outline paraphrases it, and a recreate that starts from a paraphrase starts from a different book. The origins are what § 3 states at the gate, so write them the way § 3 will say them, and when the gate corrects the persona or an origin, record the correction with `assertions.sh brief`.
 
 ### Sizing the book
 
@@ -232,12 +311,24 @@ Then, below it, two things the ledger produces:
 
 **Read every source before writing the ledger.** A ledger built from filenames is a guess, and every chapter brief below inherits it. This is the step that costs real time and the one that pays for itself: a claim the sources do not actually support is cheapest to catch here, before twenty chapters rest on it.
 
+**Record each claim no source holds as an entry before it reaches the outline.** Reading the sources is where most of them turn up, and each is one `assertions.sh add`:
+
+| What turned up | Kind | `applies_to` |
+|---|---|---|
+| Something you measured: a command run on this machine, a count taken by hand | `measured` | `prose` |
+| A fact the plans will rest on that no source states, such as a class size you had to assume. Give `search` the phrases the prose will use for it | `premise`, by `book` | `prose` |
+| Two sources that disagree, and which one the book follows, or that it states the conflict and leaves it open | `ruling`, by `book` | `book` |
+| Something the book keeps out: a name, a figure, a code | `ruling`, by `book` | `book` |
+
+Each of these is yours to propose and the operator's to settle at § 3. **The outline holds no register of its own.** Measurements, rulings, exclusions and settled decisions live in the file and nowhere else, and an outline row cites one by its ID where it needs to. A recreate writes a new outline, so a decision kept only in the old one goes with it.
+
 For every chapter the outline then carries:
 
 - **Number, title, and filename.**
 - **The brief:** two or three sentences on what this chapter explains, specific enough that someone else could write it.
 - **Draws on:** the ledger rows this chapter pays, which become the chapter header's Draws-on row.
 - **Fills in:** what this chapter supplies that the sources do not, which becomes its Fills-in row.
+- **Carries:** the IDs of the `prose` entries this chapter rests on, the way Draws on lists its sources. The chapter agent is given them and cites them (§ 5). A `book` entry governs every chapter and goes on no row.
 - **Concept list:** the gaps this chapter ends on, taken from the ledger and checked against the term ledger so no item names something a later chapter teaches.
 - **Scope** (`guide` only): where this chapter sits in the book or the course, such as the week, the session or the stage. The opening paragraph and the first sentence of `## In short` both name it, for a reader who opens the book at this chapter (`reference/guide.md § Opening`). A guide outline records no handoff nouns: its chapters do not chain.
 - **Opens on** (`narration` only): the exact noun this chapter's first paragraph starts from. For chapter 1 this is the book's hook. For every later chapter it is the noun the previous chapter closed on. **Check it against the term ledger.** Where the noun is a technical term no earlier chapter's row glosses, record on this chapter's row that it glosses the noun on arrival, at no cost against its six (`reference/narration.md § What the reader arrives with, under narration`): the handoff grants the word and never the definition, and an outline that hands forward an unglossed term is how a chapter comes to open on a definite noun phrase the reader has never met. Measured on the reference book's own outline: of sixteen handoff nouns, one was glossed on an earlier row before being handed forward and six are technical terms glossed on nobody's row, the rest ordinary words bar one technical term covered by an adjacent gloss a chapter earlier. Those six are what the gate at § 3 counts, so count technical terms rather than nouns.
@@ -270,11 +361,15 @@ It reads `OUTLINE.md` alone: every row marked re-openable names a file that is o
 
 **What it does not reach:** a row whose prose is wrong about a source it correctly names, and a row that contradicts a note elsewhere in `OUTLINE.md`. Both need a reader. Resolving the ledger narrows what the gate has to be read for; it does not replace reading it.
 
-Then show the source ledger, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
+Then show the source ledger, **the entries beside it as `assertions.sh list` prints them**, the chapter list, the title, the reader, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
 
 **Lead with the ledger, not the chapter list.** The chapter list is what the operator expects to review and the ledger is what they can actually correct: a source you were not given, a source you read wrongly, a gap you propose to fill that they would rather you left open. A wrong chapter list costs twenty chapters, and a wrong ledger costs the same twenty plus every claim inside them.
 
-**State the reader as a sentence, and say where it came from.** "Written for a second-year apprentice electrician who has wired domestic circuits but never opened a three-phase board" invites the correction. `Reader: apprentice electricians` does not, because a label reads as something already settled. In the same breath, say where that persona came from: the argument, the operator's answer to the ask at § 1, or your own inference from the subject and the sources. **A persona can be part given and part inferred**, and that case is the quiet one: an argument naming "apprentice electricians" and nothing else fires no ask, because a reader was named, while what they can be assumed to know is still yours to guess. Say which part you supplied rather than calling the whole persona given. All of this is on the outline's top line (§ 2), so read it from there rather than from memory.
+**Show the entries next, and never as raw JSON.** They are what the book will stand behind with no source to check them against, so the operator sees every one before a chapter rests on it.
+
+**Every answer the gate produces becomes an entry before it reaches the outline.** A fact the operator supplies that no source holds is `given`. A call on which source wins, a conflict to leave open, or something to include or keep out is a `ruling` by the `operator`. A recommendation of yours they accept is `adopted`, with `acted_on` saying what they did with it. A premise of yours they correct is superseded, never edited: `assertions.sh supersede <id>`, with `search` phrases for the new value. An entry you proposed and they reject is retired, with their reason. Then update the outline rows that cite them. A correction that reached only the outline is lost at the first recreate.
+
+**State the reader as a sentence, and say where it came from.** "Written for a second-year apprentice electrician who has wired domestic circuits but never opened a three-phase board" invites the correction. `Reader: apprentice electricians` does not, because a label reads as something already settled. In the same breath, say where that persona came from: the argument, the operator's answer to the ask at § 1, or your own inference from the subject and the sources. **A persona can be part given and part inferred**, and that case is the quiet one: an argument naming "apprentice electricians" and nothing else fires no ask, because a reader was named, while what they can be assumed to know is still yours to guess. Say which part you supplied rather than calling the whole persona given. All of this is on the outline's top line (§ 2), so read it from there rather than from memory. Whatever the operator corrects here, the persona or where it or the profile came from, goes into the file with `assertions.sh brief` and onto the outline's top line in the same pass.
 
 **An inferred persona is what this line is for.** Checking that a persona exists fires only when the field is empty, and from a subject plus a folder of sources a plausible reader is almost always available, so the failure that costs a book is a confident wrong persona rather than a missing one. By the time chapters exist it is at the top of the outline (§ 2) and in every chapter agent's prompt (§ 5), reading exactly like a persona the operator supplied. A wrong reader is not a wrong chapter. It is every chapter pitched at the wrong person, which is the one defect a rewrite cannot localise.
 
@@ -305,7 +400,6 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
   "glossary": true,
   "edition": "reading",
   "exclude": ["OUTLINE.md"],
-  "unsourced": ["measured"],
   "sources": {
     "syllabus": {"path": "../sources/data-modeling-syllabus.pdf", "display": "the syllabus"},
     "Week 5 deck": "../sources/week-5-deck.pptx",
@@ -345,7 +439,7 @@ This is the one blocking gate in the skill, and it earns its place: the outline 
 }
 ```
 
-The bare string form stays valid and unchanged, for every source whose key already reads as something a reader could be told. Add a `display` only where the key does not. `check-book.sh` flags a source key that looks like a repo path appearing in a chapter's prose, which is the case the display name exists to fix. Write it from the step 2 ledger, in the same pass that fixes the citation spellings, because the ledger already holds every re-openable source and its path. Without it a mark can be checked for grammar and nothing else, and `check-provenance.sh` says so rather than printing OK. `unsourced` extends the built-in `fill` with any other word the book uses for a component that names no external source.
+The bare string form stays valid and unchanged, for every source whose key already reads as something a reader could be told. Add a `display` only where the key does not. `check-book.sh` flags a source key that looks like a repo path appearing in a chapter's prose, which is the case the display name exists to fix. Write it from the step 2 ledger, in the same pass that fixes the citation spellings, because the ledger already holds every re-openable source and its path. Without it a mark can be checked for grammar and nothing else, and `check-provenance.sh` says so rather than printing OK. `unsourced` extends the built-in `fill` with any other word the book uses for a component that names no external source. **Use it for a method, never for a fact.** A measurement, an email, a page behind a sign-in: each is a claim no later run can reopen, so each is an entry in `assertions.json` cited as `assertion <id>`, which `check-provenance.sh` resolves. It never opens anything behind an `unsourced` label.
 
 **`provenance` and `suggested_reading` declare the resource-first format**: every unit carries a `<!-- src: ... -->` mark, and every chapter ends with its concept list. Both default to absent, which means a book written before the format existed still passes; `check-book.sh` holds a book to each only where it declares it, with no inference and no flag. Set both `true` for any book written against sources, which is every book this skill now writes by default.
 
@@ -373,13 +467,16 @@ Each agent's prompt carries, in full:
 6. The exact output path, and the file format above: `# Title` as the first line, the header table, the prose with its per-part H2s, and the concept list last. **Where the book declares `overview`, say that `## In short` is added at step 6 and that this agent does not write it.** The section is read off the finished chapter and takes its words from a glossary that does not exist yet, so an agent that writes it here invents the definitions the section exists to avoid inventing.
 7. **When the book is tagged, this chapter's number and the instruction to tag every paragraph.** The rule itself is at `reference/chapter-prose.md § Paragraph tags`, but the chapter number is not in that file and the agent cannot infer it, so the prompt has to supply it. Under `--no-tags`, say the book carries no tags rather than leaving the item out, since the spec describes tagging as the normal case.
 8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since the second kind is filled-in tier however confident it feels.
-9. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
-10. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
-11. **The findings path, `<book>/outline-findings/<chapter file stem>.md`, and the instruction to write anything wrong with the outline there rather than in the reply.** Say that nothing to report means no file. An agent told to report a problem and given nowhere to put it will put it in the return, which is where it is lost.
+9. **The entries this chapter carries, and every `book` entry**, each with its ID and statement as `assertions.sh list` prints them. Say that they outrank the agent's own `fill`, that a unit resting on one cites it as `assertion <id>` (`reference/chapter-prose.md § Provenance`), and that a `book` entry binds every chapter, so nothing an exclusion keeps out appears in any of them. Say too that the agent never writes `assertions.json`: a measurement it makes, or an entry it finds a source contradicting, goes in its findings file.
+10. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
+11. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
+12. **The findings path, `<book>/outline-findings/<chapter file stem>.md`, and the instruction to write anything wrong with the outline there rather than in the reply.** Say that nothing to report means no file. An agent told to report a problem and given nowhere to put it will put it in the return, which is where it is lost.
 
 **Findings go to a file, never into the return message.** An agent that opens its sources will sometimes find the outline wrong: a ledger row that contradicts the source, a page locator off by one, an anchor attributed to the wrong document. Those are worth more than the chapter that found them, because one bad ledger row is paid by every chapter drawing on it. They must not travel in the reply. A return carrying prose can exceed the harness's return cap, and a truncated return arrives empty rather than short, so the findings are lost with nothing saying they ever existed. Three agents' findings went that way on the reference book, had to be chased afterwards, and some were never recovered. Give each agent a path of its own, `<book>/outline-findings/<chapter file stem>.md`, and say that an agent with nothing to report writes no file. One path per agent rather than one shared file, because the batch drafts in parallel and four agents appending to one file interleave. The folder is invisible to everything that reads the book: `check-book.sh`, `check-provenance.sh` and `/makebook` each glob the book folder one level deep, which is why `claim-checks/` can already sit there.
 
 **Read that folder when the batches finish, before step 6. An absent folder is the all-clear**, since an agent with nothing to report writes no file. Most of what would otherwise land there is already gone, because § 3 resolved the ledger before the gate; what reaches this folder is what only a reader could have found. A ledger row that is wrong is wrong in `OUTLINE.md` and in `book.json` too, so fixing it only in the chapter that noticed leaves it in place for every later run and for `/updatebook`.
+
+**A finding about an entry is written to the file here, by this session.** A measurement an agent made becomes an entry, and the mark on the paragraph resting on it changes to cite the new ID. An entry a source contradicts goes to the operator: the entry and the source are both authorities, and neither wins without their say. Their answer supersedes the entry or retires it, and the outline rows that cite it follow.
 
 **Every claim in a chapter is written from the source, not from the prompt.** The agent opens what it was given. A brief is a plan for a chapter, and a chapter that rests on the brief rather than on the material is a chapter of confident paraphrase with nothing behind it. This is why chapter agents get paths.
 
@@ -495,6 +592,8 @@ It resolves every component of every mark through `book.json`'s `sources` map an
 
 **Read the last three census lines, not the exit code.** They report how many components were `fill`, how many locators went unparsed, and how many quotations could not be searched at all. A source with no text layer is the case that matters: the reference book's syllabus, Canvas setup guide and CSC220 syllabus are images of text, so 28 of its quotations are unverifiable by any tool and the run names the number rather than passing them. An absence found in a document nothing can read is not evidence. **A quotation counts as unverifiable when *any* source its mark names is unreadable, not only when all of them are** — 12 of those 28 name a readable source too, and a search that could not open one of the named sources cannot tell "not there" from "not readable".
 
+**Read the `assertions` line too.** A mark citing an entry that is missing, superseded or retired fails the run. Two things are reported rather than failed, as REVIEW lines. The first is every passage matching a superseded premise's `search` phrases, in any markdown file in the book folder, `diagrams/README.md` or a figure. The second is every entry that holds, rests in the prose, is `expected`, and has no mark citing it; after a recreate, that list is what the new book dropped. Both run over the whole book even under `--chapters`. The sweep runs even on a book that declares no `provenance`, whose marks are not read, since it needs only the file and the folder. Where a premise changed more than once, a report's "now:" names the end of the chain. A book with no `assertions.json` reads `assertions NOT CHECKED` there, and the OK line says so too. The script never creates the file.
+
 **A page locator that resolves is not a page locator that is right.** The assertion is that the number falls inside the PDF's page count, which is the most a script can settle without reading the page. Where a PDF's printed page numbers differ from its page index, and one cover page is enough to cause that, a citation to the wrong page resolves clean. Three did on the reference book, each landing the reader a page early: the mark reads `p. 6`, the checker counts to the PDF's sixth page, and the page printed `6` is the seventh. Nothing in the folder records which of the two a mark meant, so the check cannot be tightened. Open the source when writing the mark, and prefer a locator the file carries in its own text, such as a heading or a numbered item, wherever the source offers one.
 
 **What it does not reach is a paraphrase.** A mark can resolve perfectly, quote nothing, and sit beside a sentence the named section does not support. Only a model reading both can settle that, and `--emit-worklist` is what hands it the work:
@@ -522,7 +621,7 @@ Fix by rewriting the paragraph, not by regenerating the chapter.
 
 ### 9. Report
 
-Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), how many chapters are mostly filled in, the glossary term count where there is one, anything the checker flagged, and the `/makebook` command to bind it:
+Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), how many chapters are mostly filled in, the glossary term count where there is one, how many entries `assertions.json` holds, anything the checkers flagged, and the `/makebook` command to bind it:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
@@ -538,11 +637,141 @@ Do not run `/makebook` unless asked. Binding the PDF is a separate decision, and
 
 ## Adding to a book that already exists
 
-Point the second argument at the existing folder. Read `OUTLINE.md` and every existing chapter's opening and closing paragraph before planning, so new chapters inherit the term ledger, and under `narration` the handoff nouns, rather than restarting them. Renumbering an existing chapter renames its file **and rewrites every tag inside it**, since the chapter half of a tag is the chapter number, so prefer appending; if a chapter must be inserted, renumber every file after it in one pass, retag each one, and rerun the checker, which catches a file whose tags kept the old number.
+Point the second argument at the existing folder. **A folder with no `assertions.json` stops here**: backfill it (§ Backfilling the assertions file) and commit it before planning anything. Where the file exists, run `assertions.sh list` first: the new chapters' outline rows carry entries the way § 2 describes, and every answer the operator gives becomes an entry before it reaches the outline, as at § 3. Read `OUTLINE.md` and every existing chapter's opening and closing paragraph before planning, so new chapters inherit the term ledger, and under `narration` the handoff nouns, rather than restarting them. Renumbering an existing chapter renames its file **and rewrites every tag inside it**, since the chapter half of a tag is the chapter number, so prefer appending; if a chapter must be inserted, renumber every file after it in one pass, retag each one, and rerun the checker, which catches a file whose tags kept the old number.
 
 Renumbering also breaks any tag already cited elsewhere, in a conversation, a note or another document, the same way it breaks a `ch. N` citation. That is a second reason to append rather than insert.
 
 **Match the book you are adding to.** Read `book.json`'s `tags` and write the new chapters the same way, since a book is tagged throughout or not at all. Where the book declares nothing, read a chapter to see which it is and add the declaration in the same pass. Changing a book's mind means retagging or untagging every existing chapter, so raise it with the operator rather than tagging half a book.
+
+**Pointing the second argument at an existing folder only ever adds to it.** Rewriting every chapter is a recreate, below, and it takes its own flag, so one misread folder can never turn an append into a rewrite.
+
+## Recreating a book
+
+```
+/createbook --recreate <old-folder> <new-folder>
+```
+
+A recreate writes every chapter fresh, under the rules the book is now written to, from the old book's `assertions.json` and its sources. It is due when the chapters' boundaries or order change, or the rules the book was written under do (`updatebook § When to stop editing in place`). `/updatebook` never runs it. It names this command.
+
+**It takes no description, and it writes into a new folder.**
+
+- **No first argument.** The brief in `assertions.json` is the request, and a different request is a new book rather than a recreate.
+- **`<new-folder>` is required, and it must not exist yet or must be empty. It is never the old folder.** A recreate is due when the chapters' boundaries or order change, so the filenames change too, and in place the old chapter files would sit beside the new ones for `/makebook` to bind. The old book also stays readable for repointing citations (§ When the book supersedes one that already exists). The operator deletes it once satisfied. This skill never does.
+- **The old folder must carry an `assertions.json` that passes `check`.** Without one, stop and backfill it first (§ Backfilling the assertions file), in the old folder, and commit it there. A recreate from the outline and the sources alone drops every claim the file exists to carry.
+
+**The procedure is § Procedure, with these differences:**
+
+| Step | In a recreate |
+|---|---|
+| 1 | No `init`. Copy `<old-folder>/assertions.json` into the new folder unchanged, IDs and all, and run `list`. Take the reader, the argument and both origins from its brief, and the title, subtitle and slug from the old `OUTLINE.md`. Settle the profile afresh, because changed rules are the usual reason for a recreate. Where the brief's argument is `null`, say so at the gate, and record it with `assertions.sh brief --argument` if the operator has it |
+| 2 | Read every source again and write a new ledger, since the sources may have changed. **Carry every entry that holds.** Each `prose` entry goes on the Carries row of the chapter that will rest on it, and every `book` entry reaches every chapter agent. The old chapters are not an input: the file and the sources are, and a chapter drafted from the old prose rebuilds the shape the recreate exists to leave |
+| 3 | The gate adds the three things below |
+| 4 | Start `book.json` from the old one. Rewrite every source path relative to the new folder, and write the profile the gate settled |
+| 7 | Before the checks, turn every carried entry to `expected` with `assertions.sh expect <new-folder> --all`, because every mark in the new book was written to cite. `check-provenance.sh`'s uncited report then names each entry the new book dropped. Write each one into the chapter that should carry it, or retire it with the operator's say |
+
+**At the gate, add three things to § 3's list:**
+
+- **How many entries were carried**, of how many hold.
+- **Which chapter carries each `prose` entry**, from the Carries rows. An entry no row carries is a drop in the making. Name it, and let the operator say whether it belongs in a chapter or is retired.
+- **Which entries a source now contradicts**, such as a new document stating the class size an entry records. The operator settles each one, and neither the entry nor the source wins without their say. Their answer supersedes the entry, retires it, or keeps it with a `ruling` saying which one wins.
+
+**Then repoint every outside citation** through § When the book supersedes one that already exists, because a recreate renumbers every tag.
+
+## Backfilling the assertions file
+
+A book written before `assertions.json` existed has none, and the claims it would hold are scattered through the outline, the marks and the history. **A backfill gathers them into the file, once per book.** Three skills stop and run it when a book folder has a `book.json` and no `assertions.json`:
+
+- this skill, pointed at an existing folder to add chapters or to recreate
+- `/updatebook`, at its step 0
+- `/check-claims`, at its step 1, because it reads the file
+
+`/makebook` never does, because it binds any folder of markdown and reads nothing from the file. No script ever does, because a backfill needs judgement, and no flag skips it. The cost is one backfill per book, paid by the first run that touches the book, even when that run is a one-word fix.
+
+**A backfill writes `assertions.json` and nothing else.** It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is `legacy`: the prose resting on it predates the file, so no mark cites it yet. A mark keeps its `unsourced` label until its paragraph is rewritten, and the rewrite cites the entry instead.
+
+**What goes in is the test in § The assertions file**: a claim the book stands behind that a fresh run would not reproduce from the brief and the sources alone. A claim a source makes stays out, and so does the model's own `fill`, unless the operator adopted it. So does a fact first read from a live system that a later, re-openable export now carries, and anything read on the open web, which a fresh run reads again.
+
+### 1. Gather the candidates
+
+Read these, in this order, and write down each candidate as you find it:
+
+| Where | What it yields |
+|---|---|
+| `OUTLINE.md`: any section recording measurements, decisions, names or exclusions, and the house rules | `measured`, `ruling` and `settled` candidates |
+| The source ledger's rows, for asides that rule on a source: which one wins, what to leave out | `ruling` |
+| The revision notes on the outline's chapter rows | Whatever each revision established. Often a `premise` that changed, or a `given` |
+| Marks naming an `unsourced` label (`book.json`), where the label stands for a fact, not a method: an email, a page behind sign-in, a live system behind sign-in read on a date | One `given` per fact the label stands for, never one per mark |
+| `claim-checks/*.md` | `settled`: a finding the operator ruled on, especially one raised on every run |
+| `git log -p` of the chapters and the outline | What a revision put only into the prose, and every correction to a derived answer. Start with the commits that changed a chapter and left `OUTLINE.md` alone, since those facts reached nowhere else |
+
+For each candidate, prepare:
+
+- a proposed kind
+- the claim as a full sentence
+- a proposed origin, with its date taken from the commit that introduced the fact:
+
+  ```bash
+  git log --reverse --format='%as %h' -S'<a phrase the fact uses>' -- "$BOOK" | head -1
+  ```
+
+- its evidence: an outline section, a commit, or a mark's location
+
+**Two shapes are gathered whole, never split:**
+
+- **A premise that changed is a pair**, the old value and the one that replaced it.
+- **A derived answer key is one `settled` entry with an `answers` set**, never one entry per item. For each item a later commit corrected, note the answer as first derived, the corrected answer, and that commit's date.
+
+### 2. Check each against the book as it stands
+
+**A revision note whose change is still in the chapter text is current. One whose text is gone is possibly reversed.** That is the case the operator's confirmation exists for, since a note can record an edit that was later undone, and checking it here settles it mechanically instead of from memory. Do the same for every candidate that names wording: find it in the chapters now, or say that it is gone.
+
+**Check an exclusion the other way round**, by searching the chapters for what it keeps out. Finding it means the exclusion was broken or quietly lifted, and only the operator can say which: a lifted one is written and then retired with their reason.
+
+### 3. Ask the doubtful ones individually
+
+Ask these one at a time, or four to a call with AskUserQuestion, because each needs an answer only the operator has:
+
+- **Every possibly reversed candidate**: keep, drop, or the value it holds now.
+- **Every ruling whose author the evidence does not settle.** Was it the operator's call or the book's own judgement? That is `origin.by`.
+- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one. **Propose them from a sweep of the bare value word, never from memory.** Grep the folder for the value itself, in words and in figures (`twenty` and `20`, not `room of twenty`), sort what it finds into the phrasings that are about the premise, and show the operator which of those lines the proposed phrases would still leave unmatched. Arithmetic built on a premise rarely repeats its canonical phrase. A written entry's phrases cannot be amended later, so this is the one time to get them right.
+- **The original `/createbook` argument.** A book written before this file existed never saved it in the book folder. Look first for a saved copy beside it, such as a prompts or notes file holding the invocation, and confirm it with the operator. Where nobody has it, it is written `null`, never as the outline's paraphrase.
+- **The persona's and the profile's origins**, where the outline does not record them. `unrecorded` is an honest answer.
+
+### 4. Show the rest grouped by kind, for striking
+
+One table per kind, each candidate numbered, with its full sentence, its evidence and its proposed origin, never as a bare label (§ 3, on why a label reads as settled). The operator strikes by number and corrects in words: "drop 4 and 9; 12 was mine, not the book's".
+
+### 5. Ask what it missed
+
+**A backfill reads only what reached the repo.** A ruling given in conversation and never written down is invisible to it, so ask for anything missing, and add each answer as a candidate.
+
+### 6. Write the file in one pass
+
+Nothing written can be deleted, since the helper only retires and never reuses an ID. So write only once every candidate is settled:
+
+```bash
+A=${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh
+$A init "$BOOK" --how backfill --from OUTLINE.md --from "provenance marks" \
+  --from claim-checks --from "git log" --candidates <gathered> --confirmed <kept> \
+  --reader "<the persona>" --reader-origin <origin> --profile-origin <origin> \
+  [--argument="<the argument, if the operator has it>"]
+$A add "$BOOK" --kind <kind> --statement "<sentence>" --by <by> --date <commit date> \
+  --applies-to prose --citation legacy [the kind's own flags]
+```
+
+- **`--from` names only what was actually read.**
+- **`--candidates` counts everything gathered, including what was struck. `--confirmed` counts what is written.**
+- **A premise that changed is added as the old value, then `supersede`d by the new one with `--citation legacy`**, each dated to its own commit, with the `search` phrases from step 3. `supersede` does not carry `citation` over, and left to its default the new value comes out `expected`: uncited on every run from then on, with nothing that can turn it back.
+- **A corrected answer key is added with the answers as first derived, then each correction is replayed** with `correct <id> --item "<item>" --answer <answer> --date <the fixing commit's date>`. That records `was` and `corrected` exactly as the history had them.
+- **A `book` entry takes no `--citation`.**
+
+### 7. Sweep each premise that changed
+
+Run `check-provenance.sh "$BOOK"`, and show every `REVIEW` line its sweep prints for a superseded premise: each is a passage still built on the old value. **Say that the fix is a rewrite of each chapter it reaches, or the recreate, never a patch** (`updatebook § When to stop editing in place`). The backfill itself changes none of them.
+
+### 8. Confirm, then commit the file on its own
+
+Show `assertions.sh list "$BOOK"` as the final confirmation. Once the operator accepts it, commit `assertions.json` alone, before the work that stopped for it resumes. `/updatebook`'s step 0 refuses a folder with uncommitted changes, and its step 5 proves untouched chapters untouched with a `git diff` that a new file would muddy. The order is always the same: backfill, confirm, commit, then resume.
 
 ## When the book supersedes one that already exists
 
@@ -566,7 +795,7 @@ It runs four checks and reports them separately so a weaker one cannot stand in 
 
 ## Notes
 
-- The book folder holds chapters, `OUTLINE.md`, `book.json`, `about-this-book.md` where the book was written against sources, and `glossary.md` where it carries a glossary. Figures land in `diagrams/` only when `/makebook` runs and decides a figure earns its place.
+- The book folder holds chapters, `OUTLINE.md`, `book.json`, `assertions.json` beside it (§ The assertions file), `about-this-book.md` where the book was written against sources, and `glossary.md` where it carries a glossary. Figures land in `diagrams/` only when `/makebook` runs and decides a figure earns its place.
 - `books/` at the repo root is the default home for books that belong to no course. A book that supports a course belongs under that course instead, the way `courses/<course>/instructor-guide/` does.
 - Paragraph tags reach the bound PDF and EPUB, because they are text rather than markup. That is deliberate: the address a reader cites from the printed page is the address the markdown carries. It is also the reason `--no-tags` exists, since a book meant only to be read shows the reader an address they have no use for.
 - A chapter carrying more than the one claim the outline gave it is telling you the outline is wrong. Split it into two rather than writing around it, and never by cutting until it fits, which trims the glosses and the hedges first (`reference/chapter-prose.md § Before sending`).
