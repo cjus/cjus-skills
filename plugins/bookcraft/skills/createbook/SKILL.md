@@ -1,7 +1,7 @@
 ---
 name: createbook
 description: Write a whole book from a one-line description of what the book should be. Plans a chapter outline, then narrates every chapter into its own markdown file, named so that a plain filename sort is the reading order. The finished folder is ready for /makebook. Use when asked to "write a book on X", "create a book about X", or to turn a subject into a multi-chapter set of narrations.
-argument-hint: <what the book should be> [output-folder]
+argument-hint: <what the book should be> [output-folder] | --recreate <old-folder> <new-folder>
 ---
 
 # /createbook
@@ -21,8 +21,9 @@ A book here is a folder of markdown files, one file per chapter, named so that s
 | `--source <path>` (repeatable) | A resource the book is written against: a repo file, a folder, a PDF. See § The sources are an argument. |
 | `--minutes <N>` (optional) | How long the reader has. Sizes the book. See § Sizing the book. |
 | `--no-tags` (optional) | Write the book without paragraph tags. See § Paragraph tags; tagging is otherwise on. |
+| `--recreate <old-folder>` | Rewrite an existing book into the output folder, which is then required and must be new. Takes no description. See § Recreating a book. |
 
-With no first argument, ask what the book should be about and stop.
+With no first argument and no `--recreate`, ask what the book should be about and stop.
 
 ## The sources are an argument
 
@@ -641,6 +642,40 @@ Point the second argument at the existing folder. Read `OUTLINE.md` and every ex
 Renumbering also breaks any tag already cited elsewhere, in a conversation, a note or another document, the same way it breaks a `ch. N` citation. That is a second reason to append rather than insert.
 
 **Match the book you are adding to.** Read `book.json`'s `tags` and write the new chapters the same way, since a book is tagged throughout or not at all. Where the book declares nothing, read a chapter to see which it is and add the declaration in the same pass. Changing a book's mind means retagging or untagging every existing chapter, so raise it with the operator rather than tagging half a book.
+
+**Pointing the second argument at an existing folder only ever adds to it.** Rewriting every chapter is a recreate, below, and it takes its own flag, so one misread folder can never turn an append into a rewrite.
+
+## Recreating a book
+
+```
+/createbook --recreate <old-folder> <new-folder>
+```
+
+A recreate writes every chapter fresh, under the rules the book is now written to, from the old book's `assertions.json` and its sources. It is due when the chapters' boundaries or order change, or the rules the book was written under do (`updatebook § When to stop editing in place`). `/updatebook` never runs it. It names this command.
+
+**It takes no description, and it writes into a new folder.**
+
+- **No first argument.** The brief in `assertions.json` is the request, and a different request is a new book rather than a recreate.
+- **`<new-folder>` is required, and it must not exist yet or must be empty. It is never the old folder.** A recreate is due when the chapters' boundaries or order change, so the filenames change too, and in place the old chapter files would sit beside the new ones for `/makebook` to bind. The old book also stays readable for repointing citations (§ When the book supersedes one that already exists). The operator deletes it once satisfied. This skill never does.
+- **The old folder must carry an `assertions.json` that passes `check`.** Without one, stop and say so: a recreate from the outline and the sources alone drops every claim the file exists to carry.
+
+**The procedure is § Procedure, with these differences:**
+
+| Step | In a recreate |
+|---|---|
+| 1 | No `init`. Copy `<old-folder>/assertions.json` into the new folder unchanged, IDs and all, and run `list`. Take the reader, the argument and both origins from its brief, and the title, subtitle and slug from the old `OUTLINE.md`. Settle the profile afresh, because changed rules are the usual reason for a recreate. Where the brief's argument is `null`, say so at the gate, and record it with `assertions.sh brief --argument` if the operator has it |
+| 2 | Read every source again and write a new ledger, since the sources may have changed. **Carry every entry that holds.** Each `prose` entry goes on the Carries row of the chapter that will rest on it, and every `book` entry reaches every chapter agent. The old chapters are not an input: the file and the sources are, and a chapter drafted from the old prose rebuilds the shape the recreate exists to leave |
+| 3 | The gate adds the three things below |
+| 4 | Start `book.json` from the old one. Rewrite every source path relative to the new folder, and write the profile the gate settled |
+| 7 | Before the checks, turn every carried entry to `expected` with `assertions.sh expect <new-folder> --all`, because every mark in the new book was written to cite. `check-provenance.sh`'s uncited report then names each entry the new book dropped. Write each one into the chapter that should carry it, or retire it with the operator's say |
+
+**At the gate, add three things to § 3's list:**
+
+- **How many entries were carried**, of how many hold.
+- **Which chapter carries each `prose` entry**, from the Carries rows. An entry no row carries is a drop in the making. Name it, and let the operator say whether it belongs in a chapter or is retired.
+- **Which entries a source now contradicts**, such as a new document stating the class size an entry records. The operator settles each one, and neither the entry nor the source wins without their say. Their answer supersedes the entry, retires it, or keeps it with a `ruling` saying which one wins.
+
+**Then repoint every outside citation** through § When the book supersedes one that already exists, because a recreate renumbers every tag.
 
 ## When the book supersedes one that already exists
 

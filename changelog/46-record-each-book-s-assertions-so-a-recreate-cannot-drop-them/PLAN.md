@@ -198,8 +198,8 @@ The skill stops and creates the file before doing what it was asked.
 
 ### Recreating a book
 
-- [ ] Let `/createbook` start from an existing book folder. It reads `assertions.json` first, takes the brief from it, takes the sources from `book.json`, and carries every entry that holds. A recreate into a new folder starts by copying the file across with its IDs unchanged. Every chapter is written fresh, with marks that cite entries, so the recreate turns each carried `legacy` entry into `expected`. From then on, the uncited-entry report covers the whole book.
-- [ ] At the gate, report how many entries were carried, which chapters will carry each one, and which conflict with a source, for example a new document that now states the class size. The operator settles each conflict. Neither the file nor the source wins without the operator's say.
+- [x] Let `/createbook` start from an existing book folder. It reads `assertions.json` first, takes the brief from it, takes the sources from `book.json`, and carries every entry that holds. A recreate into a new folder starts by copying the file across with its IDs unchanged. Every chapter is written fresh, with marks that cite entries, so the recreate turns each carried `legacy` entry into `expected`. From then on, the uncited-entry report covers the whole book.
+- [x] At the gate, report how many entries were carried, which chapters will carry each one, and which conflict with a source, for example a new document that now states the class size. The operator settles each conflict. Neither the file nor the source wins without the operator's say.
 
 ### Backfill
 
@@ -253,16 +253,15 @@ The skill stops and creates the file before doing what it was asked.
       Done 2026-09-25. The two ticket boxes left open under "Marks cite entries" are not
       checker work: replacing `unsourced` labels with entries is done to a book by its
       backfill (Phases 5 and 7), and `/check-claims` reading entries is Phase 4.
-- [ ] Phase 3: `/createbook`. Create the file at step 1 with the brief. Turn operator answers,
+- [x] Phase 3: `/createbook`. Create the file at step 1 with the brief. Turn operator answers,
       rulings, exclusions and measurements into entries at steps 2 and 3, and show `list` at the
       gate. Outline rows list the entry IDs their chapter carries. Move register material out of
       the outline. Start a recreate from an existing folder: carry every entry that holds, turn
       `legacy` into `expected`, and report carried entries and conflicts at the gate.
-      Done 2026-09-25 except the recreate. The stop for an existing folder with no file
-      moves to Phase 5, which writes the backfill that stop runs; pointing at a procedure
-      that does not exist yet would ship a dangling instruction.
-      Remaining: the recreate, now unblocked, as `/createbook --recreate <old> <new>` per
-      `## Decision: a recreate is a /createbook flag, into a new folder` below.
+      Done 2026-09-25. The recreate is `createbook § Recreating a book`, per
+      `## Decision: a recreate is a /createbook flag, into a new folder` below. An old folder
+      with no file stops it for now; Phase 5 turns that stop into a backfill, along with the
+      same stop for any existing folder, because it writes the procedure both run.
 - [ ] Phase 4: `/updatebook` and `/check-claims`. Step 0 stops on a missing file: backfill,
       confirm, commit, then step 0 again. Add the classification row, the `legacy` to `expected`
       rule, the carry, and `check` at step 5. The rewrite and recreate sections read the file,

@@ -149,3 +149,29 @@ asked for the pr plugin's own text to allow that. Four sentences said `/pr:close
 the operator's to invoke, and each now allows a standing grant. A grant still runs the close
 as its own step, never from inside another skill, and after the hands-on testing `/pr:pre-test`
 asks for. It never extends to a merge. pr is now 0.2.6. The acceptance suite passes 39 of 39.
+
+### 2026-09-25 12:05:58 MDT — Phase 3 complete: the recreate
+
+`createbook § Recreating a book` implements the decision: `/createbook --recreate <old-folder>
+<new-folder>`. It takes no description. The new folder must be absent or empty, and never the
+old one. The old folder must carry an `assertions.json` that passes `check`.
+
+A table lists how each step of the procedure differs:
+
+- **Step 1:** the file is copied with its IDs unchanged, and the brief comes from it.
+- **Step 2:** the sources are read again, every entry that holds is carried, and the old chapters
+  are not an input.
+- **Step 4:** `book.json` starts from the old one, with its paths rewritten for the new folder.
+- **Step 7:** `expect --all` runs before the checks, so the uncited report names every drop.
+
+The gate adds three reports: the carried count, which chapter carries each entry, and which
+entries a source now contradicts, each of which the operator settles.
+
+"Adding to a book" now says an existing-folder argument only ever appends. The Arguments table,
+`argument-hint` and the README gain the flag.
+
+**An old folder with no file stops the recreate for now.** Phase 5 turns that stop into a
+backfill, so this commit ships no pointer to a procedure that does not exist yet.
+
+Walked on a scratch copy: after `expect --all`, the uncited report named exactly the two entries
+the new chapter did not carry. `scripts/test-fixtures.sh`: 16 passed, 0 failed.
