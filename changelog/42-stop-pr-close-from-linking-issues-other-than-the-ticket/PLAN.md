@@ -63,6 +63,9 @@ Surfaced by PR #38's Phase 7 close review and its step 8b.
 - [x] Phase 4: Bump the pr plugin's version so installed copies refresh, and run
       `plugins/pr/scripts/test-acceptance.sh`.
 
+**Status 2026-09-25:** all four phases are done and pushed. Draft PR #49 is open with CI green,
+and the pre-test and close-gate reviews both returned APPROVE. The branch is in `/pr:close`.
+
 ## Open Questions
 
 - ~~Move the rule into `/pr:summary`, or mirror it in both skills? Mirroring keeps close's gate
@@ -80,3 +83,10 @@ Surfaced by PR #38's Phase 7 close review and its step 8b.
 - `pr-lifecycle-state.mjs` could raise a gap when an open PR's `closingIssuesReferences` holds an
   issue other than the ticket. Out of scope: this branch's objective is close's verify. #44 made
   the same call for its title check and left it to `/pr:close`.
+
+**Triage at `/pr:close`, 2026-09-25: 2 items, both dropped, none ticketed.**
+
+- The lifecycle-script stray gap: **DROP.** `/pr:close`'s verify and 8b already stop on a stray,
+  so an earlier warning has no user-visible symptom the close misses.
+- The pre-test review's "a negated sentence is ignored" claim, stated in three places: **DROP.**
+  It is unverified, and the stray check stops any link it would cause, so no symptom survives.
