@@ -152,6 +152,66 @@ docker-first-year-02-images-and-layers.md
 docker-first-year-03-the-build-cache.md
 ```
 
+## The assertions file
+
+A book rests on its sources and on everything it was told or settled along the way. `book.json` records the sources, and a later run can open them again. **`assertions.json`, beside it, records the rest**: every claim the book stands behind that a fresh run of this skill would not reproduce from the brief and the sources alone. That test decides what goes in, and it keeps the file small. A claim a source makes stays out, because the source is already its record. The model's own `fill` stays out until the operator adopts it.
+
+The file is for the recreate. While a book is only patched, the prose holding those claims stays where it is and nothing is lost. A recreate writes every chapter fresh from the outline and the sources, and whatever lived only in the old prose goes with it: a premise that changed, a recommendation the operator acted on, a ruling with no source, an answer key that was derived and then corrected.
+
+**Write it through the helper, never by hand.** The helper is the file's only writer, and its `check` is the only definition of the format. Where this section and `check` disagree, `check` is right.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<book-slug> [options]
+```
+
+| Command | What it does |
+|---|---|
+| `init` | Creates the file with its `created` and `brief` blocks and no entries. Refuses a folder that already has one |
+| `add` | Appends one entry under the next ID |
+| `supersede <id>` | Appends the replacement and writes both links in one step |
+| `retire <id>` | Takes an entry out of force, with the reason |
+| `correct <id>` | Changes one answer in a `settled` entry's set, recording the date and the answer it replaced |
+| `expect <id>...` | Turns `legacy` entries into `expected`. `--all` turns every one that holds, which is what a recreate does |
+| `list` | The table to show the operator at a gate. Show this, never the raw JSON |
+| `check` | Every rule of the format. Exits 0 when the file passes, 1 when it does not, 2 when there is nothing to check |
+
+`assertions.sh <command> --help` lists the flags, and each flag writes the key of the same name, with a hyphen for the underscore. **Every write checks the whole file before and after**, so the helper cannot leave a file `check` rejects, and a flag left off comes back as the key it would have written. A file declaring a newer `format` than this bookcraft knows stops every command with a message to update bookcraft.
+
+**The file never names a chapter number or a paragraph tag**, because a recreate renumbers both. An entry says what is true, never where the book says it.
+
+| Block | Rule |
+|---|---|
+| `format` | `1` |
+| `created` | `date` and `how`: `createbook`, or `backfill` with `from` (what it read), `candidates` and `confirmed`. Required even with no entries, because it is what tells a file that searched and found nothing from one written to get past a presence check |
+| `brief` | `argument`, the `/createbook` argument verbatim. `reader`, the persona as one sentence. `reader_origin` and `profile_origin`, each `argument`, `operator` or `inferred`. `reader_inferred`, where part of a given persona was inferred, names that part. The profile's value stays in `book.json`. A backfill may write the argument as `null` and an origin as `unrecorded`, because a book written before this file existed never saved them, and a paraphrase recorded as the argument is what the field exists to prevent |
+| `next_id` | The ID the next entry gets. Entries are retired, never deleted, so every ID below it is present and a mark citing one never comes to mean a different claim |
+| `entries` | The entries, below |
+
+| Kind | Holds | For example |
+|---|---|---|
+| `given` | A fact the operator supplied that no source file holds | A class roster, read from a portal behind sign-in |
+| `ruling` | A decision on how to treat the sources or the scope: which source wins, a conflict left open, something included or excluded | The live site outranks the older PDF. No compensation figures |
+| `premise` | A fact the book's plans are built on, sourced or not. Changing one is a rewrite (`updatebook § When to stop editing in place`), not a patch | The class size. The date of the first session |
+| `adopted` | A recommendation the book made that the operator accepted or acted on | An exam window worked back from a testing center's lead time |
+| `measured` | A live measurement: what was run, on what, and the result | A command's output on this machine |
+| `settled` | A misreading a review corrected, or a derived answer that was checked. Kept so a fresh reading does not make the same mistake | A corrected answer key. A PDF whose printed page numbers are offset from its page index |
+
+| Field | Rule |
+|---|---|
+| `id` | A whole number the helper allocates. Never reused, even after its entry is retired |
+| `kind` | One of the six above |
+| `statement` | The claim, in one sentence |
+| `origin` | `by` (`operator`, `book` or `measurement`), an optional `how`, and `date`. A `given` entry is by the `operator`, and `measurement` is a `measured` entry's origin and no other kind's |
+| `applies_to` | `prose` when sentences rest on the entry and their marks should cite it. `book` when it governs the whole book, such as an exclusion or a ruling on which source wins |
+| `citation` | On a `prose` entry only. `expected`, or `legacy` when the prose resting on the entry was written before the file existed, so no mark cites it yet. Only a backfilled file carries `legacy` |
+| `status` | `holds`, `superseded` with `superseded_by`, or `retired` with `retired_reason`. The replacement carries `supersedes`, the two links must agree, and an entry supersedes only an older one |
+| `reaches`, `search` | Required on a `premise`: what it reaches, and phrases that find prose built on it, so a superseded premise can be swept for. A replacement needs phrases of its own, since the old ones find the old value |
+| `measurement` | Required on a `measured` entry: `ran`, `on` and `result` |
+| `acted_on` | Required on an `adopted` entry: what the operator did with the recommendation |
+| `corrects`, `answers` | Optional on a `settled` entry. `corrects` holds the reading the entry replaces. `answers` is a set of `item` and `answer` pairs, no item twice. A corrected item also carries `corrected`, the date, and `was`, the answer it replaced, so the old mistake stays on record for a fresh derivation that makes it again |
+
+**No other key is allowed anywhere in the file.** A misspelt key is the likeliest error, and `check` names the nearest key that exists.
+
 ## Procedure
 
 ### 1. Derive the book
@@ -566,7 +626,7 @@ It runs four checks and reports them separately so a weaker one cannot stand in 
 
 ## Notes
 
-- The book folder holds chapters, `OUTLINE.md`, `book.json`, `about-this-book.md` where the book was written against sources, and `glossary.md` where it carries a glossary. Figures land in `diagrams/` only when `/makebook` runs and decides a figure earns its place.
+- The book folder holds chapters, `OUTLINE.md`, `book.json`, `assertions.json` beside it (§ The assertions file), `about-this-book.md` where the book was written against sources, and `glossary.md` where it carries a glossary. Figures land in `diagrams/` only when `/makebook` runs and decides a figure earns its place.
 - `books/` at the repo root is the default home for books that belong to no course. A book that supports a course belongs under that course instead, the way `courses/<course>/instructor-guide/` does.
 - Paragraph tags reach the bound PDF and EPUB, because they are text rather than markup. That is deliberate: the address a reader cites from the printed page is the address the markdown carries. It is also the reason `--no-tags` exists, since a book meant only to be read shows the reader an address they have no use for.
 - A chapter carrying more than the one claim the outline gave it is telling you the outline is wrong. Split it into two rather than writing around it, and never by cutting until it fits, which trims the glosses and the hedges first (`reference/chapter-prose.md § Before sending`).

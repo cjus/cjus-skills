@@ -108,6 +108,7 @@ books/<book-slug>/
   ...
   OUTLINE.md                      the plan each chapter was written against
   book.json                       title, byline, sources, tags on/off, front matter
+  assertions.json                 what the book was told or settled that no source holds
   about-this-book.md              where the book's material came from
   glossary.md                     derived from the outline's term ledger
   diagrams/                       hand-authored SVG figures, written by /makebook
@@ -409,6 +410,7 @@ skills/
     scripts/check-book.sh           structure
     scripts/check-provenance.sh     marks pointing out
     scripts/check-references.sh     citations pointing in
+    scripts/assertions.sh           the only writer of assertions.json, and its format's definition
     fixtures/                       books that exercise the checkers, plus the run.sh
                                     fixtures for what a book folder cannot express
   makebook/
