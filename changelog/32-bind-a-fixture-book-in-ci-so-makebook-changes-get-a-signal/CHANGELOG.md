@@ -61,3 +61,10 @@ appendix slug (#35) and the appendix-table repair (#20). Both reproduce, from #3
 files: `main`'s binder prints the middle file of the slug book as a second `A1` and warns on the
 table, and #39's does neither. **The operator added them as Phase 6, to land after #39 merges,**
 since on `main` they fail by design.
+
+### 2026-09-25 — CI green with the bind, and Linux stays advisory
+
+CI run 36134364045 on `fafa000` passed 16 of 16 on both legs, the bind included. **The Linux leg
+stays advisory, per the operator**: the bind's checks lean on font metrics, where a Linux-only
+failure is likelier a font difference than a regression. The reason sits in the `fixtures.yml`
+header beside the macOS rationale.

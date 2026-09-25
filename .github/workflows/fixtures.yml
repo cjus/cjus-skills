@@ -11,6 +11,11 @@
 # tested on (README § Platform support). Linux runs alongside it to produce the
 # first recorded Linux run rather than to gate on one.
 #
+# The bind stays advisory on Linux for the same reason, decided after its first
+# Linux run passed. Its checks lean on font metrics, such as whether the cover
+# fits on page 1, and a Linux-only failure there is likelier to be a font
+# difference than a binder regression.
+#
 # What continue-on-error on the Linux leg does and does not do, measured rather
 # than assumed: a Linux-only failure leaves the WORKFLOW RUN's conclusion
 # `success`, so it does not fail the run. It does NOT make the failure invisible

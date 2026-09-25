@@ -44,21 +44,26 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       spill, differing stamps, malformed stamp, no EPUB, no cover art). Binds twice, per the
       operator: as declared for the first two and the cover art, and with a `cover_image`
       for the stamp. Passes against PR #39's binder at `c55a002` as well as `main`'s.*
-- [ ] Phase 4: Decide whether the Linux leg of the bind is blocking, and record the reason in the
+- [x] Phase 4: Decide whether the Linux leg of the bind is blocking, and record the reason in the
       workflow's header comment beside the existing macOS/Linux rationale.
-- [ ] Phase 5: Update the comments this change makes false: the `display-names/run.sh` header
+      *Done 2026-09-25: advisory, per the operator, after the first Linux bind passed. The
+      checks lean on font metrics, where a Linux-only failure is likelier a font difference.*
+- [x] Phase 5: Update the comments this change makes false: the `display-names/run.sh` header
       ("CI installs Python and jq and not the Chromium the binder drives") and the
       `fixtures.yml` header. Confirm a local `test-fixtures.sh` run without Chromium still
       behaves as documented, and that a CI run is green with the bind in it.
       *Comments and docs updated 2026-09-25: both headers, `plugins/bookcraft/README.md`,
       `createbook/NOTES.md`, the root `README.md`. Local runs behave as documented in all
-      three modes. The CI run with the bind in it is still to do.*
+      three modes. CI run 36134364045 on `fafa000` is green on both legs with the bind in
+      it: 16 of 16, `makebook/bind/run.sh` ok on macOS and on Linux.*
 - [ ] Phase 6: Bind the two regression books #37 asked for in its comment on #32, as books inside
       `makebook/fixtures/bind/`, and tick that comment's checkboxes at close:
-      - the look-alike appendix slug (#35): `sql-01-intro.md`, `sql-02-appendix-1-of-the-standard.md`
-        and `sql-appendix-1-answer-key.md` print as 1, 2 and A1 on the Contents page
-      - the appendix-table repair (#20): a squeezed table in `repro-appendix-1-the-squeezed-table.md`,
-        after two chapters, binds with no "broken mid-word" warning
+      - the look-alike appendix slug (#35): `sql-01-intro.md`,
+        `sql-02-appendix-1-of-the-standard.md` and `sql-appendix-1-answer-key.md` print as 1, 2
+        and A1 on the Contents page
+      - the appendix-table repair (#20): a squeezed table in
+        `repro-appendix-1-the-squeezed-table.md`, after two chapters, binds with no "broken
+        mid-word" warning
       *Added 2026-09-25 by the operator. Blocked until PR #39 merges: both test #39's fixes and
       fail on `main` today, measured (Contents printed `A1` twice; the table warned). Then
       `/pr:sync` and add them. The table repro was measured on macOS only.*
@@ -106,11 +111,13 @@ to extend.
   2026-09-25: bind twice. #39 keeps `cover.xhtml` behind a declared `cover_image`, so the
   stamp is compared on a second bind that declares one.*
 - ~~**Where does the bind run?**~~ *Resolved by the operator, 2026-09-25: a `run.sh`, so
-  contributors catch a binder break locally, at the cost of a slower suite.* A `run.sh` under `makebook/fixtures/` puts it inside
-  `test-fixtures.sh`, so a local run without Chromium prints `skip` and `--strict` (implied by
-  `$CI`) turns that skip into a failure. A separate workflow step keeps `test-fixtures.sh` fast
-  and dependency-free locally, but leaves the bind outside the suite's coverage rule.
-- **Is the Linux leg blocking?** The bind is the first thing CI runs that depends on a browser and
+  contributors catch a binder break locally, at the cost of a slower suite.* A `run.sh` under
+  `makebook/fixtures/` puts it inside `test-fixtures.sh`, so a local run without Chromium prints
+  `skip` and `--strict` (implied by `$CI`) turns that skip into a failure. A separate workflow
+  step keeps `test-fixtures.sh` fast and dependency-free locally, but leaves the bind outside the
+  suite's coverage rule.
+- ~~**Is the Linux leg blocking?**~~ *Resolved by the operator, 2026-09-25: advisory, as recorded
+  in the `fixtures.yml` header.* The bind is the first thing CI runs that depends on a browser and
   on font rendering, which are the likeliest places for Linux to differ. The existing rule makes
   macOS blocking because it is the only platform the plugins are developed on.
 - **Cache the Playwright Chromium between runs?** A cold download on every run adds minutes. A
