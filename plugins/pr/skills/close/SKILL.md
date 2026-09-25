@@ -26,16 +26,16 @@ The sequence, one row each:
 - **1d** configured checks, then the CI verdict
 - **2** review gate
 - **3** `/pr:condense`
-- **4** PR exists, and the issue is linked by a **verified** closing reference
+- **4** PR exists, and the issue is linked by a **verified** closing reference, with no other issue linked
 - **4b** PR title starts with `[<title tag>] `, **verified**
 - **5** `/pr:commitmsg`
 - **6** continuity entry and the assertion audit
 - **6b** deferred-work triage
 - **7** arm the sentinel, stage, commit, push
 - **8** terminal `/pr:cp` until the tree is clean
-- **8b** PR body verified non-empty and carrying a resolved closing reference, and the title verified prefixed
+- **8b** PR body verified non-empty and carrying a resolved closing reference to the ticket and to no other issue, and the title verified prefixed
 
-**If a gate halts the run** (1b conflicts, 1c unaccepted drift, 1d a failing check, step 2 requesting changes, step 4 finding no exact match or a closed or merged PR, 4b a title that cannot be read or does not verify, or the default-branch stop), report the rows you reached, name the halt, and **stop**. Do not write rows for steps you never got to.
+**If a gate halts the run** (1b conflicts, 1c unaccepted drift, 1d a failing check, step 2 requesting changes, step 4 finding no exact match or a closed or merged PR, step 4's verify failing, 4b a title that cannot be read or does not verify, or the default-branch stop), report the rows you reached, name the halt, and **stop**. Do not write rows for steps you never got to.
 
 **Nothing here is a permission stop.** On a feature branch the run goes end to end through 7, 8 and 8b without asking. See `${CLAUDE_PLUGIN_ROOT}/reference/git-conventions.md`.
 
@@ -198,10 +198,10 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 
 | State | Action |
 |---|---|
-| **No PR** | Create from the step-1 summary, then append the link as its own line |
+| **No PR** | Create it with one body: the step-1 summary, then the link as its own line |
 | **Open, real description** | Keep it and append the link, unless GitHub already resolves one |
-| **Open, empty or placeholder body** | **Replace** the whole body with the summary, then add the link |
-| **Open, body starts with the `pr:close:summary` marker** | An earlier run of this skill wrote it. **Replace** it with the current summary, then add the link |
+| **Open, empty or placeholder body** | **Replace** the whole body with the summary and the link, in one edit |
+| **Open, body starts with the `pr:close:summary` marker** | An earlier run of this skill wrote it. **Replace** it with the current summary and the link, in one edit |
 | **Draft** | Handle the body as above, then `gh pr ready` |
 | **Closed but unmerged** | **Stop.** Let the operator reopen or explain. |
 | **Merged** | **Stop.** Nothing left to do. |
@@ -209,40 +209,46 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 ```bash
 SUMMARY="<changelogRoot>/<slug>/pr-summary-<date>.md"
 
-# No PR: create from the summary, marker first
-[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
-  | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
-      --title "[$ID] <resolved issue title>" --body-file -
+# No PR: create it with the whole body, marker first and the link last, in one write
+[ -s "$SUMMARY" ] \
+  && BODY=$(printf '%s\n\n' '<!-- pr:close:summary -->' && cat "$SUMMARY" && printf '\n\nCloses #%s' "$N") \
+  && printf '%s\n' "$BODY" | gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
+       --title "[$ID] <resolved issue title>" --body-file -
 
-# Or, on a replace row: overwrite the body with the summary, marker first
-[ -s "$SUMMARY" ] && { printf '%s\n\n' '<!-- pr:close:summary -->'; cat "$SUMMARY"; } \
-  | gh pr edit "$BRANCH" --repo "$REPO" --body-file -
+# Or, on a replace row: overwrite the body with the same whole body, in one edit
+[ -s "$SUMMARY" ] \
+  && BODY=$(printf '%s\n\n' '<!-- pr:close:summary -->' && cat "$SUMMARY" && printf '\n\nCloses #%s' "$N") \
+  && printf '%s\n' "$BODY" | gh pr edit "$BRANCH" --repo "$REPO" --body-file -
 
-# Then, on every path that appends: add the link as its own line
+# Or, on a kept description the check below finds unlinked: append the link, its one edit
 BODY=$(gh pr view "$BRANCH" --repo "$REPO" --json body --jq .body) && [ -n "$BODY" ] \
   && gh pr edit "$BRANCH" --repo "$REPO" --body "$BODY
 
 Closes #$N"
 ```
 
-**Check the summary exists and is non-empty before piping it.** A pipe's exit status is `gh`'s, so a missing or unreadable summary would still send the marker alone as the body, and the link and the verification below would then pass it. If the check fails, **stop**: step 1 did not produce the summary this step needs.
+**Build the body only from a summary that exists, is non-empty and was read in full.** Every part of the build is chained with `&&`, so a missing or unreadable summary stops the command before `gh` runs. That matters because the link rides in the same body: a build that carried on past a failed `cat` would send the marker and the closing line alone, and the verification below would pass that body, since it is non-empty and closes #N. If the build fails, **stop**: step 1 did not produce the summary this step needs.
 
-**Read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: at this point the body is never legitimately empty, because it was just created or replaced from the summary.
+**On the kept path, read the body into a variable, and edit only when the read succeeded and returned text.** Nested inside the edit as `$(…)`, a failed read (network, auth, a wrong argument) expands to an empty string. The edit then succeeds and replaces the whole description with the closing line, and the verification below passes that body. If the read fails or comes back empty, **stop**: a kept description is never legitimately empty, because an empty body is a stub and takes the replace row.
 
 A created title is `[$ID] ` followed by the title of the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
 
-**Do not assume the summary supplies the link.** It is a document, not a PR body, and any closing keyword inside it is likely to sit in a code fence, which GitHub ignores. Creating from it and going straight to verification is how this path fails.
+**The summary never supplies the link.** `/pr:summary` keeps closing keywords with an issue reference out of it; that rule lives in its step 3. A body built from the summary alone closes nothing, so every body this step writes ends with the closing line.
 
 Before appending to a **kept** description, ask the **same** question the assertion below asks:
 
 ```bash
 gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
-  --jq "[.closingIssuesReferences[].number] | index($N) != null"
+  | jq --argjson n "$N" --arg repo "$REPO" '
+      any(.closingIssuesReferences[];
+          .number == $n and ("\(.repository.owner.login)/\(.repository.name)" | ascii_downcase) == ($repo | ascii_downcase))'
 ```
 
-`false` appends the link. `true` leaves the body alone, since re-adding duplicates it on every run.
+`false` appends the link. `true` leaves the body alone, since re-adding duplicates it on every run. No output is a failed read, not a `false`: stop, for the same reason as the verify below.
 
-**After a create or a replace in this run, skip that check and append.** The body was just written from the summary, which carries no link, so there is nothing to check. A read taken this soon after an edit is not reliable anyway: `closingIssuesReferences` lags a body edit by a moment. **Keep literal closing keywords with an issue number out of the summary**, even in inline code. That way the appended line is the body's only link.
+**A create or a replace writes the summary and the link in one edit, never two.** GitHub can resolve two quick body edits out of order. On PR #38 a replace and an append landed seconds apart, and `closingIssuesReferences` settled on the replace, which had no link, reading `[]` for over a minute after the push while the body itself was intact and ended with the closing line. The `true` read straight after the append was left over from the older body. One edit leaves no intermediate body to win that race.
+
+**A create or a replace needs no pre-check.** The body it writes already carries the link, and by `/pr:summary`'s rule nothing else in it links an issue, so the closing line is the body's only link.
 
 **An empty body or one carrying the `pr:pre-test:draft-placeholder` marker is a stub, not a description.** Appending to either leaves a merged PR whose body explains nothing. Replace it wholesale.
 
@@ -283,18 +289,28 @@ This assertion is the point of the step, and it runs whether the PR was just cre
 
 ```bash
 gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences,title \
-  | jq -c --argjson n "$N" --arg id "$ID" --arg p "$PREFIX" '
+  | jq -c --argjson n "$N" --arg id "$ID" --arg p "$PREFIX" --arg repo "$REPO" '
       ("^(\\[(#[0-9]+" + (if $p == "" then "" else "|" + $p + "-[0-9]+" end) + ")\\][ :]*)+") as $re
+      | [.closingIssuesReferences[]
+         | ("\(.repository.owner.login)/\(.repository.name)" | ascii_downcase) as $r
+         | if $r == ($repo | ascii_downcase) then "#\(.number)" else "\($r)#\(.number)" end] as $refs
       | [(.body | length),
-         ([.closingIssuesReferences[].number] | index($n) != null),
-         (.title == "[\($id)] " + (.title | sub($re; ""; "i")))]'
+         ($refs | index("#\($n)") != null),
+         (.title == "[\($id)] " + (.title | sub($re; ""; "i"))),
+         ($refs - ["#\($n)"])]'
 ```
 
-Require a non-zero length, then `true`, then `true`. Any one failing is a **stop**, reported as "PR body is empty", "the PR does not close #N" or "the PR title is not `[$ID] <title>`", never as a warning appended to an otherwise successful report. **No output at all is a failed read, and also a stop.** A pipe's exit status is `jq`'s, so a `gh` failure shows up as an empty result, not as an error.
+Require a non-zero length, then `true`, then `true`, then `[]`. Any one failing is a **stop**, reported as "PR body is empty", "the PR does not close #N", "the PR title is not `[$ID] <title>`" or "the PR also closes <each stray reference>", never as a warning appended to an otherwise successful report. **No output at all is a failed read, and also a stop.** A pipe's exit status is `jq`'s, so a `gh` failure shows up as an empty result, not as an error.
+
+**The PR closes the ticket and nothing else.** Each entry in the fourth element is an issue the merge would close besides the ticket, most often because a summary quoted a closing line for another issue. Name every one in the stop. The remedy depends on where the link comes from. In a body this skill wrote, the summary broke `/pr:summary`'s closing-keyword rule: fix the summary and re-run the close, which replaces that body. In a kept description the words are the operator's, so report them and leave the change to the operator rather than rewriting their text. A stray can also be a manual link from the PR's Development sidebar, which `closingIssuesReferences` includes and no body edit removes. When neither the summary nor the body carries a closing keyword for it, report it as a manual link for the operator to remove in the sidebar, and do not re-run.
+
+**The stop holds even for a second issue the operator meant this PR to close.** A branch carries one ticket. Close the other issue by hand after the merge, not through this PR.
+
+**References are keyed on repository as well as number.** A closing line for `other/repo#42` resolves to an issue numbered 42 in another repository, so it neither links this ticket nor passes as it. It shows as a stray in that `owner/repo#N` form, and a same-repository stray shows as `#N`. A stray that names this repository under a different owner or name means `$REPO` went stale after a rename or a transfer: correct `repo` in `.claude/pr-config.json` or the remote, then re-run.
 
 **The title check is a fixed point:** the title passes only if step 4b's transform would leave it unchanged. A plain `startswith("[$ID] ")` would also pass `[#44] [#44]Carry`, the doubled prefix most likely to slip through, and that title would then land in the squash subject.
 
-**A `false` straight after an edit is not yet a verdict.** `closingIssuesReferences` lags a body edit by a moment, so re-read it, up to three reads in all, before reporting the stop. A zero length needs no re-read.
+**A `false` or a stray straight after an edit is not yet a verdict.** `closingIssuesReferences` lags a body edit by a moment, and until it catches up it describes the body before the edit, so re-read it, up to three reads in all, before reporting the stop. A zero length needs no re-read.
 
 > **Assert on `closingIssuesReferences`, never on a string match.** That field is GitHub's own resolution of the closing keywords, so it is true exactly when the merge will close the issue. A string match returns true for the keyword inside a code fence, inside a blockquote, or inside a sentence that negates it, and GitHub acts on none of those. A PR has merged with a body that satisfied a string check while closing nothing, and the run that produced it reported success.
 
@@ -373,14 +389,14 @@ pr:close report
   1d checks ................... lint ok, typecheck ok, test ok; CI <buckets> | STOPPED: <which> failed
   2  review gate .............. VERDICT: APPROVE, pr-review-<date>.md
   3  /pr:condense ............. condensed PLAN.md + CHANGELOG.md
-  4  PR + issue link .......... PR #<n> created | already open | draft marked ready; closes #<n> "<title>" verified
+  4  PR + issue link .......... PR #<n> created | already open | draft marked ready; closes #<n> "<title>" and no other issue, verified
   4b PR title ................. "[<id>] <title>" verified; created prefixed | already prefixed | normalized from "<old title>" | deferred to 8b (no PR yet)
   5  /pr:commitmsg ............ wrote COMMITMSG.md
   6  continuity + assertions .. <date>-<slug>.md added; A-<nnn> added | no invariant change (stated)
   6b deferred triage ......... N items: N dropped, N ticketed (issue #<n>) | none found
   7  commit + push ........... <sha> pushed to origin/<branch>
   8  terminal /pr:cp ......... tree clean | <sha> housekeeping commit
-  8b PR verified ............. PR #<n> title "[<id>] …", body <len> chars, closing ref to issue #<n> present
+  8b PR verified ............. PR #<n> title "[<id>] …", body <len> chars, closing ref to issue #<n> present and no other
 ```
 
 Use `skipped, <reason>` for anything not done. **Never report a step you did not perform.** Rows 7, 8 and 8b are filled after those steps run, so print them in the final message rather than this one.
@@ -426,8 +442,8 @@ The close itself writes files that can land **after** the step-7 commit, most of
 
 Step 4 owns this; here its one deferral is settled. The branch is pushed now, so the "no commits ahead" case that blocks creation at step 4 cannot still apply.
 
-- **Creation was deferred** → create the PR now exactly as step 4 describes, with the `[$ID] ` title, **including the edit that appends the closing reference.** The create alone does not add it.
-- **Then, unconditionally**, re-run step 4's verification against the final pushed state, title included. A zero length or a `false` is a **stop**, reported as a failed close.
+- **Creation was deferred** → create the PR now exactly as step 4 describes, with the `[$ID] ` title and **the closing line in the body it creates**, in the one write. The summary alone does not carry it.
+- **Then, unconditionally**, re-run step 4's verification against the final pushed state, title and stray references included. A zero length, a `false` or a stray is a **stop**, reported as a failed close, with each stray named.
 
 The duplication with step 4 is deliberate. Step 4 runs before the closing artifacts are committed, so its verdict describes a PR that step 7 then changes. This check describes what actually merges.
 

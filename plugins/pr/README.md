@@ -185,7 +185,7 @@ The mandatory gate before a merge, and the largest skill here. In order: `/pr:su
 
 Three of those deserve calling out:
 
-- **The issue link resolves by exact number and is then verified.** A `Closes #123` that reads correctly but did not register is the exact failure this workflow exists to prevent, so the skill asks GitHub what it actually resolved rather than trusting the string it just wrote. It halts on failure, on every path.
+- **The issue link resolves by exact number and is then verified.** A `Closes #123` that reads correctly but did not register is the exact failure this workflow exists to prevent, so the skill asks GitHub what it actually resolved rather than trusting the string it just wrote. It also halts when the PR would close any other issue, naming each one, so a closing line quoted from somewhere else cannot close an unrelated ticket on merge. It halts on failure, on every path.
 - **The title carries the ticket ID, and is verified alongside the link.** An existing PR missing the `[#123]` prefix gets it, keeping the rest of its title, and a wrong ticket ID in that position is replaced.
 - **Deferred-work triage happens here, once.** `PLAN.md § Deferred` is a triage inbox, not a backlog. Most entries exit as DROP; the rest become follow-up issues through `/pr:ticket`.
 
@@ -263,7 +263,7 @@ The default branch moved — does it affect me? Assesses what the new commits me
 /pr:summary
 ```
 
-Writes `pr-summary-<date>.md` into the plan folder: code examples, plan alignment, testing notes, impact. This document becomes the PR body at close.
+Writes `pr-summary-<date>.md` into the plan folder: code examples, plan alignment, testing notes, impact. This document becomes the PR body at close, so it carries no closing keyword with an issue number: the close adds the one closing line itself.
 
 ### `/pr:commitmsg`
 
