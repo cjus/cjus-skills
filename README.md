@@ -142,6 +142,13 @@ a green run proving nothing the declared mode covers. Absent `jq` is a supported
 configuration and a different one, with different right answers, and it has its
 own coverage in `skills/createbook/fixtures/jq-unrunnable/run.sh`.
 
+**The suite binds a book, so the workflow installs the binder's toolchain.**
+`skills/makebook/fixtures/bind/run.sh` binds a fixture book with `build-book.py`
+and checks the PDF and EPUB it writes. The workflow runs the same `install.sh` a
+person does, adds poppler, and asserts that Chromium can print a PDF and
+`pdftotext` can read it back. On a laptop without that toolchain the bind prints
+`skip`; in CI the skip is a failure.
+
 ## Releasing
 
 Each plugin releases on its own, and the procedure is the same for all four. `plugins/<plugin>/.claude-plugin/plugin.json` carries that plugin's version and is the source of truth for it. To cut a release, raise `version` there, commit, then:

@@ -2,6 +2,11 @@
 # verification the book checkers have and which until now ran only when someone
 # remembered to run them.
 #
+# It installs the binder's toolchain too, because one of those folders,
+# makebook/fixtures/bind, binds a real book. Without Chromium and poppler that
+# fixture skips, and --strict fails the run on the skip, so a toolchain that did
+# not install cannot pass as a bind that did not break.
+#
 # macOS is blocking because it is the only platform the plugins are developed and
 # tested on (README § Platform support). Linux runs alongside it to produce the
 # first recorded Linux run rather than to gate on one.

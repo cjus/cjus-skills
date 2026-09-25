@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+#
+# Bind a real book and assert on what the binder wrote. Nothing else in the
+# suite runs build-book.py end to end, so without this a binder regression
+# passes every fixture.
+#
+# It binds a COPY of createbook/fixtures/guide into a temp dir. The binder
+# writes its render HTML into the source folder and deletes it afterwards, so a
+# bind interrupted mid-run would otherwise leave a dotfile in a tracked fixture.
+#
+# It binds that copy twice, because the stamp cannot be read back from the book
+# as the fixture declares it:
+#
+#   as declared, no cover_image     both formats are written, page 2 of the
+#                                   PDF opens on Contents so the cover did not
+#                                   spill, and the EPUB's cover art is a PNG
+#                                   rasterised from the PDF's cover page
+#   with a declared cover_image     PDF page 1 and EPUB/cover.xhtml carry the
+#                                   same Created: stamp, in bind_stamp's form
+#
+# The EPUB keeps a text cover page, and so a stamp a script can read, only
+# behind declared art. Rasterised art stands in for that page and carries the
+# stamp as pixels. Binding only with declared art would never run the
+# rasterising path, whose failure the binder swallows and ships a book with no
+# cover art.
+#
+# The binder's toolchain is optional on a laptop and required in CI. With no
+# venv from install.sh, or no pdftotext, this prints skip and exits 0, and
+# --strict (implied by $CI) turns that skip into a failure. A toolchain that is
+# present but broken is not a skip: the bind fails, and so does this.
+#
+# Usage: ./run.sh          (from anywhere; paths are resolved from the script)
+# Exits 0 when every assertion holds, 1 otherwise.
+
+set -uo pipefail
+export LC_ALL=C
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+binder="$here/../../scripts/build-book.py"
+book="$here/../../../createbook/fixtures/guide"
+
+fails=0
+report() {
+  if [ "$1" -eq 0 ]; then echo "ok    $2"; else echo "FAIL  $2"; fails=1; fi
+}
+
+# The venv path is install.sh's and bookcraft-python's. It is checked here
+# rather than through bookcraft-python so that absent reads as a skip and
+# everything else reads as a failure.
+py="${XDG_CACHE_HOME:-$HOME/.cache}/bookcraft/venv/bin/python"
+if [ ! -x "$py" ]; then
+  echo "skip  no binder venv at $py; run scripts/install.sh to bind"
+  exit 0
+fi
+if ! command -v pdftotext >/dev/null 2>&1; then
+  echo "skip  no pdftotext on PATH, and the binder reads its PDF back through it"
+  exit 0
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+cp -R "$book" "$tmp/book"
+
+# bind <label> <out.pdf>: binds the copy, and stops the run if the bind fails,
+# since nothing after it has anything to read.
+bind() {
+  local out rc
+  out=$("$py" "$binder" "Guide Fixture" "$tmp/book" --out "$2" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    report 1 "$1: the bind exits $rc"
+    printf '%s\n' "$out" | sed 's/^/      | /'
+    exit 1
+  fi
+  report 0 "$1: the guide fixture binds"
+}
+
+# --- as declared -----------------------------------------------------------
+pdf="$tmp/declared/guide.pdf"
+epub="$tmp/declared/guide.epub"
+bind "as declared" "$pdf"
+
+[ -s "$pdf" ];  report $? "as declared: the PDF is written"
+[ -s "$epub" ]; report $? "as declared: the EPUB is written"
+[ "$fails" -eq 0 ] || exit 1
+
+p2=$(pdftotext -f 2 -l 2 "$pdf" - 2>&1 | sed -n '/[^[:space:]]/{p;q;}')
+if [ "$p2" = "Contents" ]; then
+  report 0 "as declared: page 2 is Contents, so the cover fits on page 1"
+else
+  report 1 "as declared: page 2 opens on '$p2', not Contents: the cover spilled onto a second page"
+fi
+
+art=$("$py" - "$epub" <<'EOF' 2>&1
+import re, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+opf = z.read("EPUB/content.opf").decode("utf-8")
+item = re.search(r'<item [^>]*properties="cover-image"[^>]*>', opf)
+if not item:
+    sys.exit("content.opf declares no cover-image")
+href = re.search(r'href="([^"]+)"', item.group(0)).group(1)
+if not z.read("EPUB/" + href).startswith(b"\x89PNG\r\n\x1a\n"):
+    sys.exit(f"the cover-image {href} is not a PNG")
+EOF
+); rc=$?
+if [ "$rc" -eq 0 ]; then
+  report 0 "as declared: the EPUB's cover art is a PNG rasterised from the PDF cover"
+else
+  report 1 "as declared: the EPUB has no rasterised cover art: $art"
+fi
+
+# --- with a declared cover_image ---------------------------------------------
+"$py" - "$tmp/book/book.json" <<'EOF'
+import json, sys
+cfg = json.load(open(sys.argv[1], encoding="utf-8"))
+cfg["cover_image"] = "diagrams/the-two-profiles.svg"
+json.dump(cfg, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
+EOF
+pdf="$tmp/cover-image/guide.pdf"
+epub="$tmp/cover-image/guide.epub"
+bind "cover_image" "$pdf"
+
+# One stamp per bind, in bind_stamp's form. Matching the form, and not just the
+# word, is what catches a stamp that was printed but broken.
+stamp_re='^Created: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} '
+pdf_stamp=$(pdftotext -f 1 -l 1 "$pdf" - 2>/dev/null | grep -E -m1 "$stamp_re")
+epub_stamp=$("$py" - "$epub" <<'EOF' 2>&1 | grep -E -m1 "$stamp_re"
+import re, sys, zipfile
+cover = zipfile.ZipFile(sys.argv[1]).read("EPUB/cover.xhtml").decode("utf-8")
+print("\n".join(re.findall(r"Created: [^<]*", cover)))
+EOF
+)
+if [ -z "$pdf_stamp" ]; then
+  report 1 "cover_image: PDF page 1 carries no Created: stamp in bind_stamp's form"
+elif [ -z "$epub_stamp" ]; then
+  report 1 "cover_image: EPUB/cover.xhtml carries no Created: stamp in bind_stamp's form"
+elif [ "$pdf_stamp" != "$epub_stamp" ]; then
+  report 1 "cover_image: the stamps differ: PDF page 1 says '$pdf_stamp', EPUB/cover.xhtml says '$epub_stamp'"
+else
+  report 0 "cover_image: PDF page 1 and EPUB/cover.xhtml carry the same stamp"
+fi
+
+exit "$fails"

@@ -24,3 +24,40 @@ a heredoc's line and closed on the next, where the heredoc body had already begu
 
 `install.sh` and `bookcraft-python` joined the executable-bit check, since CI now runs both through
 their shebangs.
+
+### 2026-09-25 — Phases 2, 3 and 5: the bind fixture
+
+**The bind runs inside the suite, per the operator,** as `makebook/fixtures/bind/run.sh`, so a
+contributor with the toolchain catches a binder break before pushing. It costs about 3s. Without
+`install.sh`'s venv or `pdftotext` it prints `skip`, which `--strict` and CI fail; a toolchain that
+is present but broken fails the bind.
+
+**It binds a copy of `createbook/fixtures/guide`,** because the binder writes its render HTML into
+the source folder and deletes it after, and an interrupted bind would leave a dotfile in a tracked
+fixture. Four mutated binders (a cover spilling to page 2, an EPUB stamp that differs, a stamp in
+the wrong form, no EPUB written) each fail on the assertion meant for them.
+
+**Open PR #39 collides with the stamp assertion.** With no `cover_image` it stops building
+`EPUB/cover.xhtml`, the file the assertion reads, so the check needs a decision before either
+branch merges second.
+
+The headers of `fixtures.yml` and `display-names/run.sh`, the bookcraft README's fixture section,
+`createbook/NOTES.md`'s note that the suite does not bind, and the root README's CI section now say
+what is true.
+
+### 2026-09-25 — Two binds, so the stamp check survives PR #39
+
+**The fixture binds its copy twice, per the operator.** As declared, it checks the formats, page 2
+and the EPUB's cover art, which has to be a real PNG: the binder swallows a rasterising failure and
+ships no art. With a `cover_image` added, it compares the stamps, since #39 keeps `cover.xhtml` only
+behind declared art. Measured against #39's binder at `c55a002`: the declared bind has no
+`cover.xhtml`, and the fixture passes. About 5s for both binds. A fifth mutant, rasterising that
+returns nothing, fails on the cover-art check.
+
+### 2026-09-25 — Phase 6: #37's two regression fixtures, after #39 merges
+
+#37 closed by folding two fixtures into #32 through a comment on the ticket: the look-alike
+appendix slug (#35) and the appendix-table repair (#20). Both reproduce, from #37's own repro
+files: `main`'s binder prints the middle file of the slug book as a second `A1` and warns on the
+table, and #39's does neither. **The operator added them as Phase 6, to land after #39 merges,**
+since on `main` they fail by design.
