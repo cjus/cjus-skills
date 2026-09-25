@@ -168,6 +168,12 @@ neither can be judged against anything here; both are still listed on the unit
 under `unchecked`, because a paragraph resting half on a source and half on the
 book's own knowledge must not be read as though the source owed all of it.
 
+An `assertion <id>` component is listed under `unchecked` for the same reason,
+and the unit also carries the entry itself under `entries`, statement and all,
+since the reading agent is given this file and nothing else. Each chapter's
+file also carries every `settled` entry that holds, under `settled`: a review's
+ruling on how to read a source applies wherever that source is cited.
+
 ## Marks citing assertions.json
 
 `assertions.json` holds what the book was told or settled that no source holds
@@ -1372,12 +1378,29 @@ def worklist_component(src, name, component, rest, slide, verdict="ok"):
     return _tidy(rec)
 
 
-def write_worklist(emit_dir, book, by_chapter, scoped):
+def entry_record(e):
+    """One assertions.json entry, as a reading agent needs it in a worklist."""
+    rec = {"id": e["id"], "kind": e["kind"], "statement": e["statement"],
+           "status": e["status"]}
+    for k in ("corrects", "answers"):
+        if k in e:
+            rec[k] = e[k]
+    return rec
+
+
+def write_worklist(emit_dir, book, by_chapter, scoped, settled):
     """One JSON file per chapter, plus a small index the caller can read.
 
     The split is the point: an orchestrator reads `index.json` and hands each
     chapter's file to its own agent, so the book's prose never lands in one
     context. `index.json` carries counts and no prose for the same reason.
+
+    Each chapter's file also carries every `settled` entry that holds, because
+    /check-claims gives an agent one file and nothing else, and a settled
+    entry is exactly the thing that stops a reading pass raising a finding a
+    review already ruled on. Every file gets the whole list: a settled reading
+    of a source applies wherever that source is cited, not only where a mark
+    cites the entry.
     """
     d = pathlib.Path(emit_dir)
     d.mkdir(parents=True, exist_ok=True)
@@ -1391,6 +1414,7 @@ def write_worklist(emit_dir, book, by_chapter, scoped):
             "chapter": {"kind": kind, "number": number, "file": path.name},
             "generated": today,
             "sources": used,
+            "settled": settled,
             "units": units,
         }, indent=2, ensure_ascii=False) + "\n")
         index.append({
@@ -1735,6 +1759,7 @@ def main(argv):
             has_unreadable = None
             wl_sources = []     # resolved pointers, for --emit-worklist
             wl_unchecked = []   # fill and in-book components, named not judged
+            wl_entries = []     # assertions.json entries the mark cites
 
             for c in comps:
                 # Ahead of `unsourced`, so the reserved word wins over any
@@ -1753,6 +1778,8 @@ def main(argv):
                                 f"the book has no {register.FILE}")
                     elif reg_state == "ok":
                         e = reg.get(aid)
+                        if e is not None:
+                            wl_entries.append(entry_record(e))
                         if e is None:
                             problem(f"{where}: the mark cites assertion {aid}, "
                                     f"which {register.FILE} does not have")
@@ -1841,6 +1868,7 @@ def main(argv):
                     "text": unit,
                     "sources": wl_sources,
                     "unchecked": wl_unchecked,
+                    "entries": wl_entries,
                 })
 
             if mode == "locators" or not named:
@@ -1956,7 +1984,9 @@ def main(argv):
 
     if emit_dir:
         scoped = sorted(want_chapters) if want_chapters is not None else None
-        index = write_worklist(emit_dir, book, worklist, scoped)
+        settled = [entry_record(e) for _, e in sorted(reg.items())
+                   if e["kind"] == "settled" and e["status"] == "holds"]
+        index = write_worklist(emit_dir, book, worklist, scoped, settled)
         n_units = sum(c["units"] for c in index)
         n_ptr = sum(c["sources"] for c in index)
         print(f"WORKLIST {n_units} unit(s) across {len(index)} chapter(s), "

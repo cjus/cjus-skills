@@ -178,7 +178,7 @@ The skill stops and creates the file before doing what it was asked.
 - [x] Report every `holds` entry with `applies_to: "prose"` and `citation: "expected"` that no mark cites. After a recreate, this report names each assertion the new book dropped. `legacy` entries are left out, because nothing could cite them yet, and reporting them would list nearly every backfilled entry on every run until the recreate.
 - [x] Add an `assertion` count to the census line.
 - [ ] Replace `unsourced` labels with entries wherever a label stands for a fact rather than a method. That makes the 42 marks above checkable, and `measured` joins them once the measurements are entries. `fill` stays.
-- [ ] Have `/check-claims` give each chapter agent the entries its marks cite. Before raising a finding, the agent consults any `settled` entry that already settles it. The reference guide's outline records one finding that the claim check raises as `unclear` on every run.
+- [x] Have `/check-claims` give each chapter agent the entries its marks cite. Before raising a finding, the agent consults any `settled` entry that already settles it. The reference guide's outline records one finding that the claim check raises as `unclear` on every run.
 
 ### `/createbook`
 
@@ -189,12 +189,12 @@ The skill stops and creates the file before doing what it was asked.
 
 ### `/updatebook`
 
-- [ ] Step 0: stop and backfill when the file is missing, as described above.
-- [ ] Step 2: add a row to the classification table. An instruction that supplies a fact no source holds, rules on the sources or the scope, changes a premise, or adopts a recommendation writes or supersedes an entry. It does so in the same run and before the prose changes.
-- [ ] Step 3: an edit that rewrites a paragraph resting on a `legacy` entry gives it a mark citing the entry. Once every paragraph resting on that entry cites it, the edit changes the entry to `expected`.
-- [ ] Step 4: add the file to the list of what an edit carries.
-- [ ] Step 5: run `check`, and read the file's diff alongside the chapter diff.
-- [ ] `§ Rewriting one chapter` and `§ Recreating the book`: read the file, not `git log -p`.
+- [x] Step 0: stop and backfill when the file is missing, as described above.
+- [x] Step 2: add a row to the classification table. An instruction that supplies a fact no source holds, rules on the sources or the scope, changes a premise, or adopts a recommendation writes or supersedes an entry. It does so in the same run and before the prose changes.
+- [x] Step 3: an edit that rewrites a paragraph resting on a `legacy` entry gives it a mark citing the entry. Once every paragraph resting on that entry cites it, the edit changes the entry to `expected`.
+- [x] Step 4: add the file to the list of what an edit carries.
+- [x] Step 5: run `check`, and read the file's diff alongside the chapter diff.
+- [x] `§ Rewriting one chapter` and `§ Recreating the book`: read the file, not `git log -p`.
 
 ### Recreating a book
 
@@ -262,13 +262,16 @@ The skill stops and creates the file before doing what it was asked.
       `## Decision: a recreate is a /createbook flag, into a new folder` below. An old folder
       with no file stops it for now; Phase 5 turns that stop into a backfill, along with the
       same stop for any existing folder, because it writes the procedure both run.
-- [ ] Phase 4: `/updatebook` and `/check-claims`. Step 0 stops on a missing file: backfill,
+- [x] Phase 4: `/updatebook` and `/check-claims`. Step 0 stops on a missing file: backfill,
       confirm, commit, then step 0 again. Add the classification row, the `legacy` to `expected`
       rule, the carry, and `check` at step 5. The rewrite and recreate sections read the file,
       not `git log -p`. `/check-claims` stops and backfills too, and reads `settled` entries.
       `/makebook`'s exemption is stated.
       Per the recreate decision below, the "Recreate the book" level and `§ Recreating the
       book` name the `/createbook --recreate` command and do not run the recreate.
+      Done 2026-09-25. `/check-claims`' agents get their entries through the worklist, since
+      each is given one chapter file and nothing else: `check-provenance.sh --emit-worklist`
+      now carries each unit's cited entries and every `settled` entry that holds.
 - [x] Phase 5: The backfill procedure. Candidate sources, operator confirmation, the `created`
       block, `legacy` marking, the premise sweep on a superseded premise, and derived keys as one
       `answers` entry with corrected dates taken from the commits that made them.

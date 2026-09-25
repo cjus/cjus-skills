@@ -268,16 +268,17 @@ Revises a book in place.
 
 **A chapter the instruction does not reach comes back byte-identical.** Not similar, and provably so: the skill diffs against the starting state to show it. That is the guarantee the whole skill exists for, because paragraph tags are addresses other files cite and a rerun would renumber them silently.
 
-Two things travel with an edit, or the record stops being one:
+Three things travel with an edit, or the record stops being one:
 
 - **`OUTLINE.md`** is what the book was written against, so a change to a chapter's scope, terms or anchors moves the outline in the same run.
 - **`glossary.md`** is derived from the outline's term ledger, so a term that arrives or retires reaches it in the same run.
+- **`assertions.json`** holds what the book stands behind with no source to check it against. An instruction that supplies such a fact, rules on the sources, adopts a recommendation or changes a premise writes an entry in the same run, before the prose changes.
 
 **A new paragraph takes a lettered tag, so nothing renumbers.** A paragraph added after `[5-12]` is `[5-12a]`, and `[5-13]` stays where it is. A paragraph grows only while it stays at 90 words, and new text never goes into a callout, table or list just because those take no tag.
 
-**Some changes are not edits.** When a fact a chapter's plans are built on changes, or a chapter needs several new paragraphs at once, the skill rewrites that one chapter, keeping its number and repointing citations into it. When the chapters' boundaries or order change, or the rules the book was written under do, it says the book is due for a recreate with `/createbook`. Either way it moves any fact a revision put only into the prose into `OUTLINE.md` first, so the rewrite does not drop it.
+**Some changes are not edits.** When a fact a chapter's plans are built on changes, or a chapter needs several new paragraphs at once, the skill rewrites that one chapter, keeping its number and repointing citations into it. When the chapters' boundaries or order change, or the rules the book was written under do, it names the command for a recreate, `/createbook --recreate`, and stops. Either way the facts the rewrite must keep are already entries in `assertions.json`, so neither one drops them.
 
-It runs both checkers before the edit as well as after, because a failure that was already there is not yours and finding that out afterwards costs an hour. It stops on uncommitted changes in the book folder, since those poison the proof that untouched chapters are untouched.
+It runs both checkers before the edit as well as after, because a failure that was already there is not yours and finding that out afterwards costs an hour. It stops on uncommitted changes in the book folder, since those poison the proof that untouched chapters are untouched. **A book with no `assertions.json` stops the first run that touches it, even a one-word fix,** for a backfill you confirm: the skill gathers what the book was told or settled from its outline, marks and history, asks about the doubtful ones, and commits the file before the edit begins.
 
 A rebind is not automatic: an in-place edit leaves the bound PDF and EPUB stale, and the skill reports that with the command to fix it rather than running it for you.
 
@@ -300,6 +301,8 @@ Three things it is not:
 - **Not cheap.** One agent per chapter reading real sources is minutes of wall time and real tokens. Nothing runs it for you.
 
 Pass `--chapters` to scope it. An `/updatebook` run already knows which chapters its edit reached.
+
+It reads the book's `assertions.json` too, and stops for a backfill where there is none. Each agent gets the entries its chapter's marks cite, so a claim resting on one is never reported against the source beside it, and every `settled` entry, so a finding a review already ruled on is not raised again.
 
 ---
 

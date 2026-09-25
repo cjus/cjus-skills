@@ -201,3 +201,35 @@ triage decision in eight steps:
 `/createbook` now stops and backfills for an existing folder, whether adding chapters or
 recreating. `/makebook`'s exemption and the absence of any skip flag are stated where the
 procedure opens.
+
+### 2026-09-25 12:15:51 MDT — Phase 4: /updatebook, /check-claims and /makebook
+
+**`/updatebook`:**
+- **Step 0** stops on a missing file: backfill, confirm, commit, then step 0 again, with no skip
+  flag. It also runs `assertions.sh check` and records the `assertions` census line.
+- **Step 1** reads `list` beside the outline.
+- **Step 2** gains a classification row: supplying a fact, ruling on the sources or scope, or
+  adopting a recommendation writes an entry before the prose changes. The "Changes a premise"
+  row now supersedes the premise first, with `search` phrases, so the sweep finds the old
+  passages.
+- **Step 3:** a rewritten paragraph cites its entry, and `expect` runs once every paragraph
+  resting on a `legacy` entry cites it.
+- **Step 4** carries the file, and a re-run measurement supersedes its entry.
+- **Step 5** checks the file, reads its diff beside the chapters', and compares the
+  `assertions` line.
+- **Step 6** reports entry changes by ID.
+- **`§ Rewriting one chapter`** reads the file instead of `git log -p`, and passes carried
+  entries to the chapter agent. **`§ Recreating the book`** names `/createbook --recreate` and
+  stops.
+
+**`/check-claims`:** step 1 stops on a missing file. `judgement.md` gains
+`§ Entries the book stands behind`: a sentence that could rest on a cited entry does, and
+`settled` entries are read before any finding is raised. The entries reach the agents through
+the worklist, because each gets one chapter file and nothing else. `--emit-worklist` adds
+`entries` to each unit and `settled` to each chapter file.
+
+**`/makebook`** states its exemption in its notes. The README's `/updatebook` section no longer
+says facts are carried into `OUTLINE.md` by hand.
+
+Worklist tested on a scratch book: a unit citing a source and an entry carried the entry, and
+the chapter file carried the settled one. `scripts/test-fixtures.sh`: 16 passed, 0 failed.

@@ -20,7 +20,7 @@ Nothing below this line is checkable by machine. `check-provenance.sh` will conf
 
 - **The prose.** Whether it reads well, whether the example is good, whether a heading is right. Not your job.
 - **Whether a better source exists.** The book chose its sources; you check the ones it named.
-- **Anything under `unchecked`.** Those components are `fill` (the book's own knowledge, declared as such) or in-book references like `[16-4]` and `chapter 7`. `fill` names no external source, so nothing can be checked against it, and an in-book reference is `check-references.sh`'s job. A paragraph is allowed to be mostly `fill`.
+- **Anything under `unchecked`.** Those components are `fill` (the book's own knowledge, declared as such), in-book references like `[16-4]` and `chapter 7`, or `assertion <id>`, an entry in the book's `assertions.json` (§ Entries the book stands behind). `fill` names no external source, so nothing can be checked against it, an in-book reference is `check-references.sh`'s job, and an entry is the operator's record. A paragraph is allowed to be mostly `fill`.
 - **Claims about the book itself.** "Chapter 18 keys it so" is a claim about this book, not about a source.
 - **A locator that FAILED to resolve.** `check-provenance.sh` fails the run on one of those, and the skill stops before you are spawned. **An unasserted locator is a different thing and it does reach you.** A locator in no grammar the script reads is counted rather than checked, the run still exits 0, and its pointer carries a note saying so. 31 of the reference book's 1,208 pointers are in that state. Treat such a locator as a hint about where to look rather than as an established address, and say in `read` what you actually used.
 
@@ -31,6 +31,13 @@ Nothing below this line is checkable by machine. `check-provenance.sh` will conf
 Where a sentence could plausibly rest on an `unchecked` component, it does. The asymmetry is deliberate. This format asks a book to declare its fill honestly and the reference book does: 451 of its 1,822 components are `fill`. Reading an unattributed sentence as a failed source claim would invent findings out of exactly the honesty the format was built to encourage, and a report full of those is a report nobody reads twice.
 
 So: a sentence is a candidate for a finding only when it is **specifically** attributed to a named source, by naming it ("the syllabus says", "the deck's slide 3"), by sitting in a paragraph whose only components are named sources, or by making a claim so specific that no `fill` component could cover it.
+
+## Entries the book stands behind
+
+Some claims rest on neither a source nor `fill` but on an entry in the book's `assertions.json`: a fact the operator supplied, a ruling on the sources, a premise, a measurement. A mark cites one as `assertion <id>`, and the unit's `entries` carry each cited entry's statement.
+
+- **A sentence that could rest on a cited entry does**, by the mapping rule above. The entry is the book's own record, confirmed by the operator, so a claim it carries is never a finding against the source the mark also names. The entry itself is not yours to judge.
+- **Read the file's `settled` list before raising any finding.** Each holds something a review already settled: a misreading corrected, a PDF whose printed page numbers are offset from its index, an answer that was derived and checked. Where one settles what you were about to raise, read the source the way the entry says and judge what you find then. Do not raise the settled point again. Say in `read` which entry you used.
 
 ## The verdicts
 
@@ -125,5 +132,5 @@ One JSON object. Write it to the path the prompt gives you; return only the path
 
 - Every finding quotes a real sentence from the unit text you were given. Re-read them against the worklist; a quotation you reconstructed from memory is the fault this whole check exists to catch, committed by the checker.
 - Every `unsupported` says what you read. An absence is bounded by where you looked.
-- No finding is about prose, about a better source, or about an `unchecked` component.
+- No finding is about prose, about a better source, or about an `unchecked` component, and none raises again what a `settled` entry already settles.
 - The counts sum to `units_checked`.
