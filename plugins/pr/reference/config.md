@@ -117,19 +117,22 @@ With `ticketPrefix` empty, issue `123` titled "Fix the blank render" yields:
 - Branch `feature/123-fix-the-blank-render`
 - Branch slug `123-fix-the-blank-render`
 - Changelog folder `changelog/123-fix-the-blank-render/`
+- Title tag `#123`
 - PR title `[#123] Fix the blank render`
 
 With `ticketPrefix` set to `abc`:
 
 - Ticket ID `ABC-123`
 - Branch `feature/abc-123-fix-the-blank-render`
+- Title tag `ABC-123`
 - PR title `[ABC-123] Fix the blank render`
 
 **The slug is the title lowercased, non-alphanumerics collapsed to single hyphens, then trimmed.** Every skill that derives a slug uses that one rule, so two skills asked about the same issue produce the same branch name.
 
-**The PR title is the ticket ID in square brackets, one space, then the title.** A bare issue number keeps its `#` inside the brackets, so it still reads as a GitHub reference. A prefixed ID has no `#`, because `#ABC-123` is not a GitHub reference. `/pr:pre-test` builds the title from PLAN.md's H1, and `/pr:close` builds it from the issue title. `/pr:start` wrote the first from the second, so they normally agree.
+**The PR title is the title tag in square brackets, one space, then the title.** The title tag is the ticket ID, with a `#` in front when the ID is a bare issue number. That `#` makes the tag read as a GitHub reference. A prefixed ID gets no `#`, because `#ABC-123` is not a GitHub reference. `/pr:pre-test` builds the title from PLAN.md's H1, and `/pr:close` builds it from the issue title. `/pr:start` wrote the first from the second, so they normally agree.
 
-- **A title counts as prefixed only when it starts with exactly `[<ticket ID>] `.** A matching ID later in the title does not count. GitHub appends the PR number to the end of a squash subject, so only the start of the title keeps the ticket at a fixed position.
+- **A title counts as prefixed only when it starts with exactly `[<title tag>] `**, meaning `[#123] ` or `[ABC-123] `. A matching tag later in the title does not count. GitHub appends the PR number to the end of a squash subject, so only the start of the title keeps the ticket at a fixed position.
+- **A leading token is ticket-shaped** when it is `[#<digits>]`, or `[<PREFIX>-<digits>]` in any case with a prefix configured, whether or not it matches this ticket. `[#<digits>]` counts even in a prefixed repo, so a repo that adopts a prefix later can still correct its open PRs. Any other leading tag, such as `[WIP]`, belongs to the operator. `/pr:close § Step 4b` replaces a ticket-shaped token and keeps the operator's tags.
 - **A branch that carries no ticket gets no prefix.** It has no ID to put there, and inventing one is worse than leaving the title unprefixed.
 
 The prefix exists because a PR's number never matches its ticket's. `ticketing.md § PR numbers are not ticket numbers` explains why, and how the prefix reaches the commit that lands on the default branch.

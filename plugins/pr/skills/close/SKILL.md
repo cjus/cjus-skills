@@ -27,7 +27,7 @@ The sequence, one row each:
 - **2** review gate
 - **3** `/pr:condense`
 - **4** PR exists, and the issue is linked by a **verified** closing reference
-- **4b** PR title starts with the ticket ID, **verified**
+- **4b** PR title starts with `[<title tag>] `, **verified**
 - **5** `/pr:commitmsg`
 - **6** continuity entry and the assertion audit
 - **6b** deferred-work triage
@@ -45,7 +45,7 @@ The sequence, one row each:
 node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-lifecycle-state.mjs" --text
 ```
 
-Take the branch, slug, repo, default branch, ticket number and plan folder from that. Read `.claude/pr-config.json` for `checks`, `docs`, `migrations`, `closeGate` and `ticketPrefix`. Derive the ticket ID as the PR title writes it, from the number and `ticketPrefix`, per `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`: `#32` with no prefix, `ABC-32` with one. Step 4 and step 4b use it as `$ID`, so the title prefix is `[$ID] `.
+Take the branch, slug, repo, default branch, ticket number and plan folder from that. Read `.claude/pr-config.json` for `checks`, `docs`, `migrations`, `closeGate` and `ticketPrefix`. Derive the title tag from the number and `ticketPrefix`, per `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`: `#32` with no prefix, `ABC-32` with one. Step 4 and step 4b use it as `$ID`, so the title prefix is `[$ID] `, and use `$PREFIX` for `ticketPrefix` uppercased, empty when none is set.
 
 ## Step 0. Clear a stale close sentinel
 
@@ -254,23 +254,28 @@ gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
 
 The title is what carries the ticket into the squash commit on the default branch. GitHub appends only the PR number, so an unprefixed title lands as `<title> (#41)` with the ticket nowhere in it. See `${CLAUDE_PLUGIN_ROOT}/reference/ticketing.md § PR numbers are not ticket numbers`.
 
-A PR this run just created already has the prefix. For a PR that already existed, read the title, and **stop if the read fails or comes back empty**, for the same reason as the body read above:
+A PR this run just created already has the prefix. For a PR that already existed, read the title, and **stop if the read fails or comes back empty**, for the same reason as the body read above. Then normalize it, and edit only when that changed it:
 
 ```bash
-TITLE=$(gh pr view "$BRANCH" --repo "$REPO" --json title --jq .title) && [ -n "$TITLE" ]
+TITLE=$(gh pr view "$BRANCH" --repo "$REPO" --json title --jq .title) && [ -n "$TITLE" ] \
+  && NEW_TITLE=$(jq -rn --arg t "$TITLE" --arg id "$ID" --arg p "$PREFIX" '
+       ("^(\\[(#[0-9]+" + (if $p == "" then "" else "|" + $p + "-[0-9]+" end) + ")\\][ :]*)+") as $re
+       | "[\($id)] " + ($t | sub($re; ""; "i"))') && [ -n "$NEW_TITLE" ] \
+  && { [ "$NEW_TITLE" = "$TITLE" ] || gh pr edit "$BRANCH" --repo "$REPO" --title "$NEW_TITLE"; }
 ```
 
-| Title | Action |
+**The transform strips every leading ticket-shaped token, then puts `[$ID] ` in front.** A ticket-shaped token is defined in `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`: `[#<digits>]`, or `[<PREFIX>-<digits>]` in any case when a prefix is configured, whether or not it matches this ticket, together with any spaces or colon after it. That one rule covers every case, and running it twice changes nothing:
+
+| Before (`$ID` is `#44`) | After |
 |---|---|
-| Starts with exactly `[$ID] ` | Leave it. |
-| Starts with a different ID of the same shape, `[#<digits>] `, or `[<PREFIX>-<digits>] ` with a prefix configured | Replace that token with `[$ID]` and keep the rest. Name the old token in the report: the PR was titled for a different ticket or the number was mistyped, and step 4 has just confirmed this branch's ticket by exact number. |
-| Anything else | Prepend `[$ID] ` and keep the rest. The operator's wording stays. The prefix is added, and the words are not replaced with the issue title. |
+| `[#44] Carry the ticket` | unchanged, no edit |
+| `Carry the ticket` | `[#44] Carry the ticket` |
+| `[#44]Carry`, `[#44]: Carry`, `[#44] [#44]Carry` | `[#44] Carry` |
+| `[#4] Carry` | `[#44] Carry` |
+| `[WIP] Carry` | `[#44] [WIP] Carry` |
+| `[#12] Carry`, with `$ID` `ABC-32` in a prefixed repo | `[ABC-32] Carry` |
 
-```bash
-gh pr edit "$BRANCH" --repo "$REPO" --title "[$ID] <title without any old prefix>"
-```
-
-**Only a leading ticket-shaped token is ever replaced.** Everything else in the title stays as written. That includes a leading tag that is not ticket-shaped, such as `[WIP]`: it belongs to the operator, so the prefix goes in front of it, as `[$ID] [WIP] …`.
+**The operator's words stay.** The prefix is corrected and the rest of the title is kept, not replaced with the issue title. A leading tag that is not ticket-shaped, such as `[WIP]` or `[XYZ-9]`, is the operator's, and the prefix goes in front of it. **When the edit replaced a different ticket number, report the old title**: the PR was titled for another ticket, or the number was mistyped, and step 4 has just confirmed this branch's ticket by exact number.
 
 ### Verify on every path, and halt on failure
 
@@ -278,10 +283,16 @@ This assertion is the point of the step, and it runs whether the PR was just cre
 
 ```bash
 gh pr view "$BRANCH" --repo "$REPO" --json body,closingIssuesReferences,title \
-  --jq "[(.body | length), ([.closingIssuesReferences[].number] | index($N) != null), (.title | startswith(\"[$ID] \"))]"
+  | jq -c --argjson n "$N" --arg id "$ID" --arg p "$PREFIX" '
+      ("^(\\[(#[0-9]+" + (if $p == "" then "" else "|" + $p + "-[0-9]+" end) + ")\\][ :]*)+") as $re
+      | [(.body | length),
+         ([.closingIssuesReferences[].number] | index($n) != null),
+         (.title == "[\($id)] " + (.title | sub($re; ""; "i")))]'
 ```
 
-Require a non-zero length, then `true`, then `true`. Any one failing is a **stop**, reported as "PR body is empty", "the PR does not close #N" or "the PR title does not start with [$ID]", never as a warning appended to an otherwise successful report.
+Require a non-zero length, then `true`, then `true`. Any one failing is a **stop**, reported as "PR body is empty", "the PR does not close #N" or "the PR title is not `[$ID] <title>`", never as a warning appended to an otherwise successful report. **No output at all is a failed read, and also a stop.** A pipe's exit status is `jq`'s, so a `gh` failure shows up as an empty result, not as an error.
+
+**The title check is a fixed point:** the title passes only if step 4b's transform would leave it unchanged. A plain `startswith("[$ID] ")` would also pass `[#44] [#44]Carry`, the doubled prefix most likely to slip through, and that title would then land in the squash subject.
 
 **A `false` straight after an edit is not yet a verdict.** `closingIssuesReferences` lags a body edit by a moment, so re-read it, up to three reads in all, before reporting the stop. A zero length needs no re-read.
 
@@ -363,7 +374,7 @@ pr:close report
   2  review gate .............. VERDICT: APPROVE, pr-review-<date>.md
   3  /pr:condense ............. condensed PLAN.md + CHANGELOG.md
   4  PR + issue link .......... PR #<n> created | already open | draft marked ready; closes #<n> "<title>" verified
-  4b PR title ................. "[<id>] <title>" verified; created prefixed | already prefixed | prefixed this run | replaced [<old id>]
+  4b PR title ................. "[<id>] <title>" verified; created prefixed | already prefixed | normalized from "<old title>" | deferred to 8b (no PR yet)
   5  /pr:commitmsg ............ wrote COMMITMSG.md
   6  continuity + assertions .. <date>-<slug>.md added; A-<nnn> added | no invariant change (stated)
   6b deferred triage ......... N items: N dropped, N ticketed (issue #<n>) | none found

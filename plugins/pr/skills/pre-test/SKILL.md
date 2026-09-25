@@ -45,11 +45,11 @@ gh pr list --head "$BRANCH" --repo "$REPO" --state all --json number,state,isDra
 ```bash
 git push -u origin HEAD
 gh pr create --draft --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" \
-  --title "[<ticket ID>] <PLAN.md's H1, or the branch slug>" \
+  --title "[<title tag>] <PLAN.md's H1, or the branch slug>" \
   --body "$(printf '<!-- pr:pre-test:draft-placeholder -->\n\nDraft opened by /pr:pre-test so CI runs while the branch is still in development. /pr:close replaces this body with the PR summary and adds the closing reference.')"
 ```
 
-**Prefix the title with the ticket ID**, `[#32]`, or `[ABC-32]` with `ticketPrefix` set, per `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`. Take the number from the state check's `ticket` line. A branch with no ticket gets no prefix. The prefix is what carries the ticket into the squash commit on the default branch, because GitHub appends only the PR number. An existing PR is left alone here, title included: `/pr:close` corrects the title on every run.
+**Prefix the title with the title tag in brackets**, `[#32]`, or `[ABC-32]` with `ticketPrefix` set, per `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Deriving the ticket ID, the branch slug and the PR title`. Take the number from the state check's `ticket` line. A branch with no ticket gets no prefix. The prefix is what carries the ticket into the squash commit on the default branch, because GitHub appends only the PR number. An existing PR is left alone here, title included: `/pr:close` corrects the title on every run.
 
 **Keep the `pr:pre-test:draft-placeholder` marker as the body's first line.** `/pr:close` keys on it to know the body is a stub to replace wholesale rather than a real description to preserve. Dropping the marker makes the placeholder text survive into the merged PR. The lifecycle script anchors its check to `startsWith`, so the marker must lead the body, not merely appear in it.
 

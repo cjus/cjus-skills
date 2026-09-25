@@ -222,6 +222,8 @@ OUT=$(FAKE_CLOSES='[{"number":42}]' PATH="$FAKE:$PATH" GIT_SSH_COMMAND=false nod
 chk "a linked PR reads PR #n -> closes #ticket"  "pr       PR #57 → closes #42"   "$OUT"
 OUT=$(PATH="$FAKE:$PATH" GIT_SSH_COMMAND=false node "$S" --text)
 chk "an unlinked PR names the missing ref"       "PR #57 → no closing ref to #42" "$OUT"
+OUT=$(FAKE_CLOSES='[{"number":99}]' PATH="$FAKE:$PATH" GIT_SSH_COMMAND=false node "$S" --text)
+chk "a PR closing another issue still names it"  "PR #57 → closes #99, no closing ref to #42" "$OUT"
 git checkout -q main
 rm -rf "$FAKE"
 

@@ -137,13 +137,16 @@ gh api "repos/$REPO" --jq '[.allow_squash_merge, .squash_merge_commit_title, .sq
 
 Under `COMMIT_OR_PR_TITLE`, **a PR with a single commit lands with that commit's subject, not its title**, so the ticket prefix silently fails to reach the default branch on exactly the small PRs that are easiest to merge without looking. Ask with `AskUserQuestion`, carrying `PR_TITLE` as the recommended option, and say plainly that it changes a setting on the GitHub repo, not a file in it. **Never change it without a yes.** It is a repo-wide setting, and it applies to PRs that never went through this plugin.
 
-On a yes, send the current message setting back unchanged. GitHub requires the title whenever the message is sent, and sending both makes the call change the title and nothing else:
+On a yes, read the current message setting and send it back unchanged with the new title. That pins the pair, so the call changes only the title. GitHub's docs require the title whenever the message is sent, which this call satisfies:
 
 ```bash
-gh api -X PATCH "repos/$REPO" \
-  -f squash_merge_commit_title=PR_TITLE \
-  -f squash_merge_commit_message="$CURRENT_MESSAGE"
+CURRENT_MESSAGE=$(gh api "repos/$REPO" --jq .squash_merge_commit_message) && [ -n "$CURRENT_MESSAGE" ] \
+  && gh api -X PATCH "repos/$REPO" \
+       -f squash_merge_commit_title=PR_TITLE \
+       -f squash_merge_commit_message="$CURRENT_MESSAGE"
 ```
+
+**Read the message on its own, and stop if it comes back empty.** An empty string is not one of the message values GitHub accepts (`PR_BODY`, `COMMIT_MESSAGES`, `BLANK`), so the call would fail, and not for the admin reason described below. Do not split the earlier `@tsv` line with `read`: tab counts as whitespace to `IFS`, so an empty middle field shifts the fields after it one place left.
 
 Then re-run the read and report the value it returns rather than the value you sent. A `403` or `404` from the `PATCH` means the token lacks admin on the repo. Report that as `left as COMMIT_OR_PR_TITLE (needs repo admin)`. It does not fail the run, since everything else this skill set up still stands.
 

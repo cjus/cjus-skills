@@ -44,3 +44,23 @@ subject, and makes the plugin say which number is which.
 - **Operator decision.** This branch's PR is titled `[#44] …` by hand, because the installed 0.2.5
   plugin will not add the prefix.
 
+### 2026-09-25: review fixes (`pr-review-2026-09-25.md`, APPROVE)
+
+- **Operator decisions on the review's questions.** A leading `[#N]` is ticket-shaped even in a
+  prefixed repo, and a malformed same-ID tag such as `[#44]Carry` is normalized.
+- **One name for the bracketed part.** `config.md` defines the *title tag*: `#123`, or `ABC-123`
+  with a prefix. It also defines a ticket-shaped leading token in one place. The ticket ID stays
+  `123`, so the rule no longer reads as `[123] `. `close` and `pre-test` now use the new term.
+- **Step 4b is one jq transform, not a three-row table.** It strips every leading ticket-shaped
+  token, including a trailing space or colon, then prepends `[$ID] `. Tested on 13 titles: each
+  output is idempotent, and `[WIP]` and `[XYZ-9]` stay.
+- **Verification is a fixed point.** The title passes only if 4b's transform would leave it
+  unchanged. `[#44] [#44]Carry`, which the old `startswith` check passed, now fails. The 4b and
+  verify snippets were extracted from `SKILL.md` and run read-only against PR #45, with the edit
+  swapped for an echo. The transform left the title unchanged, and verify returned
+  `[202,false,true]`. The `false` is expected: a draft has no closing reference yet.
+- **The lifecycle `pr` line keys its warning on `hasCloses`**, so a PR that closes another issue
+  reads `closes #99, no closing ref to #42`. A third stub case covers it. 42 passed, 0 failed.
+- **`/pr:init` step 6** reads `$CURRENT_MESSAGE` on its own and guards it before the `PATCH`.
+  The reason given for sending it is corrected. The 4b report row gains a `deferred to 8b` form.
+
