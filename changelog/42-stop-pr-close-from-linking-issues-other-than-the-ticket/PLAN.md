@@ -56,7 +56,7 @@ Surfaced by PR #38's Phase 7 close review and its step 8b.
 
 - [x] Phase 1: Step 4's verify, and step 8b's backstop, fail when `closingIssuesReferences` holds
       any number other than #N, naming each stray issue.
-- [ ] Phase 2: State the no-closing-keywords rule in `/pr:summary`, which writes the text, and
+- [x] Phase 2: State the no-closing-keywords rule in `/pr:summary`, which writes the text, and
       have close step 4 refer to it rather than carry it alone.
 - [ ] Phase 3: Write the summary and the closing line as one body in a single edit, on the create
       path and the replace path alike, then verify with the existing re-reads.

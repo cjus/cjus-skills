@@ -263,7 +263,7 @@ The default branch moved — does it affect me? Assesses what the new commits me
 /pr:summary
 ```
 
-Writes `pr-summary-<date>.md` into the plan folder: code examples, plan alignment, testing notes, impact. This document becomes the PR body at close.
+Writes `pr-summary-<date>.md` into the plan folder: code examples, plan alignment, testing notes, impact. This document becomes the PR body at close, so it carries no closing keyword with an issue number: the close adds the one closing line itself.
 
 ### `/pr:commitmsg`
 

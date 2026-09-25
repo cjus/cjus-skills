@@ -31,3 +31,15 @@ closing-keyword rule where the summary is written, and writes the body in one ed
 - Tested the jq on six fixture payloads (none, ticket only, ticket plus a stray, a cross-repo
   #42, mixed-case repo, stray only) and against PR #45 live: `[9599,true,true,[]]`.
 - README's `/pr:close` link bullet now says the close halts on any other linked issue.
+
+### 2026-09-25: Phase 2, the closing-keyword rule moves to `/pr:summary`
+
+- **`summary/SKILL.md` step 3 states the rule in full.** It lists all nine keywords (any tense,
+  any case) and both reference shapes (`#123`, `owner/repo#123`), and it says the rule covers
+  ordinary prose, not only quoted syntax. A summary that has to show a closing line uses a `#N`
+  placeholder, or names the issue without the keyword.
+- **Close step 4 points to it and no longer carries its own copy.** The "do not assume the
+  summary supplies the link" paragraph now gives the reason (the summary never carries a
+  keyword) instead of the old code-fence explanation.
+- README's `/pr:summary` entry says the document carries no closing keyword with an issue number,
+  and that the close adds the one closing line.

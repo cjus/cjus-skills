@@ -231,7 +231,7 @@ Closes #$N"
 
 A created title is `[$ID] ` followed by the title of the issue resolved just above, so it cannot drift from the branch. `--body-file` deliberately bypasses any pull-request template: the summary already covers what a template prompts for, and more.
 
-**Do not assume the summary supplies the link.** It is a document, not a PR body, and any closing keyword inside it is likely to sit in a code fence, which GitHub ignores. Creating from it and going straight to verification is how this path fails.
+**The summary never supplies the link.** `/pr:summary` keeps closing keywords with an issue reference out of it; that rule lives in its step 3. A body created from the summary alone closes nothing, and going straight to verification is how this path fails.
 
 Before appending to a **kept** description, ask the **same** question the assertion below asks:
 
@@ -244,7 +244,7 @@ gh pr view "$BRANCH" --repo "$REPO" --json closingIssuesReferences \
 
 `false` appends the link. `true` leaves the body alone, since re-adding duplicates it on every run. No output is a failed read, not a `false`: stop, for the same reason as the verify below.
 
-**After a create or a replace in this run, skip that check and append.** The body was just written from the summary, which carries no link, so there is nothing to check. A read taken this soon after an edit is not reliable anyway: `closingIssuesReferences` lags a body edit by a moment. **Keep literal closing keywords with an issue number out of the summary**, even in inline code. That way the appended line is the body's only link.
+**After a create or a replace in this run, skip that check and append.** The body was just written from the summary, which carries no link, so there is nothing to check. A read taken this soon after an edit is not reliable anyway: `closingIssuesReferences` lags a body edit by a moment. By `/pr:summary`'s rule the summary carries no closing keyword, so the appended line is the body's only link.
 
 **An empty body or one carrying the `pr:pre-test:draft-placeholder` marker is a stub, not a description.** Appending to either leaves a merged PR whose body explains nothing. Replace it wholesale.
 
