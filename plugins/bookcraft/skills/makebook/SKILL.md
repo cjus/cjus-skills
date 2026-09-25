@@ -150,7 +150,7 @@ build one.
 
 | Part | Content |
 |---|---|
-| Cover | Title, subtitle, byline, creation stamp, description, footnote, as one page. The cover **art** comes from `book.json`'s `cover_image`, or, when that is absent, from rasterising the PDF's own cover page, stamp included. Rasterised art stands in for the page, so the book opens on one cover either way |
+| Cover | Title, subtitle, byline, creation stamp, description, footnote, as one page. The cover **art** comes from `book.json`'s `cover_image`, or, when that is absent, from rasterising the PDF's own cover page, stamp included. Rasterised art stands in for the page, so a book without `cover_image` opens on one cover; declared art keeps the text cover page behind it |
 | Nav | The contents, as the EPUB navigation document, plus a readable contents page. `sections` become nested entries |
 | Figures | Every figure, linking to where it sits in its chapter. Only when the book has figures |
 | Chapters | One XHTML file each, in the same sort order as the PDF |
@@ -406,7 +406,7 @@ A chapter written under `/createbook`'s **guide** profile may carry four labelle
 
 A file named `<book-slug>-appendix-<N>-<slug>.md` is bound as an appendix: after the chapters, before the glossary, labelled **Appendix N** rather than **Chapter N** on its own page and in the Contents. A plain filename sort still gives the reading order, because `a` sorts after every digit.
 
-`-appendix-` has to follow the book slug directly, and the book slug is letters and dashes only, which is how `/createbook`'s checkers read the name. So `sql-02-appendix-1-of-the-standard.md` is chapter 2, whose slug happens to hold the word, and `09-appendix-1-tables.md`, with no book slug in front, is a chapter too.
+`-appendix-` has to follow the book slug directly, and the book slug is lowercase letters and dashes only, which is how `/createbook`'s checkers read the name. So `sql-02-appendix-1-of-the-standard.md` is chapter 2, whose slug happens to hold the word, and `09-appendix-1-tables.md`, with no book slug in front, is a chapter too.
 
 The appendix kind comes from `/createbook`'s guide profile; see `createbook/reference/guide.md § Appendices` for what belongs in one.
 
@@ -471,7 +471,7 @@ breaks a word in the middle, which looks deliberate on the page.
 |---|---|---|---|---|
 | Running title, capped at a fixed 5in | 77 characters, warns past 77 | 66, warns past 64 | 56, warns past 53 | Names the length and what fits |
 | A line inside a fenced code block | 80 characters, warns past 79 | 68, warns past 67 | 55, warns past 54 | Counts every offending line and names its chapter |
-| A table column narrower than its own longest word | Rarely reached, since the words scale and the measure does not | Reachable | Nothing is lost; a word prints broken in two | Names the chapter, the column, how far short it is, and the words that broke |
+| A table column narrower than its own longest word | Rarely reached, since the words scale and the measure does not | Reachable | Nothing is lost; a word prints broken in two | Names the chapter or appendix, the column, how far short it is, and the words that broke |
 
 The first two are calibrated to fire a character or two early, so a build that
 stays quiet is genuinely clear rather than borderline. The third is not

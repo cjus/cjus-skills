@@ -114,6 +114,10 @@ hold.
   Run the existing fixture runner.
 - [x] Phase 7: update `makebook/SKILL.md` wherever it describes the behaviors that changed.
 
+**Status (2026-09-25):** all seven phases are done. Draft PR #39 has CI green on macOS and Linux.
+The pre-test and close reviews both returned APPROVE. bookcraft was bumped to `1.7.1` so
+installed copies pick up the fix.
+
 ## Open Questions
 
 - ~~**#19: a declared `cover_image`.**~~ Resolved by the operator: keep the asymmetry. The text
@@ -125,7 +129,8 @@ hold.
   names a table by.
 - **Fixtures.** Should the #20 A/B reproduction and the #35 look-alike slug become permanent
   fixtures under the fixture runner, or stay local to this branch? Binding a fixture in CI is
-  #32's scope, so this branch should not grow that work.
+  #32's scope, so this branch should not grow that work. Carried into § Deferred as "No regression
+  fixtures for #35 or #20". Settled at close: folded into #32.
 
 ## Deferred
 
@@ -135,4 +140,15 @@ hold.
   table's plan in that chapter by one place. On `main` this was also what let chapter 3 pick up
   appendix 3's widths in the phase 2 fixture; keying on `num` closes the cross-chapter half, and
   the within-chapter shift remains. Pushing an entry for the empty table, with no columns, would
-  keep the indices aligned.
+  keep the indices aligned. **Triage: TICKET, filed as #40.**
+- **No regression fixtures for #35 or #20** (from the pre-test review). A revert of either fix
+  binds silently. The reviewer suggests folding the look-alike slug and the appendix-table A/B
+  into #32's checklist, since #32 is where a bind would run in CI. This is the same decision as
+  the Fixtures open question above. **Triage: folded into #32 as a comment listing both fixtures.**
+- **`check-book.sh:336` takes the last `-appendix-N-` in a name** (from the pre-test review). Its
+  greedy `sed` differs from the binder and the other two checkers only for a doubled name like
+  `x-appendix-1-appendix-2-y.md`. **Triage: DROP.**
+- **The binder's appendix tail is stricter than `check-references.sh` and
+  `check-provenance.sh`** (from the pre-test review). The binder requires `[a-z0-9-]+\.md`, the
+  two checkers accept any tail, and `check-book.sh` requires the same tail as the binder.
+  Unchanged from `main`. **Triage: DROP.**

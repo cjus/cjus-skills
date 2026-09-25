@@ -701,10 +701,10 @@ PARA_TAG_RE = re.compile(r"^\[A?\d+-\d+[a-z]?\] ", re.M)
 # orders the book already puts these last.
 #
 # Anchored the way check-book.sh, check-provenance.sh and check-references.sh
-# anchor it: the book slug is letters and dashes only, so the word has to follow
-# it directly. Unanchored, a chapter slug that happens to hold the word,
-# `sql-02-appendix-1-of-the-standard.md`, bound as Appendix 1 while every
-# checker read it as chapter 2.
+# anchor it: the book slug is lowercase letters and dashes only, so the word
+# has to follow it directly. Unanchored, a chapter slug that happens to hold
+# the word, `sql-02-appendix-1-of-the-standard.md`, bound as Appendix 1 while
+# every checker read it as chapter 2.
 #
 # The binder still numbers every file sequentially for its own purposes --
 # probes, figure numbers, the index -- and that number is not what the reader
