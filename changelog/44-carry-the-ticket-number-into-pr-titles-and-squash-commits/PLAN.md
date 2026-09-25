@@ -73,6 +73,12 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 ## Deferred
 
+**Triaged at `/pr:close` on 2026-09-25.**
+- **Filed as issue #47**, "Warn at /pr:close when a squash would drop the title tag": the
+  single-commit squash warning, which covers the first two items below, plus the empty-`$ID`
+  guard and the leading space or colon case.
+- **Dropped:** the `/pr:pre-test` `ticketPrefix` wording, because `/pr:close` corrects the title.
+
 - `/pr:init` refuses on an already-configured repo unless given `--force`, which reruns
   detection and rewrites the config. So a repo that adopted the plugin before 0.2.6 gets the
   new squash-title check only through a full `--force` rerun. This repo was changed by hand
@@ -80,3 +86,11 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 - A repo that declines `PR_TITLE` at `/pr:init` still lands a single-commit PR with its commit
   subject. `/pr:close` does not warn about that. It could read the setting and the commit count
   at step 4b.
+- Close review suggestions (`pr-review-2026-09-25-close.md`):
+  - An empty `$ID` in `/pr:close` step 4b writes a `[] ` title. That run halts, but the next run
+    turns it into `[#44] [] …`, which verifies green. A `[ -n "$ID" ]` guard would prevent it.
+  - A title that starts with a space or colon needs two passes to settle, which contradicts the
+    skill's claim that one pass is idempotent. The next run fixes it.
+  - `/pr:pre-test` does not say to read `ticketPrefix`, so a prefixed repo's draft may open as
+    `[#32]` until `/pr:close` corrects it.
+
