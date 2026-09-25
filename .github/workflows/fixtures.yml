@@ -3,9 +3,10 @@
 # remembered to run them.
 #
 # It installs the binder's toolchain too, because one of those folders,
-# makebook/fixtures/bind, binds a real book. Without Chromium and poppler that
-# fixture skips, and --strict fails the run on the skip, so a toolchain that did
-# not install cannot pass as a bind that did not break.
+# makebook/fixtures/bind, binds real books. Without install.sh's venv or poppler
+# that fixture skips, and --strict fails the run on the skip; a Chromium that
+# will not launch fails the bind outright. Either way a toolchain that did not
+# install cannot pass as a bind that did not break.
 #
 # macOS is blocking because it is the only platform the plugins are developed and
 # tested on (README § Platform support). Linux runs alongside it to produce the

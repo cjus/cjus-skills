@@ -146,8 +146,9 @@ own coverage in `skills/createbook/fixtures/jq-unrunnable/run.sh`.
 `skills/makebook/fixtures/bind/run.sh` binds fixture books with `build-book.py`
 and checks the PDF and EPUB it writes. The workflow runs the same `install.sh` a
 person does, adds poppler, and asserts that Chromium can print a PDF and
-`pdftotext` can read it back. On a laptop without that toolchain the bind prints
-`skip`; in CI the skip is a failure.
+`pdftotext` can read it back. On a laptop without `install.sh`'s venv or
+`pdftotext` the bind prints `skip`, and in CI the skip is a failure. A Chromium
+that will not launch fails the bind rather than skipping it.
 
 ## Releasing
 

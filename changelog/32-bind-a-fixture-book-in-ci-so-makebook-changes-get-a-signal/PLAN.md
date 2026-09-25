@@ -74,6 +74,11 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
       pre-#39 binder, failed both checks on both legs (the column 51pt short on macOS, 43pt
       on Linux). The branch was deleted.*
 
+**Status (2026-09-25):** all six phases are done and pushed at `8bb3b93`. Draft PR #41 has CI
+green on both legs. The pre-test review returned APPROVE with one Important finding (the
+appendix-table check trusts the binder's own warning) and two suggestions, all fixed; see
+`pr-review-2026-09-25.md`.
+
 ## Deferred
 
 - Assert that the finished PDF's text layer carries none of the binder's page markers.

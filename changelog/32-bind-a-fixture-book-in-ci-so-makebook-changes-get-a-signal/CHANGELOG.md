@@ -89,3 +89,12 @@ macOS-only caveat.
 
 **No Chromium cache, per the operator:** a cold install costs 16 to 19s in CI. Every open question
 in the plan is now settled.
+
+### 2026-09-25 — Pre-test review fixes
+
+The pre-test review (APPROVE, `pr-review-2026-09-25.md`) found the appendix-table check trusting
+the binder's own warning, which goes quiet together with the repair if the broken-word detector
+goes blind. **The check now reads the three long words back off the appendix's page,** and a
+blind-detector mutant fails it where the warning check alone passed. The `book.json` edit is
+guarded, the EPUB read keeps its traceback, and three doc phrasings now say the fixture skips
+without the venv or `pdftotext` and counts three books, not four.
