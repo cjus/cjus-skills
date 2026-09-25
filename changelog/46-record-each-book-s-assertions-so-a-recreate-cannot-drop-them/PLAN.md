@@ -292,6 +292,15 @@ The skill stops and creates the file before doing what it was asked.
       cases are carried and that the sweep lists the passages still built on twenty. Record the
       outcome here in generic terms only: nothing from that book's sources, people or course
       names comes into this repo.
+      Run 2026-09-25 with this branch's scripts. The file is written and confirmed, and its
+      commit in the book's own repo waits on the operator, since that repo's default branch is
+      gated. Three of the four cases are carried: the roster (a premise superseding the
+      assumed class size), the rulings, and the corrected key (56 answers, one correction
+      replayed). The recommendation case is left out on purpose, because the operator has not
+      acted on it, so it stays `fill`. With phrases drawn from a bare-value grep, the sweep
+      lists 35 lines still built on the old class size, 33 of them real. The measured detail
+      is in `createbook/NOTES.md`, and four procedure fixes it prompted are in the backfill
+      steps.
 
 ## Open Questions
 
@@ -306,6 +315,11 @@ The skill stops and creates the file before doing what it was asked.
 
 ## Deferred
 
+- **No helper command amends a written entry's `search` phrases.** Found on the reference guide:
+  the first phrases missed a third of the passages, and the fix had to rewrite the uncommitted
+  file from scratch. Backfill step 3 now proposes phrases from a bare-value sweep, which should
+  make this rare. A committed file has no such escape, though, and phrases are a sweep aid rather
+  than a claim, so amending them in place would be safe. Revisit if a real book needs it.
 - **A review file for a backfill too large to confirm in chat.** Candidates written to a file in
   a subfolder of the book, such as `<book>/backfill/`, never a `*.md` at the top level, where
   `/makebook` would bind it and the sweep would report the old premises it quotes. The operator

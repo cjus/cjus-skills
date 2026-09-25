@@ -310,3 +310,32 @@ Suggestions taken:
 chain, the markless sweep, the entity, and the mode. The mode check uses 0640, because 0644 is
 also what the umask fallback produces and would have hidden the regression.
 `test-fixtures.sh --strict`: 17 passed. pr acceptance: 42 passed.
+
+### 2026-09-25 15:39:29 MDT — Phase 7: the reference guide, backfilled
+
+The backfill ran against the reference guide in its own repo with this branch's scripts, and
+followed `createbook § Backfilling the assertions file` step by step. Everything below is kept
+generic; nothing from that book comes into this repo.
+
+- **Gathered:** 41 candidates. Four were asked individually: an exclusion found broken, the
+  sweep phrases, whether a recommendation had been acted on, and who made a settled reading. The
+  other 36 were confirmed from tables grouped by kind, with nothing struck.
+- **Written in one pass:** 40 entries (38 hold, 1 superseded, 1 retired). `check` passes. The
+  argument is verbatim, recovered from a prompts file beside the book.
+- **Cases carried:** three of the ticket's four, the roster premise, the rulings and the
+  corrected key. The recommendation case is out because the operator has not acted on it, which
+  is the procedure working.
+- **The sweep:** its first four phrases found 21 of 33 premise lines. The file was rewritten
+  before commit with ten phrases drawn from a bare-value grep, which found 35 lines, 33 of them
+  real.
+
+Four procedure fixes came from the run, all in the backfill steps:
+
+- Propose `search` phrases from a sweep of the bare value word.
+- Look for a saved argument before writing it as `null`.
+- Check an exclusion by searching for what it keeps out, which is how the lifted one was found.
+- Leave out a live-system read that a later re-openable export now carries.
+
+`NOTES.md` now records the sweep's measured precision and recall in place of "not yet measured".
+A helper gap, no way to amend a written entry's phrases, is under `## Deferred`. The file's
+commit in the book's repo waits on the operator.

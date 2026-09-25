@@ -689,7 +689,7 @@ A book written before `assertions.json` existed has none, and the claims it woul
 
 **A backfill writes `assertions.json` and nothing else.** It never edits a chapter, because `/updatebook` keeps untouched chapters byte-identical. Every `prose` entry it writes is `legacy`: the prose resting on it predates the file, so no mark cites it yet. A mark keeps its `unsourced` label until its paragraph is rewritten, and the rewrite cites the entry instead.
 
-**What goes in is the test in § The assertions file**: a claim the book stands behind that a fresh run would not reproduce from the brief and the sources alone. A claim a source makes stays out, and so does the model's own `fill`, unless the operator adopted it.
+**What goes in is the test in § The assertions file**: a claim the book stands behind that a fresh run would not reproduce from the brief and the sources alone. A claim a source makes stays out, and so does the model's own `fill`, unless the operator adopted it. So does a fact first read from a live system that a later, re-openable export now carries, and anything read on the open web, which a fresh run reads again.
 
 ### 1. Gather the candidates
 
@@ -725,14 +725,16 @@ For each candidate, prepare:
 
 **A revision note whose change is still in the chapter text is current. One whose text is gone is possibly reversed.** That is the case the operator's confirmation exists for, since a note can record an edit that was later undone, and checking it here settles it mechanically instead of from memory. Do the same for every candidate that names wording: find it in the chapters now, or say that it is gone.
 
+**Check an exclusion the other way round**, by searching the chapters for what it keeps out. Finding it means the exclusion was broken or quietly lifted, and only the operator can say which: a lifted one is written and then retired with their reason.
+
 ### 3. Ask the doubtful ones individually
 
 Ask these one at a time, or four to a call with AskUserQuestion, because each needs an answer only the operator has:
 
 - **Every possibly reversed candidate**: keep, drop, or the value it holds now.
 - **Every ruling whose author the evidence does not settle.** Was it the operator's call or the book's own judgement? That is `origin.by`.
-- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one.
-- **The original `/createbook` argument.** A book written before this file existed never saved it. Where nobody has it, it is written `null`, never as the outline's paraphrase.
+- **For each premise that changed, `search` phrases for both values**: the phrases the prose uses for the old value and for the new one. **Propose them from a sweep of the bare value word, never from memory.** Grep the folder for the value itself (`twenty`, not `room of twenty`), sort what it finds into the phrasings that are about the premise, and show the operator which of those lines the proposed phrases would still leave unmatched. Arithmetic built on a premise rarely repeats its canonical phrase. A written entry's phrases cannot be amended later, so this is the one time to get them right.
+- **The original `/createbook` argument.** A book written before this file existed never saved it in the book folder. Look first for a saved copy beside it, such as a prompts or notes file holding the invocation, and confirm it with the operator. Where nobody has it, it is written `null`, never as the outline's paraphrase.
 - **The persona's and the profile's origins**, where the outline does not record them. `unrecorded` is an honest answer.
 
 ### 4. Show the rest grouped by kind, for striking
