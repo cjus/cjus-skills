@@ -31,13 +31,13 @@ git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
 The old rule was "a path containing the ticket segment including its trailing hyphen", and that
 substring is unanchored on the left. Two gaps remain, and both were already on `main` before #25.
 
-- [ ] **`abort` and `sync` still match a path substring.** They are at
+- [x] **`abort` and `sync` still match a path substring.** They are at
   `plugins/pr/skills/abort/SKILL.md:54` and `plugins/pr/skills/sync/SKILL.md:53`.
   - `/pr:sync 2` with only `feature/12-…` checked out reports on ticket 12's worktree.
   - `/pr:abort 2` resolves ticket 12 and stops only at its issue-title/slug check
     (`abort/SKILL.md:101`).
   - Occasion: any repo past ticket 10.
-- [ ] **`/pr:cleanup` with `worktrees.enabled: false` acts on the session's checkout.** Step 0
+- [x] **`/pr:cleanup` with `worktrees.enabled: false` acts on the session's checkout.** Step 0
   resolves a branch but sets no `$WORKTREE_PATH`, and `git -C ""` leaves the working directory
   unchanged.
   - Step 1 checks whatever checkout the session is in.
