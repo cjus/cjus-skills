@@ -79,11 +79,11 @@ git -C "$WORKTREE_PATH" ls-files --cached --others --exclude-standard -- \
 
 ```bash
 { git -C "$MAIN_CHECKOUT" ls-tree -r --name-only "$BRANCH" -- "<changelogRoot>/<slug>/"
-  git -C "$MAIN_CHECKOUT" ls-files --others --exclude-standard -- "<changelogRoot>/<slug>/"
+  git -C "$MAIN_CHECKOUT" ls-files --others --exclude-standard -- "<changelogRoot>/<slug>/" 2>/dev/null
 } | grep -E '/(COMMITMSG|pr-summary-[^/]*|pr-review-[^/]*)\.md$'
 ```
 
-The first half is what the close committed to the branch. The second is what a halted close left untracked, which is in the main checkout because untracked files stay in a checkout when the operator switches branches. **`ls-tree` takes no globs**: a `pr-summary-*.md` pathspec lists nothing and exits 0, so list the folder and filter by name.
+The first half is what the close committed to the branch. The second is what a halted close left untracked, which is in the main checkout because untracked files stay in a checkout when the operator switches branches. Its stderr is dropped because the usual case, a merge not yet pulled, has no such folder in the main checkout, and `ls-files` warns that it cannot open it. **No output, with `grep` exiting 1, is the "No artifacts at all" row below**, not a failed command. **`ls-tree` takes no globs**: a `pr-summary-*.md` pathspec lists nothing and exits 0, so list the folder and filter by name.
 
 | Result | Meaning | Action |
 |---|---|---|
@@ -103,7 +103,7 @@ git -C "$WORKTREE_PATH" status --porcelain
 
 **If anything is there, report it and STOP.** Do not prompt, do not proceed.
 
-**With no workspace, this holds by construction:** no working tree holds the branch, so nothing on it is uncommitted. Do not run the command in the main checkout instead. It describes that checkout's own state, so it would stop on unrelated work there, and on the untracked plan folder a halted close leaves behind, which step 1 has already weighed.
+**Skip when `WORKTREE_PATH` is empty:** this holds by construction, since no working tree holds the branch, so nothing on it is uncommitted. Do not run the command in the main checkout instead. It describes that checkout's own state, so it would stop on unrelated work there, and on the untracked plan folder a halted close leaves behind, which step 1 has already weighed.
 
 Note that stashing is not a safe workaround: the stash stack is shared across every worktree of the repo, so a later `git stash pop` elsewhere can take what you pushed.
 

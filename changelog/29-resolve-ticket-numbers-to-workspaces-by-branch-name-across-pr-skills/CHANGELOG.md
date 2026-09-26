@@ -36,3 +36,17 @@ the anchored branch-name rule #25 introduced, and makes cleanup act on the branc
 - **Checked in a scratch repo:** git refuses to delete a checked-out branch, `ls-tree` ignores a
   glob pathspec and exits 0, untracked files stay across a switch, and the pattern's documented
   matches and non-matches hold.
+
+### 2026-09-26: review suggestions (`pr-review-2026-09-26.md`, APPROVE)
+
+- **Operator decision:** apply all four suggestions. The three deferred items stay for `/pr:close`
+  to triage.
+- **What changed:**
+  - Abort rule 1 says how to set `MAIN_CHECKOUT`, since its main-checkout stop compares against it.
+  - Abort's remote fallback carries rule 1's cardinality: one remote row resolves, and several list
+    and stop.
+  - Cleanup step 1's `ls-files` half drops stderr. When the changelog root exists but the branch's
+    folder does not, `ls-files` warns that it cannot open the folder, and that is the usual
+    merged-but-not-pulled case. No output with `grep` exiting 1 is named as the "No artifacts at
+    all" row.
+  - Cleanup step 2 opens with "Skip when `WORKTREE_PATH` is empty", matching steps 5 and 7.

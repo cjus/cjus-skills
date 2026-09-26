@@ -58,7 +58,7 @@ Work down this list and stop at the first rule that resolves, setting the ticket
      | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
    ```
 
-   Match the branch name, never the worktree path: `12-` is a substring of `…/feature/112-…`. Multiple rows list and stop. One row resolves, and its second field decides the worktree:
+   Match the branch name, never the worktree path: `12-` is a substring of `…/feature/112-…`. Set `MAIN_CHECKOUT` to the first `worktree` entry of `git worktree list --porcelain`; a row whose second field equals it is checked out in the main checkout. Multiple rows list and stop. One row resolves, and its second field decides the worktree:
    - **A worktree of its own** → that is the worktree path.
    - **Empty** → the worktree is gone; see below.
    - **The main checkout** → **stop.** The branch is checked out there, and step 8 cannot delete a checked-out branch, so the abort would close the PR and the issue and then fail on the branch. Ask the operator to switch the main checkout to the default branch and run the abort again. Do not switch it for them: a switch carries uncommitted changes with it.
@@ -77,7 +77,7 @@ git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin \
   | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
 ```
 
-A branch exists, locally or on the remote → set the worktree path empty and carry on; steps 7 and 9 skip themselves. No branch either → run the no-match check in `config.md § Resolving a ticket number to its branch`. A hit names the branch this ticket most likely belongs to, so report it and stop. Otherwise report that only the issue remains and confirm the operator wants it closed on its own.
+A branch exists, locally or on the remote → set the worktree path empty and carry on; steps 7 and 9 skip themselves. One remote row resolves; several list and stop, as in rule 1. No branch either → run the no-match check in `config.md § Resolving a ticket number to its branch`. A hit names the branch this ticket most likely belongs to, so report it and stop. Otherwise report that only the issue remains and confirm the operator wants it closed on its own.
 
 ### Echo the resolution, always
 
