@@ -2,7 +2,7 @@
 name: abort
 description: Abandon a branch that will never merge. Closes its issue as not planned, closes any open PR, removes the worktree, and deletes the branch locally and on the remote. Permanent, so it only runs when the user invokes it explicitly. Use when the user says "/pr:abort <reason>".
 disable-model-invocation: true
-allowed-tools: Bash(node:*), Bash(git:*), Bash(gh:*), Bash(rmdir:*), Bash(ls:*), Bash(jq:*), Bash(date:*)
+allowed-tools: Bash(node:*), Bash(git:*), Bash(gh:*), Bash(grep:*), Bash(rmdir:*), Bash(ls:*), Bash(jq:*), Bash(date:*)
 argument-hint: "[ticket-number] <reason>"
 ---
 
@@ -51,21 +51,33 @@ This differs from `/pr:cleanup`, which can afford a non-halting bookkeeping step
 
 Work down this list and stop at the first rule that resolves, setting the ticket, the branch and the worktree path.
 
-1. **An explicit ticket number was passed.** Find its worktree in `git worktree list --porcelain`, matching the ticket segment **including its trailing hyphen**, so `12` does not match `125-`. One match resolves; multiple list and stop.
+1. **An explicit ticket number was passed.** Resolve it to its branch by `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Resolving a ticket number to its branch`:
+
+   ```bash
+   git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
+     | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
+   ```
+
+   Match the branch name, never the worktree path: `12-` is a substring of `…/feature/112-…`. Multiple rows list and stop. One row resolves, and its second field decides the worktree:
+   - **A worktree of its own** → that is the worktree path.
+   - **Empty** → the worktree is gone; see below.
+   - **The main checkout** → **stop.** The branch is checked out there, and step 8 cannot delete a checked-out branch, so the abort would close the PR and the issue and then fail on the branch. Ask the operator to switch the main checkout to the default branch and run the abort again. Do not switch it for them: a switch carries uncommitted changes with it.
+
+   No row at all → see below.
 2. **No number, and this session is inside a feature worktree.** The common case, needing no argument: if the current branch matches the configured ticket pattern, that capture **is** the ticket. Derive all three and move on. **Do not ask for a number you already have.**
 3. **No number, and the session is in the main checkout on the default branch.** There is no branch context, so list the feature worktrees with their numbers and full slugs and ask which to abort. **Do not auto-select a single match**: a lone worktree is evidence about what exists on disk, not about what the operator meant, and this skill deletes three things.
 4. **Nothing resolves.** Report what was checked and ask. **Never guess a number from a recent conversation.**
 
 ### When the worktree is already gone
 
-Rules 1 and 3 can name a ticket whose worktree was removed by hand:
+A worktree removed by hand leaves its branch behind, so rule 1 finds it as a row whose second field is empty. With no local row at all, check the remote by the same pattern:
 
 ```bash
-git -C "$MAIN_CHECKOUT" branch --list "<prefix><ticket>-*"
-git -C "$MAIN_CHECKOUT" branch -r --list "origin/<prefix><ticket>-*"
+git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin \
+  | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
 ```
 
-A branch exists → set the worktree path empty and carry on; steps 7 and 9 skip themselves. No branch either → report that only the issue remains and confirm the operator wants it closed on its own.
+A branch exists, locally or on the remote → set the worktree path empty and carry on; steps 7 and 9 skip themselves. No branch either → run the no-match check in `config.md § Resolving a ticket number to its branch`. A hit names the branch this ticket most likely belongs to, so report it and stop. Otherwise report that only the issue remains and confirm the operator wants it closed on its own.
 
 ### Echo the resolution, always
 

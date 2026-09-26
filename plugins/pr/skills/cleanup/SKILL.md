@@ -25,7 +25,7 @@ A finished close, a pushed branch, an approved review, or an open PR are **not**
 
 Each step depends on the one before it:
 
-- Step 0 resolves the workspace and its branch, and step 1 reads that branch's artifacts out of it.
+- Step 0 resolves the workspace and its branch, and step 1 reads that branch's artifacts out of it, or out of the branch itself when there is no workspace.
 - Step 1 gates every destructive action.
 - **Step 4 must run before step 6. Deleting a branch before checking PR status can permanently lose work.**
 
@@ -40,16 +40,21 @@ git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
   | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
 ```
 
-Drop the `(<branchPrefix>)?` and `(<ticketPrefix>-)?` groups when those settings are empty, and escape any regex metacharacters in them. `lstrip=2` rather than `short`, which prints `heads/…` when a tag shares the branch's name and so yields the wrong slug.
+The last command resolves the ticket to its branch by `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Resolving a ticket number to its branch`, which carries the escaping rule and the examples. **Match the branch name, never the worktree path**: `6-` is a substring of `…/feature/16-…`.
 
-**Match the branch name, never the worktree path.** The pattern requires the ticket to open a segment of the branch name, or to follow `branchPrefix` directly, and to end at its hyphen. So `/pr:cleanup 6` finds `feature/6-…`, a nested `feature/<owner>/6-…`, `feature-6-…` where `branchPrefix` is `feature-`, and, with `ticketPrefix` set to `abc`, `feature/abc-6-…`; and not `feature/16-…`, `feature/66-…`, `feature/6x-…` or `feature/14-phases-6-9`. A path cannot be anchored that way: `6-` is a substring of `…/feature/16-…`, and a worktree root's own name can carry digits.
+Set `MAIN_CHECKOUT` to the first `worktree` entry. Each row is a branch and the worktree it is checked out in, and that second field decides whether the row is usable. Neither an empty field nor the main checkout is a workspace, so step 5 must never be handed the main checkout.
 
-Each row is a branch and the worktree it is checked out in. That second field is empty when the branch is checked out nowhere, and is the main checkout (the first `worktree` entry above) whenever the branch is checked out there, as it usually is when worktrees are off. Neither is a workspace: step 5 must never be handed the main checkout.
+| Second field | `worktrees.enabled` true | `worktrees.enabled` false |
+|---|---|---|
+| A worktree of its own | Usable: the workspace | Usable: a worktree made by hand is still one |
+| Empty, checked out nowhere | Not usable | Usable, with no workspace. Steps 5 and 7 skip themselves, and steps 1 and 2 read the branch rather than a checkout |
+| The main checkout | Not usable | Not usable |
 
-- **No row checked out in a worktree of its own** → where `worktrees.enabled` is false the branch has no worktree, so resolve the branch by name from the rows and skip steps 5 and 7; no rows at all means there is no branch, so report that and stop. Where it is true, report "no workspace found for ticket $1" and stop.
-- **Multiple rows** → list them and ask. Where `worktrees.enabled` is true, only a row checked out in a worktree of its own can be chosen.
+- **No rows** → there is no branch. Run the no-match check in that section, report what it finds, and stop.
+- **Rows, none usable** → where `worktrees.enabled` is true, report "no workspace found for ticket $1" and stop. Where it is false, the branch is checked out in the main checkout: stop, and tell the operator to switch the main checkout to the default branch and run cleanup again. Step 6 cannot delete a checked-out branch, and step 8 would pull this branch rather than the default. Do not switch it for them: a switch carries uncommitted changes with it.
+- **Multiple rows** → list them and ask. Only a usable row can be chosen.
 
-Set `WORKTREE_PATH` and `BRANCH` from the row, and `SLUG` to the branch minus `branchPrefix`. **Echo them immediately**, with the full slug and never the bare number.
+Set `WORKTREE_PATH` from the row, empty when it has no workspace, `BRANCH` from the row, and `SLUG` to the branch minus `branchPrefix`. **Echo them immediately**, with the full slug and never the bare number. **`BRANCH` is fixed from here on.** No later step re-derives it from a checkout, because with `WORKTREE_PATH` empty `git -C ""` runs in the session's own checkout, whose branch need not be this one.
 
 Step 1 reads the plan folder this slug names, so it can only verify the workspace this step hands it: a wrong match here passes step 1 on another ticket's record.
 
@@ -70,6 +75,16 @@ git -C "$WORKTREE_PATH" ls-files --cached --others --exclude-standard -- \
 >
 > **The folder is the exact slug step 0 resolved, never a glob on the ticket number.** `/pr:start` names the folder `<changelogRoot>/<slug>/` and the state script reads it by the same rule, so a nested (`<owner>/6-…`) or prefixed (`abc-6-…`) folder needs nothing extra: the nesting and the prefix are part of the slug. A glob loose enough to reach those reaches other tickets' folders too (`*6-*` matches `16-…`, `26-…` and `14-phases-6-9`), and every closed ticket's `COMMITMSG.md` is committed on the default branch, so after a few dozen tickets every worktree holds a decoy for most single-digit numbers. A branch renamed after `/pr:start` no longer names its folder; the gate then finds nothing and asks, defaulting to no, which is the safe direction.
 
+**With no workspace, read the branch rather than a checkout.** The branch is checked out nowhere, so the main checkout holds some other branch, and its files say nothing about whether this one's close ran:
+
+```bash
+{ git -C "$MAIN_CHECKOUT" ls-tree -r --name-only "$BRANCH" -- "<changelogRoot>/<slug>/"
+  git -C "$MAIN_CHECKOUT" ls-files --others --exclude-standard -- "<changelogRoot>/<slug>/"
+} | grep -E '/(COMMITMSG|pr-summary-[^/]*|pr-review-[^/]*)\.md$'
+```
+
+The first half is what the close committed to the branch. The second is what a halted close left untracked, which is in the main checkout because untracked files stay in a checkout when the operator switches branches. **`ls-tree` takes no globs**: a `pr-summary-*.md` pathspec lists nothing and exits 0, so list the folder and filter by name.
+
 | Result | Meaning | Action |
 |---|---|---|
 | `COMMITMSG.md` present | The close completed | Report `close: verified` and **proceed without prompting** |
@@ -88,21 +103,21 @@ git -C "$WORKTREE_PATH" status --porcelain
 
 **If anything is there, report it and STOP.** Do not prompt, do not proceed.
 
+**With no workspace, this holds by construction:** no working tree holds the branch, so nothing on it is uncommitted. Do not run the command in the main checkout instead. It describes that checkout's own state, so it would stop on unrelated work there, and on the untracked plan folder a halted close leaves behind, which step 1 has already weighed.
+
 Note that stashing is not a safe workaround: the stash stack is shared across every worktree of the repo, so a later `git stash pop` elsewhere can take what you pushed.
 
 ## Step 3. Confirm the target out loud
 
-```bash
-BRANCH=$(git -C "$WORKTREE_PATH" rev-parse --abbrev-ref HEAD)
-```
-
-**Print both before continuing.** This is the last point before anything destructive:
+**Print the workspace and the branch step 0 resolved before continuing.** This is the last point before anything destructive:
 
 ```
 Cleaning up ticket <N>:
-  Workspace: <path>
+  Workspace: <path> | none (worktrees off)
   Branch:    <branch>
 ```
+
+**Do not re-derive the branch from a checkout here.** With no workspace, `git -C "" rev-parse` answers for the session's own checkout, and steps 4 and 6 would then check and delete whatever branch the session happens to be on.
 
 **This is the only defence against the one failure this skill's gates cannot see.** Steps 1 and 4 verify that *the resolved ticket* was properly closed and merged. Neither says anything about whether it is the ticket the operator meant. A mistyped number that happens to match another closed and merged workspace passes every gate legitimately and deletes the wrong one.
 
@@ -155,6 +170,8 @@ fi
 **Nothing goes in its place.** There is no `status:done`, and a closed issue is a done ticket. `/pr:close` runs pre-merge, which is why stripping the label there would leave an open ticket carrying no status through review; cleanup is the only correct place for it.
 
 ## Step 5. Remove the worktree, with verification
+
+**Skip when `WORKTREE_PATH` is empty.** `grep -q ""` matches every line, so the registration check below would report a worktree that does not exist as still registered.
 
 `git worktree remove` commonly fails with `Directory not empty` when the workspace holds dependency or build caches. Sometimes the first attempt unregisters git's metadata but leaves the directory on disk, and the retry then reports `is not a working tree`, which is misleading.
 
@@ -216,6 +233,8 @@ Require explicit confirmation naming an option number. **The default is not to d
 
 ## Step 7. Clean the empty parent directory
 
+Skip when `WORKTREE_PATH` is empty, since `dirname ""` is `.`.
+
 ```bash
 rmdir "$(dirname "$WORKTREE_PATH")" 2>/dev/null || true
 ```
@@ -224,11 +243,14 @@ A no-op while other worktrees remain under the same prefix segment, which is the
 
 ## Step 8. Pull the merge
 
-Only when step 4 reported `MERGED`:
+Only when step 4 reported `MERGED`, and only when the main checkout is on the default branch:
 
 ```bash
-git -C "$MAIN_CHECKOUT" pull --ff-only
+git -C "$MAIN_CHECKOUT" branch --show-current
+git -C "$MAIN_CHECKOUT" pull --ff-only    # only when the line above printed $DEFAULT_BRANCH
 ```
+
+On any other branch, `pull` would advance that branch rather than bring in the merge, so report `not pulled (main checkout is on <branch>)` instead. With worktrees off that is a real case: the main checkout may hold the next ticket's branch.
 
 **The merged plan folder arrives with this pull and stays.** It is the project's only record of the work.
 
