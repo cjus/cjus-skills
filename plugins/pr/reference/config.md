@@ -145,6 +145,32 @@ The prefix exists because a PR's number never matches its ticket's. `ticketing.m
 
 Both optional groups are built from config rather than hardcoded. A branch that does not match carries no ticket, which is a reportable state and not an error: a branch made by hand is still a branch.
 
+## Resolving a ticket number to its branch
+
+`/pr:cleanup`, `/pr:abort` and `/pr:sync` take a ticket number and have to find the branch that carries it. All three use this one rule:
+
+```bash
+git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
+  | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
+```
+
+Drop the `(<branchPrefix>)?` and `(<ticketPrefix>-)?` groups when those settings are empty, and escape any regex metacharacters in them. `lstrip=2` rather than `short`, which prints `heads/…` when a tag shares the branch's name and so yields the wrong slug.
+
+**Match the branch name, never the worktree path.** The pattern requires the ticket to open a segment of the branch name, or to follow `branchPrefix` directly, and to end at its hyphen. So ticket `6` finds `feature/6-…`, a nested `feature/<owner>/6-…`, `feature-6-…` where `branchPrefix` is `feature-`, and, with `ticketPrefix` set to `abc`, `feature/abc-6-…`; and not `feature/16-…`, `feature/66-…`, `feature/6x-…` or `feature/14-phases-6-9`. A path cannot be anchored that way: `6-` is a substring of `…/feature/16-…`, and a worktree root's own name can carry digits.
+
+**Each row is a branch and the worktree it is checked out in.** The second field is empty when the branch is checked out nowhere, and is the main checkout (the first `worktree` entry of `git worktree list --porcelain`) when the branch is checked out there, as it usually is when worktrees are off. The rows cover every local branch that carries the ticket, not only those with a worktree, so each skill says which rows it can act on.
+
+The rule is looser than the recovery regex above in one respect: it accepts segments before the ticket, such as an owner. So a nested `feature/<owner>/6-…` is found by its number, although recovering a number from that name finds none.
+
+**When nothing matches, look for a word in front of the number** before reporting the miss:
+
+```bash
+git for-each-ref --format='%(refname:lstrip=2)' refs/heads \
+  | grep -iE '(^|/)[[:alpha:]]+-<ticket>-'
+```
+
+A hit is usually a branch that puts a tracker key before the number, such as `<user>/abc-836-…`, in a repo whose `ticketPrefix` is not that key, often because the repo never ran `/pr:init`. Name the branch, say that setting `ticketPrefix` to the key through `/pr:init` resolves it, and **do not act on it.** The rule is strict on purpose: accepting any leading word would let a hand-made `feature/fix-6-…` answer for ticket 6.
+
 ## The `checks` contract
 
 A `null` check is **absent**, not failing. Skills distinguish three outcomes and never conflate the first two:

@@ -50,7 +50,14 @@ git rev-parse --short "origin/$DEFAULT_BRANCH"
 git worktree list --porcelain
 ```
 
-- **With `$1`:** keep only the worktree whose path contains the ticket segment **including its trailing hyphen**, so `78` does not match `788-`. No match reports and stops; multiple lists and asks.
+- **With `$1`:** resolve the ticket to its branch by `${CLAUDE_PLUGIN_ROOT}/reference/config.md § Resolving a ticket number to its branch`, and keep only that branch's worktree:
+
+  ```bash
+  git for-each-ref --format='%(refname:lstrip=2)%09%(worktreepath)' refs/heads \
+    | grep -iE '^(<branchPrefix>)?([^/[:space:]]+/)*(<ticketPrefix>-)?<ticket>-'
+  ```
+
+  Match the branch name, never the worktree path: `78-` is a substring of `…/feature/178-…`. Drop rows whose second field is empty, since a branch checked out nowhere has no working tree to assess; the main checkout counts, since it is where the branch lives when worktrees are off. One row left sets `$WT` and `$BRANCH`, and multiple rows list and ask. None left reports and stops: when rows matched but none is checked out, name those branches; when nothing matched, run the no-match check in that section.
 - **Without `$1`:** keep all. Exclude the main checkout from the *action* half but keep it in the report, since a stale main checkout is worth knowing about.
 
 ## Step 3. Per worktree: is it behind, and on what?
