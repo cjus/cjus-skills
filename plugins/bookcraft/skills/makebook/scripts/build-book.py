@@ -63,6 +63,10 @@ try:
     from markdown_it import MarkdownIt
     from mdit_py_plugins.tasklists import tasklists_plugin
     from playwright.sync_api import sync_playwright
+    from pypdf import PdfWriter
+    from pypdf.generic import (ArrayObject, DecodedStreamObject,
+                               DictionaryObject, NameObject, NumberObject,
+                               TextStringObject)
 except ImportError as exc:  # pragma: no cover - setup guidance
     # Resolved from this file rather than from CLAUDE_PLUGIN_ROOT, so the line
     # stays copy-pasteable when the script is run directly and that variable is
@@ -186,6 +190,20 @@ body {
 .mono, code, pre {
   font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
+/* Code is set on a quarter pixel, and every code size below is rounded to one,
+   because that is what keeps a copied `_` on its line. Off a quarter pixel,
+   Chromium writes each glyph of a line to the PDF as its own text run; on one,
+   it writes the line as a single run. PDFKit (Preview, Safari) rebuilds lines
+   from those runs, and an underscore's glyph sits wholly below the baseline, so
+   run by run it lands on a line of its own: `for` / `_` / `in range(7):`.
+   Measured 2026-09-30 on Chromium 151 by counting text runs per line: every
+   quarter-pixel size from 7 to 40px gave one run in Menlo, SF Mono, Courier,
+   Courier New and generic monospace, and 8.8, 10.4 and 12.7pt, the fenced
+   size at 11.8, 14 and 17pt of body, all split. The prose is written glyph by
+   glyph too, and survives it, because none of its letters sits wholly below
+   the line. This keeps `_` inline; it cannot keep indentation, which PDFKit
+   drops from the text layer at any size (see attach_scripts). */
+.mono, code, pre { font-size: round(nearest, 1em, 0.25px); }
 
 /* Invisible layout probes, read back out of the PDF's text layer each pass. */
 .probe { color: #ffffff; font-size: 5pt; letter-spacing: 0; }
@@ -323,15 +341,29 @@ h2.section-title {
 }
 .chapter th { background: #f2f2f2; font-weight: 600; }
 .chapter code {
-  font-size: 0.86em; background: #f2f2f2;
+  font-size: round(nearest, 0.86em, 0.25px); background: #f2f2f2;
   padding: 0.08em 0.28em; border-radius: 3px;
 }
 .chapter pre {
   background: #f6f6f6; border: 1px solid #e6e6e6; border-radius: 4px;
-  padding: 0.6em 0.8em; font-size: ${pre}pt; line-height: 1.42;
+  padding: 0.6em 0.8em; font-size: round(nearest, ${pre}pt, 0.25px); line-height: 1.42;
   overflow-x: auto; break-inside: avoid;
 }
 .chapter pre code { background: none; padding: 0; font-size: inherit; }
+/* The note under a block the book asks to be saved (script_notes). Set like a
+   figure caption and kept with its block, since a note alone at the top of a
+   page no longer says which code it means. The filename is the link that
+   attach_scripts turns into the attachment, so it prints as plain text. */
+.chapter p.script-note {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: ${figcap}pt; line-height: 1.45; color: #4a4a4a;
+  text-align: left; margin: -0.3em 0 0.9em; break-before: avoid;
+}
+.chapter p.script-note a {
+  color: #1a1a1a; text-decoration: none; font-weight: 600;
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: round(nearest, 1em, 0.25px);
+}
 .chapter img { max-width: 100%; height: auto; display: block; margin: 0.8em auto; }
 
 /* ---- Figures ----
@@ -560,13 +592,26 @@ TITLE_CHARS_PER_PT = 616.0
 # 11.8, 14 and 17pt of body, against 8.8, 10.4 and 12.7pt of `pre`: 80, 68 and
 # 55 characters survived. Those products run 698.5 to 707; this takes the low
 # end so the warning fires slightly early, for the reason TITLE_CHARS_PER_PT
-# does. The thresholds it yields are 79, 67 and 54.
+# does. The thresholds it yields are 79, 67 and 54. Code now prints on a quarter
+# pixel (see code_pt), at 8.8125, 10.3125 and 12.75pt, and the thresholds taken
+# at those sizes are the same three numbers.
 CODE_CHARS_PER_PT = 698.0
 
 
 def scaled_pt(pt: float, body_pt: float) -> float:
     """A design size at `body_pt`, on the one ratio the whole book scales by."""
     return round(pt * (body_pt / TYPE_SCALE["body"]), 1)
+
+
+def code_pt(pt: float) -> float:
+    """The size code at `pt` actually prints at: the nearest quarter pixel.
+
+    CSS_TEMPLATE rounds every code size with `round(nearest, ..., 0.25px)`,
+    which is what keeps a copied `_` on its line; see the note there. Anything
+    measured against printed code has to use the rounded size, not the asked-for
+    one. Half rounds up, as CSS's `nearest` does.
+    """
+    return math.floor(pt * 4 / 3 * 4 + 0.5) / 4 * 3 / 4
 
 
 def scaled(pt: float, body_pt: float) -> str:
@@ -876,7 +921,11 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False,
             notes = [(m.group(1), m.group("body").strip())
                      for m in HEADER_NOTE_RE.finditer(head)]
             body_md = HEADER_NOTE_RE.sub("", head) + rest
-        body_html = boxify_callouts(md.render(body_md))
+        # Parsed and rendered in two steps, which is all md.render does, so
+        # find_scripts can mark each script's fence before it becomes HTML.
+        tokens = md.parse(body_md)
+        scripts, script_gaps = find_scripts(tokens)
+        body_html = boxify_callouts(md.renderer.render(tokens, md.options, {}))
         if notes:
             body_html += build_endnotes(md, notes)
         am = APPENDIX_FILE_RE.search(path.name)
@@ -889,6 +938,9 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False,
             "body_html": body_html,
             "plain": strip_markdown(f"{title}\n\n{harvest_md}"),
             "fenced": fenced_lines(body_md),
+            "scripts": [{"name": sc["name"], "content": sc["content"]}
+                        for sc in scripts],
+            "script_gaps": script_gaps,
         })
     return chapters
 
@@ -977,6 +1029,174 @@ def fenced_lines(body_md: str) -> list[str]:
         if inside:
             out.append(line)
     return out
+
+
+# A code block the book asks the reader to save as a file. The PDF carries each
+# one as an attachment (attach_scripts), because the page itself cannot hand
+# the code over: PDFKit drops every leading indent from the text layer, so a
+# script copied off the page will not run. Two ways to mark one:
+#
+#   ```python file=time_species.py      exact, and the one to reach for. It
+#                                       needs no sentence beside the block.
+#   Save the script below as            the words guide books already use, so
+#   `time_species.py`.                  a book written before this existed
+#                                       gets its scripts attached unchanged.
+#
+# The sentence has to sit in the paragraph next to the block: just before it,
+# or just after it when it says "above". A sentence that asks for a save and
+# cannot be tied to a block and a filename is a gap, and the bind reports it
+# rather than shipping a book whose instruction the reader cannot follow.
+FENCE_FILE_RE = re.compile(r'(?:^|\s)file=(?:"([^"]+)"|(\S+))')
+SAVE_AS_RE = re.compile(
+    r"\bsav(?:e|ing)\b[^.!?]*?\bas\s+`(?P<a>[^`]+)`"
+    r"|\b(?:create|make|open|start)\s+(?:a\s+)?(?:new\s+)?file\s+"
+    r"(?:named|called)\s+`(?P<b>[^`]+)`"
+    r"|\bin(?:to)?\s+a\s+(?:new\s+)?file\s+(?:named|called)\s+`(?P<c>[^`]+)`",
+    re.I)
+# A save asked for without a name the reader could use. Narrower than "save"
+# alone, so "save time with this loop" is not read as an instruction.
+SAVE_INTENT_RE = re.compile(
+    r"\bsav(?:e|ing)\s+(?:it|this|that|them|these|the\s+(?:following|"
+    r"(?:\w+\s+){0,2}?(?:script|code|program|file|block|listing|snippet)s?))\b"
+    r"|\bsav(?:e|ing)\b[^.!?]*?\bas\b",
+    re.I)
+# "Save the output as `results.txt`" names a file, and the block beside it is
+# the command that makes the output, not the file's contents.
+SAVE_OTHER_RE = re.compile(
+    r"\b(?:output|results?|logs?|screenshots?|images?|pictures?|changes|"
+    r"work|progress|notebook)\b", re.I)
+SAVE_BACK_RE = re.compile(r"\b(?:above|preceding|previous)\b", re.I)
+SAVE_AHEAD_RE = re.compile(r"\b(?:below|following|next)\b", re.I)
+# A name a reader can save a file under: no spaces, no shell, not a flag.
+SCRIPT_NAME_RE = re.compile(r"^[\w.][\w.-]*(?:/[\w.-]+)*$")
+SCRIPT_ATTR_RE = re.compile(r' data-script="(\d+)"')
+
+
+# Blocks that hold commands to type rather than a file to keep. "Save it as
+# `f.py` and run it:" sits above the command that runs it, and a .py file is
+# never that command, so a named file only lands on one of these when its own
+# name says it is a shell script.
+SHELL_LANGS = {"bash", "sh", "shell", "zsh", "console", "shellsession",
+               "terminal", "powershell", "ps", "ps1", "pwsh", "cmd", "bat"}
+SHELL_EXTS = {".sh", ".bash", ".zsh", ".ps1", ".bat", ".cmd"}
+
+
+def fits_block(name: str, token) -> bool:
+    """Whether a file named in prose can be the block `token` holds."""
+    lang = token.info.split(maxsplit=1)[0].lower() if token.info.strip() else ""
+    if not name or lang not in SHELL_LANGS:
+        return True
+    return Path(name).suffix.lower() in SHELL_EXTS
+
+
+def find_scripts(tokens) -> tuple[list[dict], list[str]]:
+    """The blocks a chapter asks the reader to save, and the asks it cannot tie.
+
+    Reads markdown-it's tokens rather than the text, so a fence inside a list
+    item pairs with the sentence in the same item and a fence is never confused
+    with a line that merely starts with backticks. Every script's fence token is
+    marked with `data-script` as a side effect; the PDF puts its attachment note
+    under the block that carries it, and the EPUB strips it.
+
+    Returns (scripts, gaps). A script is {name, content, token}. A gap is one
+    line saying which sentence asked for a save that nothing covers.
+    """
+    # The chapter as a flat run of blocks. Lists and block quotes are only
+    # containers, so they are passed through rather than breaking a sentence
+    # from the block it introduces.
+    blocks: list[tuple[str, object]] = []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if t.type == "paragraph_open":
+            blocks.append(("para", tokens[i + 1].content))
+            i += 3
+            continue
+        if t.type in ("fence", "code_block"):
+            lang = t.info.split(maxsplit=1)[0].lower() if t.info.strip() else ""
+            # An SVG fence becomes a figure (figurize), not a block of code.
+            blocks.append(("other" if lang == "svg" else "code", t))
+        elif t.nesting == 1 and t.type not in (
+                "bullet_list_open", "ordered_list_open", "list_item_open",
+                "blockquote_open"):
+            blocks.append(("other", t))
+            depth, close = 1, t.type.replace("_open", "_close")
+            while depth and i + 1 < len(tokens):
+                i += 1
+                if tokens[i].type == t.type:
+                    depth += 1
+                elif tokens[i].type == close:
+                    depth -= 1
+        elif t.nesting == 0 and t.type in ("hr", "html_block"):
+            blocks.append(("other", t))
+        i += 1
+
+    named: dict[int, str] = {}
+    for _, t in (b for b in blocks if b[0] == "code"):
+        m = FENCE_FILE_RE.search(t.info)
+        if m:
+            named[id(t)] = m.group(1) or m.group(2)
+
+    gaps: list[str] = []
+    # A block one sentence has asked about is not there for the next to claim,
+    # whether or not the first found a name for it. Otherwise a sentence with
+    # no block of its own reaches back and takes its neighbour's.
+    asked: set[int] = set()
+    for k, (kind, text) in enumerate(blocks):
+        if kind != "para":
+            continue
+        m = SAVE_AS_RE.search(text) or SAVE_INTENT_RE.search(text)
+        if not m or SAVE_OTHER_RE.search(m.group(0)):
+            continue
+        # The whole sentence, which is what an author searches their file for.
+        starts = [0] + [e.end() for e in re.finditer(r"[.!?:]\s+", text)
+                        if e.end() <= m.start()]
+        sentence = re.sub(r"\s+", " ", re.split(
+            r"(?<=[.!?:])\s+", text[starts[-1]:], maxsplit=1)[0])
+        said = sentence if len(sentence) <= 72 else sentence[:69] + "..."
+        prev = blocks[k - 1] if k else None
+        nxt = blocks[k + 1] if k + 1 < len(blocks) else None
+        # The direction comes from the sentence that asks for the save first:
+        # in "Save the code above as `f.py`. Next, run it:" the "Next" belongs
+        # to the other sentence, and reading the whole paragraph would hand
+        # `f.py` the command below. Only a sentence with no direction of its
+        # own takes the paragraph's, as in "The script above is complete. Save
+        # it as `f.py`."
+        order = None
+        for scope in (sentence, text):
+            back, ahead = SAVE_BACK_RE.search(scope), SAVE_AHEAD_RE.search(scope)
+            if back and not ahead:
+                order = [prev]
+            elif ahead and not back:
+                order = [nxt]
+            if order:
+                break
+        order = order or [nxt, prev]
+        groups = m.groupdict()
+        name = (groups.get("a") or groups.get("b") or groups.get("c") or "").strip()
+        target = next((b[1] for b in order if b and b[0] == "code"
+                       and id(b[1]) not in asked and fits_block(name, b[1])),
+                      None)
+        if target is None:
+            gaps.append(f'"{said}" has no code block beside it')
+            continue
+        asked.add(id(target))
+        if id(target) in named:
+            continue
+        if not SCRIPT_NAME_RE.match(name):
+            lang = target.info.split(maxsplit=1)[0] if target.info.strip() else "text"
+            gaps.append(f'"{said}" names no file to save the block as; put the '
+                        f"name on its fence: ```{lang} file=NAME")
+            continue
+        named[id(target)] = name
+
+    scripts = []
+    for _, t in (b for b in blocks if b[0] == "code"):
+        if id(t) not in named:
+            continue
+        t.attrSet("data-script", str(len(scripts)))
+        scripts.append({"name": named[id(t)], "content": t.content, "token": t})
+    return scripts, gaps
 
 
 def strip_markdown(text: str) -> str:
@@ -1953,6 +2173,42 @@ def inject_colgroups(body_html: str, ch: int,
     return "".join(out)
 
 
+# Where a script's attachment goes. The note under each script links here, and
+# Chromium turns the link into a PDF link annotation drawn exactly over the
+# note's filename; attach_scripts finds each one by this prefix and replaces it
+# with the file. So the attachment lands where the note printed without anything
+# measuring the page, and a link left behind is caught rather than shipped. The
+# .invalid top-level domain is reserved (RFC 2606), so no link could resolve.
+ATTACH_URI = "https://bookcraft.invalid/attach/"
+# markdown-it puts a fence's attributes on its <code> and an indented block's on
+# its <pre>, so the marker is looked for on both.
+SCRIPT_PRE_RE = re.compile(
+    r'<pre(?P<pre>[^>]*)><code(?P<code>[^>]*)>(?P<body>.*?)</code></pre>', re.S)
+
+
+def script_notes(body_html: str, ch: dict) -> str:
+    """Put the attachment note under every block the chapter asks to be saved.
+
+    PDF only. The EPUB carries no attachments, so a note there would point at
+    something that is not in the book.
+    """
+    def one(m: re.Match) -> str:
+        mark = SCRIPT_ATTR_RE.search(m.group("pre") + m.group("code"))
+        if not mark:
+            return m.group(0)
+        n = int(mark.group(1))
+        name = html_mod.escape(ch["scripts"][n]["name"])
+        return (f'<pre{SCRIPT_ATTR_RE.sub("", m.group("pre"))}>'
+                f'<code{SCRIPT_ATTR_RE.sub("", m.group("code"))}>'
+                f'{m.group("body")}</code></pre>'
+                f'<p class="script-note"><a href="{ATTACH_URI}{ch["num"]}/{n}">'
+                f"{name}</a> is attached to this PDF. Copying the code off the "
+                "page loses its indentation, so save the attachment instead: "
+                "double-click its name here, or open your viewer's list of "
+                "attachments.</p>")
+    return SCRIPT_PRE_RE.sub(one, body_html)
+
+
 def build_chapters(chapters, cfg, figures: list[dict], src: Path,
                    col_plan: dict | None = None,
                    slides: list[dict] | None = None) -> str:
@@ -1969,6 +2225,7 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
                         fig_prefix=(f'A{ch["label_num"]}' if ch.get("appendix")
                                     else str(ch["num"])))
         body = inject_colgroups(body, ch["num"], col_plan or {})
+        body = script_notes(body, ch)
         out.append(
             f'<section class="chapter" data-ch="{ch["num"]}">'
             '<div class="chapter-head">'
@@ -2516,6 +2773,136 @@ def locate(pages_text: list[str]):
     return chapters, index_page, figures, lof_page, cover_end, gloss_page
 
 
+def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
+    """Carry every script the book asks the reader to save inside the PDF.
+
+    The page cannot carry one. PDFKit, which is Preview and Safari, drops every
+    leading indent when text is copied out of a Chromium PDF, whatever the font,
+    so a Python script copied off the page fails with IndentationError; poppler
+    keeps the indents on a short block and drifts on a long one. No stylesheet
+    reaches that, so the file travels beside the text instead, twice over:
+    as a file attachment annotation over the note's filename, which a viewer
+    that supports them opens on a double-click, and in the document's list of
+    embedded files, which is what a viewer's attachments panel reads. Two
+    routes, because viewers support one, the other, both or neither, and which
+    of the common ones does what is not measured here (see SKILL.md).
+
+    Rewrites `pdf` in place and returns {(chapter, script): page}. Raises
+    RuntimeError when a script's link is missing or one is left over, because
+    either way the book would print a note that does not do what it says.
+    """
+    wanted = {(ch["num"], n): (ch, sc) for ch in chapters
+              for n, sc in enumerate(ch.get("scripts", []))}
+    if not wanted:
+        return {}
+    writer = PdfWriter(clone_from=str(pdf))
+    specs: dict[tuple[int, int], object] = {}
+
+    def spec_for(key):
+        if key not in specs:
+            ch, sc = wanted[key]
+            data = sc["content"].encode("utf-8")
+            ef = DecodedStreamObject()
+            ef.set_data(data)
+            ef[NameObject("/Type")] = NameObject("/EmbeddedFile")
+            ef[NameObject("/Params")] = DictionaryObject(
+                {NameObject("/Size"): NumberObject(len(data))})
+            name = Path(sc["name"]).name
+            label = (f'Appendix {ch["label_num"]}' if ch.get("appendix")
+                     else f'Chapter {ch["num"]}')
+            # pypdf's only way to make an object indirect, which a stream has
+            # to be. It is underscored and has been stable across releases.
+            ef_ref = writer._add_object(ef)
+            specs[key] = writer._add_object(DictionaryObject({
+                NameObject("/Type"): NameObject("/Filespec"),
+                NameObject("/F"): TextStringObject(name),
+                NameObject("/UF"): TextStringObject(name),
+                NameObject("/Desc"): TextStringObject(
+                    f"{label}: the script saved as {sc['name']}"),
+                NameObject("/EF"): DictionaryObject({
+                    NameObject("/F"): ef_ref, NameObject("/UF"): ef_ref}),
+            }))
+        return specs[key]
+
+    placed: dict[tuple[int, int], int] = {}
+    stray: list[str] = []
+    for pno, page in enumerate(writer.pages, start=1):
+        annots = page.get("/Annots")
+        if annots is None:
+            continue
+        annots = annots.get_object()
+        for j in range(len(annots)):
+            a = annots[j].get_object()
+            action = a.get("/A")
+            uri = str(action.get_object().get("/URI", "")) if action else ""
+            if a.get("/Subtype") != "/Link" or not uri.startswith(ATTACH_URI):
+                continue
+            try:
+                key = tuple(int(x) for x in uri[len(ATTACH_URI):].split("/"))
+            except ValueError:
+                key = None
+            if key not in wanted:
+                stray.append(uri)
+                continue
+            rect = a["/Rect"]
+            w = float(rect[2]) - float(rect[0])
+            h = float(rect[3]) - float(rect[1])
+            # An empty appearance, so the viewer draws nothing over the note:
+            # the printed filename is the thing to double-click. Left without
+            # one, each viewer paints its own paperclip or pushpin over it.
+            blank = DecodedStreamObject()
+            blank.set_data(b"")
+            blank.update({
+                NameObject("/Type"): NameObject("/XObject"),
+                NameObject("/Subtype"): NameObject("/Form"),
+                NameObject("/BBox"): ArrayObject(
+                    [NumberObject(0), NumberObject(0),
+                     NumberObject(math.ceil(abs(w))),
+                     NumberObject(math.ceil(abs(h)))]),
+            })
+            _, sc = wanted[key]
+            annots[j] = writer._add_object(DictionaryObject({
+                NameObject("/Type"): NameObject("/Annot"),
+                NameObject("/Subtype"): NameObject("/FileAttachment"),
+                NameObject("/Rect"): rect,
+                NameObject("/FS"): spec_for(key),
+                NameObject("/Contents"): TextStringObject(
+                    f"Attached file: {Path(sc['name']).name}"),
+                NameObject("/Name"): NameObject("/Paperclip"),
+                NameObject("/F"): NumberObject(4),
+                NameObject("/AP"): DictionaryObject(
+                    {NameObject("/N"): writer._add_object(blank)}),
+            }))
+            placed.setdefault(key, pno)
+
+    missing = [wanted[k][1]["name"] for k in wanted if k not in placed]
+    if missing or stray:
+        raise RuntimeError(
+            f"attachment links missing for {missing or 'none'}, "
+            f"unrecognised for {stray or 'none'}")
+
+    # Keyed by book order rather than by filename: two chapters may each save a
+    # file of the same name, and a name tree's keys must be unique and sorted.
+    # Viewers list an attachment by its filespec's name, not by this key.
+    tree = ArrayObject()
+    for key in sorted(wanted):
+        tree.append(TextStringObject(f"{key[0]:04d}-{key[1]:04d} "
+                                     f"{Path(wanted[key][1]['name']).name}"))
+        tree.append(spec_for(key))
+    root = writer._root_object
+    names = root.get("/Names")
+    names = names.get_object() if names is not None else DictionaryObject()
+    names[NameObject("/EmbeddedFiles")] = DictionaryObject(
+        {NameObject("/Names"): tree})
+    root[NameObject("/Names")] = names
+
+    tmp = pdf.with_name(f".{pdf.name}.attach")
+    with open(tmp, "wb") as fh:
+        writer.write(fh)
+    tmp.replace(pdf)
+    return placed
+
+
 # --------------------------------------------------------------------------
 # EPUB
 # --------------------------------------------------------------------------
@@ -3049,7 +3436,8 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
 
     chapter_items = []
     for ch in chapters:
-        body = figurize_epub(ch["body_html"], ch["num"], counter, figures, src,
+        body = figurize_epub(SCRIPT_ATTR_RE.sub("", ch["body_html"]),
+                             ch["num"], counter, figures, src,
                              slide_dir_of(cfg))
         body = collect_images(body, src, assets, lost_images)
         heading = html_mod.escape(ch["title"])
@@ -3420,6 +3808,14 @@ def main(argv: list[str]) -> int:
     if not markers_hidden:
         tables = render(page_html, src, out, args.title, body_pt)
         final = page_texts(out)
+    # Last, onto the finished file, because it rewrites the PDF rather than the
+    # page: no render after this could keep what it adds.
+    try:
+        attached = attach_scripts(out, chapters)
+    except RuntimeError as exc:
+        print(f"error: could not attach the book's scripts to {out}: {exc}",
+              file=sys.stderr)
+        return 1
     total = len(final) - (1 if not final[-1].strip() else 0)
     print(f"wrote {out}")
     print(f"pages: {total}   chapters: {len(chapters)}")
@@ -3457,7 +3853,7 @@ def main(argv: list[str]) -> int:
     # gone from the text layer as well, so a reader cannot recover it by
     # selecting the line. A documentation note does not reach the person binding
     # a book full of long commands; this does.
-    pre_pt = scaled_pt(TYPE_SCALE["pre"], body_pt)
+    pre_pt = code_pt(scaled_pt(TYPE_SCALE["pre"], body_pt))
     code_fits = int(CODE_CHARS_PER_PT / pre_pt)
     over = [(len(ln), ch, ln) for ch in chapters for ln in ch["fenced"]
             if len(ln) > code_fits]
@@ -3473,6 +3869,25 @@ def main(argv: list[str]) -> int:
         print(f"  The cut text is absent from the PDF's text layer too, so it "
               f"cannot be copied out. Shorten the line, or bind at a smaller "
               f"size with --type-size.")
+    # Every block the book asks the reader to save travels as a file, since
+    # copying it off the page loses its indentation (attach_scripts). A save the
+    # binder could not tie to a block and a filename travels as nothing, and
+    # that is the gap worth a warning: the book tells the reader to do something
+    # the PDF gives them no working way to do.
+    if attached:
+        where = ", ".join(
+            f"{ch['scripts'][n]['name']} (p. {attached[(ch['num'], n)]})"
+            for ch in chapters for n in range(len(ch["scripts"])))
+        print(f"scripts: {len(attached)} attached to the PDF: {where}")
+    gaps = [(ch, g) for ch in chapters for g in ch["script_gaps"]]
+    if gaps:
+        print(f"  warning: {len(gaps)} instruction(s) to save code as a file "
+              f"have nothing attached, so a reader who copies the code off the "
+              f"page gets it without its indentation:")
+        for ch, g in gaps:
+            print(f"    ch {ch['num']}: {g}")
+        print(f"  Name the file on the block's fence (```python file=NAME), or "
+              f"say it beside the block: Save the script below as `NAME`.")
     # A table too wide for the measure breaks its words mid-token rather than
     # overflowing, because the cells carry `overflow-wrap: anywhere`. That is
     # the right trade against the alternative, which was the whole book
