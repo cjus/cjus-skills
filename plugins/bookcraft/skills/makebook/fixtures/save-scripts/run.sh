@@ -23,15 +23,20 @@
 #             block beside it, so nothing is attached and nothing is warned
 #             a list item's sentence and fence pair up (in_a_list.py), and the
 #             attached file carries none of the list's own indent
-#   save-02   "Save the code above as" reaches back to the block (after.py)
+#   save-02   "Save the code above as `after.py`. Next, run it:" reaches back
+#             to the block above (after.py); the "Next" belongs to the other
+#             sentence, so the command below is not taken
 #             "Save this script" names no file: a warning
 #             a sentence naming later.py with no block of its own: a warning,
 #             and it must not take the block the sentence before it asked about
 #             an ordinary block with no save beside it: neither
+#             an indented block, not a fence, beside a save (indented.py).
+#             markdown-it marks it on <pre> rather than <code>, and missing
+#             that once failed the whole bind
 #
 # What is checked, and against what:
 #
-#   attachments    pdfdetach lists exactly the four scripts, and not later.py
+#   attachments    pdfdetach lists exactly the five scripts, and not later.py
 #   contents       each extracted file is the block byte for byte, indents and
 #                  all, and every .py parses
 #   warnings       the bind warns for the two gaps and for nothing else
@@ -92,9 +97,9 @@ report 0 "the book binds"
 # Unique names, because every script is listed twice: once in the document's
 # embedded files and once as the annotation over its note.
 listed=$(pdfdetach -list "$pdf" 2>&1 | sed -n 's/^[0-9][0-9]*: //p' | sort -u | tr '\n' ' ')
-want="after.py count_rounds.py in_a_list.py time_species.py "
+want="after.py count_rounds.py in_a_list.py indented.py time_species.py "
 if [ "$listed" = "$want" ]; then
-  report 0 "the PDF carries exactly the four scripts the book asks to be saved"
+  report 0 "the PDF carries exactly the five scripts the book asks to be saved"
 else
   report 1 "the PDF should carry '$want', and carries '$listed'"
 fi
@@ -113,6 +118,8 @@ want = {
         "            total_count = n_rounds * 2\n"
         "    return time.perf_counter() - start\n"),
     "in_a_list.py": 'for _ in range(3):\n    print("inside a list item")\n',
+    "after.py": "def after_the_fact(x_value):\n    return x_value * 2\n",
+    "indented.py": 'for _ in range(2):\n    print("an indented block")\n',
 }
 bad = []
 for name, text in want.items():
@@ -205,10 +212,10 @@ else
   else
     report 0 "no marker link survives into the finished PDF"
   fi
-  if [ "${nattach:-0}" -eq 4 ]; then
+  if [ "${nattach:-0}" -eq 5 ]; then
     report 0 "each script's note carries a file attachment annotation"
   else
-    report 1 "four notes should carry a file attachment annotation, and $nattach do"
+    report 1 "five notes should carry a file attachment annotation, and $nattach do"
   fi
 fi
 

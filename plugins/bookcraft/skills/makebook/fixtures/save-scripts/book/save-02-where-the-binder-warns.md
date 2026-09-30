@@ -5,7 +5,11 @@ def after_the_fact(x_value):
     return x_value * 2
 ```
 
-Save the code above as `after.py` and run it.
+Save the code above as `after.py`. Next, run it:
+
+```bash
+python after.py
+```
 
 Save this script so you can run it again tomorrow:
 
@@ -22,3 +26,8 @@ Nothing to save here, and nothing to warn about.
 ```python
 print("an ordinary block")
 ```
+
+Save the script below as `indented.py`.
+
+    for _ in range(2):
+        print("an indented block")

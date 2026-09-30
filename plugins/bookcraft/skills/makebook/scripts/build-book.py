@@ -1069,7 +1069,7 @@ SAVE_BACK_RE = re.compile(r"\b(?:above|preceding|previous)\b", re.I)
 SAVE_AHEAD_RE = re.compile(r"\b(?:below|following|next)\b", re.I)
 # A name a reader can save a file under: no spaces, no shell, not a flag.
 SCRIPT_NAME_RE = re.compile(r"^[\w.][\w.-]*(?:/[\w.-]+)*$")
-SCRIPT_ATTR_RE = re.compile(r' data-script="\d+"')
+SCRIPT_ATTR_RE = re.compile(r' data-script="(\d+)"')
 
 
 def find_scripts(tokens) -> tuple[list[dict], list[str]]:
@@ -1134,14 +1134,19 @@ def find_scripts(tokens) -> tuple[list[dict], list[str]]:
         # The whole sentence, which is what an author searches their file for.
         starts = [0] + [e.end() for e in re.finditer(r"[.!?:]\s+", text)
                         if e.end() <= m.start()]
-        said = re.split(r"(?<=[.!?:])\s+", text[starts[-1]:], maxsplit=1)[0]
-        said = re.sub(r"\s+", " ", said)
-        said = said if len(said) <= 72 else said[:69] + "..."
+        sentence = re.sub(r"\s+", " ", re.split(
+            r"(?<=[.!?:])\s+", text[starts[-1]:], maxsplit=1)[0])
+        said = sentence if len(sentence) <= 72 else sentence[:69] + "..."
         prev = blocks[k - 1] if k else None
         nxt = blocks[k + 1] if k + 1 < len(blocks) else None
-        if SAVE_BACK_RE.search(text) and not SAVE_AHEAD_RE.search(text):
+        # The direction comes from the sentence that asks for the save, not the
+        # paragraph around it: in "Save the code above as `f.py`. Next, run
+        # it:" the "Next" belongs to the other sentence, and reading the whole
+        # paragraph would hand `f.py` the command below.
+        back, ahead = SAVE_BACK_RE.search(sentence), SAVE_AHEAD_RE.search(sentence)
+        if back and not ahead:
             order = [prev]
-        elif SAVE_AHEAD_RE.search(text) and not SAVE_BACK_RE.search(text):
+        elif ahead and not back:
             order = [nxt]
         else:
             order = [nxt, prev]
@@ -2152,8 +2157,10 @@ def inject_colgroups(body_html: str, ch: int,
 # measuring the page, and a link left behind is caught rather than shipped. The
 # .invalid top-level domain is reserved (RFC 2606), so no link could resolve.
 ATTACH_URI = "https://bookcraft.invalid/attach/"
+# markdown-it puts a fence's attributes on its <code> and an indented block's on
+# its <pre>, so the marker is looked for on both.
 SCRIPT_PRE_RE = re.compile(
-    r'<pre><code data-script="(\d+)"([^>]*)>(.*?)</code></pre>', re.S)
+    r'<pre(?P<pre>[^>]*)><code(?P<code>[^>]*)>(?P<body>.*?)</code></pre>', re.S)
 
 
 def script_notes(body_html: str, ch: dict) -> str:
@@ -2163,9 +2170,14 @@ def script_notes(body_html: str, ch: dict) -> str:
     something that is not in the book.
     """
     def one(m: re.Match) -> str:
-        n = int(m.group(1))
+        mark = SCRIPT_ATTR_RE.search(m.group("pre") + m.group("code"))
+        if not mark:
+            return m.group(0)
+        n = int(mark.group(1))
         name = html_mod.escape(ch["scripts"][n]["name"])
-        return (f"<pre><code{m.group(2)}>{m.group(3)}</code></pre>"
+        return (f'<pre{SCRIPT_ATTR_RE.sub("", m.group("pre"))}>'
+                f'<code{SCRIPT_ATTR_RE.sub("", m.group("code"))}>'
+                f'{m.group("body")}</code></pre>'
                 f'<p class="script-note"><a href="{ATTACH_URI}{ch["num"]}/{n}">'
                 f"{name}</a> is attached to this PDF. Copying the code off the "
                 "page loses its indentation, so save the attachment instead: "
