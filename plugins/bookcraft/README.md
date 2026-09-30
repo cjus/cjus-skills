@@ -369,7 +369,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./fixtures/assertions/run.sh                              # exits 0, the helper rebuilds its file and the checks read it
 ../makebook/fixtures/display-names/run.sh                 # exits 0, the binder swaps only the source rows
 ../makebook/fixtures/bind/run.sh                          # exits 0, binds three books, the guide twice; skips without install.sh's venv
-../makebook/fixtures/save-scripts/run.sh                  # exits 0, attaches five scripts and warns about two saves it cannot cover
+../makebook/fixtures/save-scripts/run.sh                  # exits 0, attaches seven scripts and warns about two saves it cannot cover
 ```
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.

@@ -13,12 +13,12 @@ A reader who copies a fenced code block out of a `/makebook` PDF gets text Pytho
 - **`plugins/bookcraft/skills/makebook/scripts/build-book.py`**
   - CSS: `.mono`, `code`, `pre`, `.chapter code`, `.chapter pre` and the note's filename are rounded with `round(nearest, ..., 0.25px)`. New `code_pt()` mirrors the rounding for the fenced-line width warning, whose thresholds (79, 67, 54) come out unchanged.
   - `find_scripts()`: walks markdown-it's tokens and pairs each save instruction with its block. Recognises `file=NAME` on the fence, or a save sentence in the adjacent paragraph. Returns the scripts, plus a gap for every save it cannot cover. `load_chapters` now parses and renders in two steps so the script fences can be marked with `data-script`.
-  - `script_notes()`: PDF only. Prints the attachment note under each script block. The note's filename links to a reserved `https://bookcraft.invalid/attach/<ch>/<n>` marker.
+  - `script_notes()`: PDF only. Prints the attachment note under each script block, finding the marker on the `<code>` of a fence or on the `<pre>` of an indented block. The note's filename links to a reserved `https://bookcraft.invalid/attach/<ch>/<n>` marker.
   - `attach_scripts()`: runs after the final render. It uses `pypdf` to replace each marker link annotation with a FileAttachment annotation at the same rect, with an empty appearance so the printed filename shows through. It also adds every script to the document-level EmbeddedFiles name tree. A missing or leftover marker fails the bind.
   - `main`: prints `scripts: N attached to the PDF: name (p. N), ...`, and warns once per uncovered save instruction.
   - The EPUB strips the `data-script` marker and carries no note.
 - **`plugins/bookcraft/skills/makebook/fixtures/save-scripts/`**: new fixture. It binds a two-chapter book that exercises every save case and checks the attachments, their contents, the warnings, text runs, PDFKit's copy, leftover markers, and the EPUB.
-- **`plugins/bookcraft/skills/makebook/requirements.txt`**: adds `pypdf>=6.0`.
+- **`plugins/bookcraft/skills/makebook/requirements.txt`**: adds `pypdf>=6.0`, and raises the Playwright floor from 1.40 to 1.44. 1.44 is the first release to bundle a Chromium (125) that parses CSS `round()`.
 - **`plugins/bookcraft/skills/makebook/SKILL.md`**: new section *Code the reader is asked to save*. The Procedure's report step now includes scripts and gaps.
 - **`plugins/bookcraft/README.md`**: lists the new fixture.
 - **`.github/workflows/fixtures.yml`**: the comment now names both binding fixtures and `pdfdetach`.
@@ -51,7 +51,7 @@ Save the script below as `time_species.py`.
 What the bind prints for the fixture book (`save-scripts/run.sh` asserts on it):
 
 ```
-scripts: 4 attached to the PDF: time_species.py (p. 3), count_rounds.py (p. 3), in_a_list.py (p. 4), after.py (p. 5)
+scripts: 7 attached to the PDF: time_species.py (p. 3), count_rounds.py (p. 3), in_a_list.py (p. 4), after.py (p. 5), indented.py (p. 5), complete.py (p. 6), run_next.py (p. 6)
   warning: 2 instruction(s) to save code as a file have nothing attached, ...
     ch 2: "Save this script so you can run it again tomorrow:" names no file to save the block as; put the name on its fence: ```python file=NAME
     ch 2: "Save the script as `later.py` once you have written it." has no code block beside it
@@ -67,21 +67,37 @@ All five phases were completed as planned.
 - **Phase 4, detection and warning:** done. The recognition rule is both `file=` and prose, per the operator. The warning stays for uncovered saves, also per the operator.
 - **Phase 5, fixture, docs, version:** done.
 
+**The first close run stopped at review with REQUEST_CHANGES**, and all three findings are fixed in the second commit:
+
+- An indented code block beside a save sentence failed the whole bind, because the note looked for the marker only on `<code>`.
+- A paragraph holding "above" in one sentence and "Next" in another sent the file to the block below. The direction is now read from the save sentence alone.
+- The Playwright floor allowed a Chromium too old for `round()`.
+
+The fixture now covers both book cases, and reverting either code fix fails it.
+
+**The second review returned APPROVE with one important finding**, fixed in the close commit. Reading the direction from the save sentence alone had lost "The script above is complete. Save it as `f.py`.", and "Save it as `f.py` and run it:" above a bash block handed the command to `f.py`. Now a sentence with no direction takes the paragraph's, and a file named in prose never lands on a shell block unless its name is a shell script.
+
 **One deviation:** the ticket asked for a way to get each script "that works for the reader". Which common viewers actually offer an embedded file to a reader was not verified. See Testing and Deferred work.
 
 ## Testing
 
 **Automated.** `plugins/bookcraft/scripts/test-fixtures.sh --strict` passes 18 of 18 on macOS, including the new `makebook/save-scripts/run.sh`, which checks that:
 
-- `pdfdetach` lists exactly the four scripts, and not `later.py`;
-- `time_species.py` and `in_a_list.py` match their blocks byte for byte, and every attached `.py` parses;
+- `pdfdetach` lists exactly the seven scripts, and not `later.py`;
+- `time_species.py`, `in_a_list.py`, `after.py`, `indented.py`, `complete.py` and `run_next.py` match their blocks byte for byte, and every attached `.py` parses;
 - the bind warns for the two uncovered saves and nothing else;
 - every monospace text object in the PDF is written as one run;
 - on macOS, PDFKit's copy of the whole book has `for _ in range(7):` intact and no lone `_` line;
-- no marker link survives, and four FileAttachment annotations exist;
+- no marker link survives, and seven FileAttachment annotations exist;
 - the EPUB carries neither the note nor the marker.
 
-**Revert check.** With the four `round()` rules stripped, the fixture fails twice: code lines are written in 15 to 31 runs, and PDFKit's copy reads `time` / `_` / `species.py`.
+**Revert checks.**
+
+- With the `round()` rules stripped, the fixture fails twice: code lines are written in 15 to 31 runs, and PDFKit's copy reads `time` / `_` / `species.py`.
+- With the marker looked for on `<code>` only, the bind fails.
+- With the save direction read from the whole paragraph, `after.py` comes out as `python after.py`.
+- With no fallback to the paragraph, `complete.py` comes out as the block below it.
+- Without the shell-block guard, `run_next.py` comes out as `python run_next.py`.
 
 **By hand.**
 
@@ -95,9 +111,9 @@ All five phases were completed as planned.
 
 ## Impact assessment
 
-11 files changed, 928 insertions, 12 deletions. About a third of the insertions are the plan folder.
+Outside the plan folder: 9 files changed, 836 insertions and 13 deletions. `build-book.py` accounts for 421 of those insertions, and most of the rest is the new fixture. The plan folder adds the plan, the changelog, this summary, two reviews and the commit message.
 
-- **New runtime dependency: `pypdf>=6.0`.** Anyone updating from 1.8.0 has to re-run `install.sh` once. Until they do, the binder stops at start-up, naming the missing package and the command. CI runs `install.sh`, so it picks up the dependency automatically.
+- **New runtime dependency, `pypdf>=6.0`, and a raised Playwright floor, `>=1.44`.** Anyone updating from 1.8.0 has to re-run `install.sh` once. Until they do, the binder stops at start-up, naming the missing package and the command. CI runs `install.sh`, so it picks up the dependency automatically.
 - **Every bound book changes slightly.** Code prints at most 0.125px (under 0.1pt) off its previous size: at 14pt body, fenced code moves from 10.4pt to 10.3125pt. Page counts can shift where a code block sat on a page boundary.
 - **Books with save instructions** gain a note under each saved block and grow by the size of the attached files.
 - **A book with no save instructions** gets no note and no attachment, and the PDF is not rewritten.

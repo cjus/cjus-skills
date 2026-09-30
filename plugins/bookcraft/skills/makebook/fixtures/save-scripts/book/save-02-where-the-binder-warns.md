@@ -31,3 +31,29 @@ Save the script below as `indented.py`.
 
     for _ in range(2):
         print("an indented block")
+
+A finished script comes first here:
+
+```python
+def complete_above(y_value):
+    return y_value + 1
+```
+
+The script above is complete. Save it as `complete.py`.
+
+```python
+print("the next step's block")
+```
+
+One more:
+
+```python
+def run_it_next(z_value):
+    return z_value - 1
+```
+
+Save it as `run_next.py` and run it:
+
+```bash
+python run_next.py
+```

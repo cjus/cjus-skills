@@ -1072,6 +1072,23 @@ SCRIPT_NAME_RE = re.compile(r"^[\w.][\w.-]*(?:/[\w.-]+)*$")
 SCRIPT_ATTR_RE = re.compile(r' data-script="(\d+)"')
 
 
+# Blocks that hold commands to type rather than a file to keep. "Save it as
+# `f.py` and run it:" sits above the command that runs it, and a .py file is
+# never that command, so a named file only lands on one of these when its own
+# name says it is a shell script.
+SHELL_LANGS = {"bash", "sh", "shell", "zsh", "console", "shellsession",
+               "terminal", "powershell", "ps", "ps1", "pwsh", "cmd", "bat"}
+SHELL_EXTS = {".sh", ".bash", ".zsh", ".ps1", ".bat", ".cmd"}
+
+
+def fits_block(name: str, token) -> bool:
+    """Whether a file named in prose can be the block `token` holds."""
+    lang = token.info.split(maxsplit=1)[0].lower() if token.info.strip() else ""
+    if not name or lang not in SHELL_LANGS:
+        return True
+    return Path(name).suffix.lower() in SHELL_EXTS
+
+
 def find_scripts(tokens) -> tuple[list[dict], list[str]]:
     """The blocks a chapter asks the reader to save, and the asks it cannot tie.
 
@@ -1139,27 +1156,33 @@ def find_scripts(tokens) -> tuple[list[dict], list[str]]:
         said = sentence if len(sentence) <= 72 else sentence[:69] + "..."
         prev = blocks[k - 1] if k else None
         nxt = blocks[k + 1] if k + 1 < len(blocks) else None
-        # The direction comes from the sentence that asks for the save, not the
-        # paragraph around it: in "Save the code above as `f.py`. Next, run
-        # it:" the "Next" belongs to the other sentence, and reading the whole
-        # paragraph would hand `f.py` the command below.
-        back, ahead = SAVE_BACK_RE.search(sentence), SAVE_AHEAD_RE.search(sentence)
-        if back and not ahead:
-            order = [prev]
-        elif ahead and not back:
-            order = [nxt]
-        else:
-            order = [nxt, prev]
+        # The direction comes from the sentence that asks for the save first:
+        # in "Save the code above as `f.py`. Next, run it:" the "Next" belongs
+        # to the other sentence, and reading the whole paragraph would hand
+        # `f.py` the command below. Only a sentence with no direction of its
+        # own takes the paragraph's, as in "The script above is complete. Save
+        # it as `f.py`."
+        order = None
+        for scope in (sentence, text):
+            back, ahead = SAVE_BACK_RE.search(scope), SAVE_AHEAD_RE.search(scope)
+            if back and not ahead:
+                order = [prev]
+            elif ahead and not back:
+                order = [nxt]
+            if order:
+                break
+        order = order or [nxt, prev]
+        groups = m.groupdict()
+        name = (groups.get("a") or groups.get("b") or groups.get("c") or "").strip()
         target = next((b[1] for b in order if b and b[0] == "code"
-                       and id(b[1]) not in asked), None)
+                       and id(b[1]) not in asked and fits_block(name, b[1])),
+                      None)
         if target is None:
             gaps.append(f'"{said}" has no code block beside it')
             continue
         asked.add(id(target))
         if id(target) in named:
             continue
-        groups = m.groupdict()
-        name = (groups.get("a") or groups.get("b") or groups.get("c") or "").strip()
         if not SCRIPT_NAME_RE.match(name):
             lang = target.info.split(maxsplit=1)[0] if target.info.strip() else "text"
             gaps.append(f'"{said}" names no file to save the block as; put the '

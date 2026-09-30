@@ -113,8 +113,10 @@ Labels at start: `bug`, `status:todo`, `priority:high`.
 
 ## Status
 
-2026-09-30: all five phases done locally; `test-fixtures.sh --strict` passes 18 of 18 on macOS.
-Not yet pushed through CI, so the Linux leg's fonts are unmeasured.
+2026-09-30: all five phases done; `test-fixtures.sh --strict` passes 18 of 18 on macOS. The first
+close review returned REQUEST_CHANGES (indented blocks, save direction, Playwright floor), fixed
+in `318ca15`; the second returned APPROVE with one finding (paragraph fallback and a shell-block
+guard), fixed in the close commit. CI has not run yet, so the Linux leg's fonts are unmeasured.
 
 ## Open Questions
 
@@ -129,6 +131,8 @@ All four answered by the operator on 2026-09-30:
 - ~~Does the EPUB preserve indentation when copied?~~ Out of scope.
 
 ## Deferred
+
+Triaged at `/pr:close` on 2026-09-30: the viewer check became issue 56; the other three dropped.
 
 - Viewer support for the attachments is unverified by hand: Adobe Acrobat Reader, Firefox,
   Chrome's built-in viewer and macOS Preview. Only poppler (`pdfdetach`) and PDFKit's parsing

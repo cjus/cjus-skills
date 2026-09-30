@@ -33,12 +33,14 @@ wherever it remains, so the book is not shipped with it silently.
   checks the attachments byte for byte, the warnings, one text run per code line, PDFKit's copy
   on macOS, no leftover marker link, and an EPUB without the note. Reverting the rounding fails
   it. bookcraft 1.8.0 -> 1.9.0; updating needs one more `install.sh` run.
-- **Review fixes (first close run stopped at REQUEST_CHANGES).** An indented code block beside a
-  save sentence failed the whole bind: markdown-it marks it on `<pre>`, and the note looked only
-  on `<code>`. The direction of a save is now read from the sentence that asks for it, so "Save
-  the code above as `f.py`. Next, run it:" no longer attaches the command below as `f.py`. The
-  Playwright floor rises to 1.44, the first to bundle a Chromium (125) that parses CSS `round()`;
-  on an older one the rounded sizes are dropped and code prints at body size. The fixture gained
-  both book cases, and reverting either fix fails it.
+- **Close reviews.** The first returned REQUEST_CHANGES: an indented block beside a save
+  sentence failed the bind (markdown-it marks it on `<pre>`, the note looked only on `<code>`);
+  "Save the code above as `f.py`. Next, run it:" sent `f.py` to the command below; and the
+  Playwright floor (1.40) allowed a Chromium too old for CSS `round()`, now 1.44 (Chromium 125).
+  The second returned APPROVE with one finding: with direction read from the save sentence
+  alone, "The script above is complete. Save it as `f.py`." and "Save it as `f.py` and run it:"
+  above a bash block attached the wrong block. A directionless sentence now takes the
+  paragraph's direction, and a prose-named file never lands on a shell block unless its name is
+  a shell script. Every case is in the fixture, and reverting any one fix fails it.
 - **Not verified:** which common viewers offer the attachments to a reader. Only `pdfdetach` and
   PDFKit's parsing were checked; Chrome's PDF viewer was out of reach of the browser extension.
