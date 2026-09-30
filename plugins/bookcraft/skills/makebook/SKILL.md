@@ -69,7 +69,7 @@ Running the script is the last step, not the first. A makebook run is:
 4. **Author the figures** you decided on, against `references/diagram-style.md`, and place each one in its chapter.
 5. **Build**, read the report, and **look at the pages that carry figures** in the finished PDF. A figure that renders wrong fails silently.
 6. **Run `epubcheck` on the EPUB** if it is installed. A package a device would reject is not visible from the report.
-7. Report: page count, figure count and where they went, the index source, anything the legibility check flagged, and the EPUB's validation result.
+7. Report: page count, figure count and where they went, the scripts attached and any save the build could not cover, the index source, anything the legibility check flagged, and the EPUB's validation result.
 
 ## Deciding where a figure helps
 
@@ -401,6 +401,39 @@ A chapter written under `/createbook`'s **guide** profile may carry four labelle
 **Why they come off the Figures page.** That page exists so a reader can find the one diagram they remember. In the reference book 66 of its 76 entries were slides, so the ten real figures were buried under the teaching aids and the page did not do its job. Numbering is the same story: a slide numbered `Figure 12.4` claims a place in an argument it is not part of.
 
 **Why the art is narrower.** A divider slide carrying a one-sentence note used to take half a page. At 62% with the note beside it, it takes the room it is worth. The legibility floor scales with the width, so art that cleared the floor as a full-measure figure may not clear it here, and the report says so rather than letting it print as a smudge.
+
+## Code the reader is asked to save
+
+**A script copied off the page of a bound PDF will not run, so the PDF carries each one as a file.** A guide that says "Save the script below as `time_species.py`" is asking for something the page cannot hand over: PDFKit, which is Preview and Safari, drops every leading indent from the text a reader copies out of a Chromium PDF, whatever the font, and Python stops at the first indented line. poppler keeps the indents on a short block and drifts on a long one. No stylesheet reaches that, so every block the book asks the reader to save is attached to the PDF as the file it names, byte for byte.
+
+**Two ways to mark a block, and a book written before either existed already uses the second:**
+
+- **On the fence:** ```` ```python file=time_species.py ````. Exact, needs no sentence beside it, and the one to reach for in a new book. A name with spaces goes in quotes: `file="two words.py"`.
+- **In the sentence next to the block:** "Save the script below as `time_species.py`", "Save the code above as `after.py`", "Create a file named `x.py`", "Put it in a file called `x.py`". The sentence has to be in the paragraph directly before the block, or directly after it when it says "above". Inside a list item, the item's own sentence and fence pair up. "Save the output as `results.txt`" is read as being about the output rather than the block beside it, so nothing is attached.
+
+The fence's name wins when both are given. The extracted file is the block's own text, so a block inside a list item comes out without the list's indent.
+
+**What the reader gets.** Under each attached block the PDF prints a note: *`time_species.py` is attached to this PDF. Copying the code off the page loses its indentation, so save the attachment instead: double-click its name here, or open your viewer's list of attachments.* The file is in the PDF twice: as a file-attachment annotation over the note's filename, and in the document's list of embedded files, which is what an attachments panel reads. Each script therefore appears twice in a panel that lists both. Checked on 2026-09-30: poppler's `pdfdetach` lists and extracts every script from both places, and PDFKit reads the annotations. **Not checked:** whether Adobe Acrobat Reader, Firefox, Chrome's built-in viewer or Preview offer the file to a reader. Open a bound book in the viewer your readers will use before you hand it out. The EPUB carries no attachments and prints no note.
+
+**The build lists what it attached**, with each script's page:
+
+```
+scripts: 2 attached to the PDF: time_species.py (p. 3), count_rounds.py (p. 3)
+```
+
+**and warns about every save it could not cover**, because that is a step the reader cannot complete:
+
+```
+  warning: 2 instruction(s) to save code as a file have nothing attached, ...
+    ch 2: "Save this script so you can run it again tomorrow:" names no file to save the block as; put the name on its fence: ```python file=NAME
+    ch 2: "Save the script as `later.py` once you have written it." has no code block beside it
+```
+
+The first names no file, and the fix is `file=` on the fence. The second names a file with no block next to it; a block already claimed by the sentence before it does not count. The detector reads only a sentence that asks for a save ("save it", "save this script", "save … as"), so "save time with this loop" is not an instruction. It can still be wrong in either direction, and the `file=` fence is the way to say exactly what you mean.
+
+**Code prints on a quarter pixel, which keeps a copied `_` on its line.** Off a quarter pixel, Chromium writes each glyph of a code line to the PDF as its own text run, and PDFKit then puts every underscore on a line of its own: `for` / `_` / `in range(7):`. Every code size in the stylesheet, fenced or inline or in a note, is rounded with `round(nearest, …, 0.25px)`, which moves it by under 0.1pt. `fixtures/save-scripts/` binds a book that saves in every way above and fails if a code line is written in more than one run, or, on macOS, if PDFKit's copy puts a `_` on a line alone.
+
+**Updating from 1.8.0 needs one more run of `install.sh`,** since writing attachments added `pypdf` to `requirements.txt`. Until then the binder stops at the start and names the missing package and the command.
 
 ## Appendices
 
