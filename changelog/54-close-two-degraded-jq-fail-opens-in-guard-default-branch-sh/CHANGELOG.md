@@ -11,185 +11,114 @@ and adds probes that fail without each fix.
 
 ## Changes
 
+`pr-summary-2026-09-30.md` has the full narrative, the code examples and the plan alignment.
+The reviews are `pr-review-2026-09-30.md` (pre-test) and `pr-review-2026-09-30-close.md` (close
+gate). Every timestamp below is kept, and each entry is condensed to its decisions and their
+evidence.
+
 ### 2026-09-30 13:55:26 MDT: Phase 1, both holes reproduced against `main` @ `a26f79c`
 
-The hook was run directly against an opted-in throwaway repo on `main`. Each command went
-through three paths:
+**Reproduction.** Nine commands were each run in `default` and `bypassPermissions` mode, on the
+jq path, a no-jq `PATH` of links to `cat`, `git`, `grep` and `dirname`, and a broken-jq `PATH`
+with a stub `jq` that exits 126:
 
-- the jq path
-- a no-jq `PATH`: a folder of links to only `cat`, `git`, `grep` and `dirname`, as in the suite
-- a broken-jq `PATH`: a stub `jq` that exits 126, first on the normal `PATH`
+- Commands: `git push`, `git commit`, `cd /x && git push`, `git add -A`⏎`git commit -m x`,
+  `ls`⏎`git push origin main`, `git push`⏎`echo done`, `git push`⇥`echo done`, `git commit` + CR,
+  and `git commit -m x`.
+- The jq path asked or denied every one.
+- The no-jq and broken-jq paths printed nothing for all of them, with one exception: the no-jq
+  path gated `git commit -m x`.
+- With a broken jq, even `ls -la` passed only because `gate()` failed silently.
 
-| Command | jq | no jq | broken jq |
-|---|---|---|---|
-| `git push` | ask | nothing, exit 0 | nothing, exit 0 |
-| `git commit` | ask | nothing | nothing |
-| `cd /x && git push` | ask | nothing | nothing |
-| `git add -A`⏎`git commit -m x` | ask | nothing | nothing |
-| `ls`⏎`git push origin main` | ask | nothing | nothing |
-| `git push`⏎`echo done` | ask | nothing | nothing |
-| `git push`⇥`echo done` | ask | nothing | nothing |
-| `git commit` followed by a CR | ask | nothing | nothing |
-| `git commit -m x` | ask | ask | nothing |
+**Item 1: widen the regex, don't decode.** Decoding needs `${s//…/…}`, which grows roughly with
+the cube of the length under bash 3.2: 1.1s for 10KB, 8.3s for 20KB, 66s for 40KB. A 1MB run
+was killed after 100s. `GIT_VERB_RAW` adds `\\([bfnrt]|u[0-9a-fA-F]{4})` before `git`, in
+whitespace runs and after the verb, plus the unescaped closing `"` after the verb, and removes
+nothing from `GIT_VERB`.
 
-Under `bypassPermissions`, every `ask` above became `deny` and every "nothing" stayed nothing.
-With a broken jq, `ls -la` also printed nothing. It passes, as it should, but only because
-`gate()` fails silently.
+- **Differential test.** 160,000 checks: 2 encoders × 2 seeds × `C` and UTF-8 × 20,000
+  commands.
+  - Today's raw match missed 95–98% of the decoded matches.
+  - `GIT_VERB_RAW` missed none, and over-matched 400–842 per run, the safe direction.
+- **Cost.** At worst 0.32s against 0.07s, over six 1MB stress shapes.
 
-**Chosen for item 1: widen the regex, not decode.** A decode in bash builtins has to use
-`${s//pattern/replacement}`, and on bash 3.2 that grows roughly with the cube of the length. One
-`\n` replacement took 1.1s on 10KB, 8.3s on 20KB and 66s on 40KB. A 1MB run was killed after
-100s. The no-jq path runs on every Bash call, so decoding is not an option.
-
-The raw-only variant `GIT_VERB_RAW` adds one escape class, `\\([bfnrt]|u[0-9a-fA-F]{4})`, which
-is any JSON escape except `\"`, `\\` and `\/`. It is accepted:
-
-- before `git`
-- at every whitespace run
-- after the verb, where the unescaped closing `"` is also accepted
-
-The token classes stay as they are in `GIT_VERB`, and so `GIT_VERB_RAW` matches everything
-`GIT_VERB` matches.
-
-**Evidence.**
-
-- **Differential test.** Commands were generated around the shape
-  `<lead>git<sep>[<opt><sep>[<arg><sep>]]<verb><trail>`, with random boundary characters. Each
-  command was encoded with `JSON.stringify`, and again with every non-ASCII character
-  `\u`-escaped. The decoded command matched against `GIT_VERB` stood in for the jq path.
-  - 160,000 checks: 2 encoders × 2 seeds × `C` and UTF-8 × 20,000 commands.
-  - Today's raw match missed 95–98% of the decoded matches: 1,329–1,491 of 1,367–1,531 per run.
-  - `GIT_VERB_RAW` missed none. It over-matched 400–842 per run, and every over-match is a gate
-    the jq path would not make, which is the safe direction.
-- **Cost.** Six 1MB payload shapes built to stress the regex engine. The worst took 0.32s
-  against 0.07s for `GIT_VERB`, under both `C` and UTF-8.
-
-**Chosen for item 2 (the operator chose "ask").** A jq that cannot run takes the no-jq path.
-When the parse fails, `jq -n true` is run once: if that succeeds, the payload is at fault and
-is denied as before; if it fails, the no-jq path takes over, with its completeness check, token
-and mode recovery. The happy path costs nothing extra. As a separate safeguard, `gate()` falls
-back to `printf` when `jq -nc` produces nothing, so no route through it can end silently.
+**Item 2: the operator chose "ask".** After a failed parse, `jq -n true` decides: jq runs and
+the payload is denied, or jq cannot run and the no-jq path takes over. `gate()` also falls back
+to `printf` whenever `jq -nc` prints nothing.
 
 ### 2026-09-30 14:07:29 MDT: Phases 2–6, probes, both fixes, mutation proof, docs
 
-**Probes.** 22 cases were added, taking the suite from 91 to 113. `nj` now wraps a general
-`pj` helper that takes the hook's `PATH`.
+**Probes.** 22 new cases took the suite from 91 to 113. `nj` now wraps `pj`, which takes the
+hook's `PATH`.
 
-- **Item 1.** 10 `nj` cases. Eight must gate: `git push` and `git commit` as the whole command,
-  `cd /x && git push`, both later-line shapes, the verb before `\n`, `git`⇥`push`, and `git push`
-  under `bypassPermissions`, which must deny. Two must pass: `echo "git push"` and
-  `printf 'git push\n'`, which pin that only an unescaped quote ends the verb and that `\\n` is
-  not a newline.
-- **Item 2.** A broken-jq harness, a stub `jq` that exits 126, with 8 cases: a check that the
-  stub cannot run, commit ask and deny, a command ending in its verb, the approval token, a
-  non-git command, an empty payload, and an unconfigured repo. A second stub fails only on
-  `jq -nc`, so it parses and then fails in `gate()`. Its 3 cases are commit ask and deny, and a
-  `-C` path holding a `"`.
-- **Malformed payload.** One case with a trailing comma, which is invalid JSON that still looks
-  whole to the no-jq check. With a jq that runs, it must still be denied.
+- 10 no-jq cases for item 1. Eight must gate, including one that must deny under
+  `bypassPermissions`. Two pin precision: `echo "git push"` and `printf 'git push\n'` must pass.
+- A broken-jq harness with 8 cases.
+- A harness whose stub `jq` fails only on `-nc`, with 3 cases.
+- A trailing-comma payload that must still be denied when jq runs.
 
-Against the unfixed hook: 98 passed and 15 failed, and the 15 are exactly the gating cases.
-The other 7 new cases pass either way. Two are checks on the harness or against regression:
-the stub cannot run, and an unconfigured repo is left alone. The other five guard against a
-fix that reaches too far, and the mutants below turn each of them red.
+Against the unfixed hook, 98 passed and 15 failed, and the 15 are exactly the gating cases.
+The other 7 pass either way. Two check the harness or guard against regression, and mutants
+turn the other five red.
 
-**Fixes.**
-
-- **Item 1.** The no-jq branch matches `GIT_VERB_RAW`, as chosen in Phase 1.
-- **Item 2.** On a failed parse, `jq -n true` decides: jq runs, so `gate()` denies as before;
-  jq cannot run, so `HAVE_JQ=0` and the no-jq branch runs. The branch changed from `else` to
-  `if [[ "$HAVE_JQ" == 0 ]]`.
-- **`gate()`.** It now captures `jq -nc` and falls back to `printf` when that output is empty.
-  A reason that holds `"`, `\` or a control character is replaced by a fixed one, since
-  `printf` cannot escape it.
+**Fixes.** The no-jq branch now uses `GIT_VERB_RAW`. On a parse failure, `jq -n true` routes to
+deny or to the no-jq branch, which now opens with `if [[ "$HAVE_JQ" == 0 ]]`. `gate()` captures
+`jq -nc` and falls back to `printf`, swapping a reason that `printf` cannot escape.
 
 **Evidence.**
 
-- **Suite.** 113 of 113 on macOS with bash 3.2.57 and jq 1.8.2. Also 113 of 113 in
-  `ubuntu:24.04` with bash 5.2.21 and jq 1.7, where the differential test (4 × 20,000 checks)
-  found no under-match either.
-- **Real broken jq.** The stale x86_64 jq on this machine, symlinked first on `PATH`, fails
-  with `Bad CPU type in executable`, exit 126. On `main`, the hook printed nothing for
-  `git commit -m x`, `git push` or `ls -la`. On the branch it gives ask, deny under
-  `bypassPermissions`, ask, and nothing for `ls -la`.
-- **Phase 1 repro, repeated.** All 18 shapes now give the same decision on all three paths.
-- **Mutants.** All 12 were caught, each by its own cases:
-
-| Mutant | Cases turned red |
-|---|---|
-| no-jq branch uses `GIT_VERB` | 9: every item-1 gating case, plus the broken-jq "ending in its verb" case |
-| no closing `"` after the verb | 6: the cases whose command ends in its verb |
-| no escape before `git` | 2: both later-line cases |
-| no escape in whitespace runs | 1: `git`⇥`push` |
-| no escape after the verb | 1: the verb before `\n` |
-| `\"` also ends the verb | 1: `echo "git push"` |
-| `RAW_ESC` loosened to `\\.` | 2: both precision cases |
-| every failed parse denies | 4: broken-jq ask, token and non-git cases |
-| every failed parse goes to the no-jq branch | 1: the trailing-comma payload |
-| `HAVE_JQ` not cleared | 4: the broken-jq gating cases |
-| `gate()` has no fallback once jq ran | 3: every jq-fails-in-`gate()` case |
-| no swap for an unsafe reason | 1: the quoted `-C` path, which printed invalid JSON |
-
-- **Acceptance.** 42 of 42, against a copy of `plugins/pr`.
+- **Suite.** 113 of 113, both on macOS with bash 3.2.57 and jq 1.8.2, and on `ubuntu:24.04`
+  with bash 5.2.21 and jq 1.7. On Linux the differential test found no under-match in 80,000
+  checks.
+- **Real broken jq.** This machine's stale x86_64 jq exits 126 with `Bad CPU type`. On `main`
+  the hook printed nothing. On the branch it asks, or denies under `bypassPermissions`, and
+  `ls -la` passes.
+- **Mutants.** All 12 were caught by their own cases: 7 on the regex, 3 on the parse-failure
+  route and 2 on the fallback. Acceptance passed 42 of 42.
 
 **Docs.**
 
-- **Hook.** The decision table gained the jq-cannot-run row. The parse-failure comment explains
-  the `jq -n true` question and why not every failed parse is handed over. The no-jq branch
-  comment explains `GIT_VERB_RAW`, what it over-matches, why decoding was rejected, and the
-  evidence. The `gate()` comment explains the fallback and the swap.
-- **README.** The case count went from 91 to 113, and the coverage list names the new sections.
-  The mass-failure shapes were measured again. `main`'s 33/58 and 6/85 were reproduced first,
-  confirming the method. The new shapes are 35/78 outside a configured repo and 8/105 inside
-  one. A broken jq and a missing jq now give the same shape, because the hook treats them the
-  same way, so the text explains the shape by where the suite ran, not by what is wrong with
-  jq.
+- **Hook.** The decision table, the parse-failure comment, the no-jq `GIT_VERB_RAW` comment and
+  the `gate()` comment.
+- **README.** 113 cases. The mass-failure shapes were measured again: `main`'s 33/58 and 6/85
+  were reproduced first, and the new shapes are 35/78 outside a configured repo and 8/105
+  inside one. A broken jq and a missing jq now give the same shape.
 - **Version.** `pr` goes from 0.2.10 to 0.2.11.
 
 ### 2026-09-30 14:34:22 MDT: Pre-test, draft PR #57, review APPROVE, two escalations filed
 
-**Review.** `pr-review-2026-09-30.md` gives APPROVE. The reviewer ran its own differential test,
-stricter than Phase 1's, over 180,000 checks:
+**Review: APPROVE.** The reviewer's own differential test found no under-match in 180,000
+checks. It used `grep -E` line by line with the token check, three encoders and a wider
+alphabet. The same test caught 53 under-matches in `main`'s regex. Two suggestions were applied:
 
-- the jq side used the hook's real logic: `grep -E` line by line, plus the approval token
-- the alphabet was all of ASCII plus Unicode spaces and surrogates
-- three encoders and two locales
+- **Timing.** A 1MB body of repeated `git \t-a\tb\t` took 0.42s, and 0.40s here, so the comment
+  now says about 0.4s at worst and names the shape.
+- **`gate()` fails closed.** The check became `JSON_SAFE`, a safe shape, so a regex that fails to
+  evaluate swaps rather than skips. The reason and the deny instruction (`stop`) are swapped
+  separately, so a quoted reason keeps the token instruction. Both spellings of the class
+  behave identically on bash 3.2 and on bash 5.2 with glibc.
 
-It found no under-match. The same test caught 53 under-matches in `main`'s regex, and 32 with
-the closing-quote alternative removed. The reviewer also reproduced both of the README's
-mass-failure shapes.
+A new probe, a token name holding a quote, took the suite to 114, and the swap mutant was split
+in two, making 13. The jq path's stdout is byte-identical to `main`'s. The shapes are 35/79 and
+8/106.
 
-**Suggestions applied.**
+**Escalated.** Two pre-existing under-matches, reproduced identically on `main`, were each filed
+immediately under the scope contract:
 
-- **Timing claim.** The comment said "0.32s at worst", but the reviewer found a shape that took
-  0.42s: a 1MB body of repeated `git \t-a\tb\t`. I measured it at 0.40s. The comment now says
-  about 0.4s at worst and names the shape.
-- **`gate()` fallback.** It now checks for a safe shape, `JSON_SAFE='^[^"\[:cntrl:]]*$'`, rather
-  than an unsafe one, so a regex that fails to evaluate swaps rather than skips. The deny
-  instruction is kept in `stop` and checked separately, so a reason with a `"` in it keeps the
-  approval-token instruction. Both spellings of the class gave identical results on bash 3.2 and
-  on bash 5.2 with glibc.
-- **New probe.** "A token name holding a quote still denies" uses a fixture repo whose config
-  sets `mainGuard.approvalToken` to `A"B`. The suite goes from 113 to 114 cases.
+- **#58.** A default-branch push followed by `)`, `>` or a backtick passes on every path.
+- **#59.** Without jq, the approval token is honoured across a `\n` inside an assignment's
+  value.
 
-**Evidence.**
+### 2026-09-30 14:54:00 MDT: Close gate, review APPROVE, one probe added
 
-- 114 of 114 on macOS and in `ubuntu:24.04`.
-- 13 mutants: the 12 earlier ones plus a separate mutant for each swap, and every one caught.
-- The jq path's stdout is byte-identical to `main`'s for commit, `-C` with a quote, push, `ls`
-  and three malformed payloads, in both modes.
-- The mass-failure shapes, measured again, are 35/79 and 8/106. The README is updated.
+**Review: APPROVE, no blocking or important issues.** Two suggestions were applied:
 
-**Escalated.** The review found two pre-existing under-matches, which I reproduced identically
-on `main`. Each was filed immediately as its own issue under the scope contract's rule for
-pre-existing security defects:
+- **The recovery the separate swaps keep was unpinned.** The pre-`58aee16` joint swap passed as
+  a mutant, so a new case now checks that a quoted reason under `bypassPermissions` still names
+  `PR_ALLOW_MAIN=1`. That takes the suite to 115, and the joint-swap mutant, M14, is caught
+  along with the other 13.
+- **The summary's line totals would go stale** once the close commits its own artifacts, so
+  they were replaced with the code and doc lines only.
 
-- **#58.** `GIT_VERB`'s trailing group rejects `)`, `>` and a backtick. `(cd /x && git push)`,
-  `echo $(git push)`, `git push>/dev/null` and ``x=`git push` `` all pass on the default branch
-  on every path, jq included.
-- **#59.** The no-jq approval token is honoured across a `\n` inside an assignment's value. A
-  command of `PR_ALLOW_MAIN=1 X=`, a newline, then a push naming the default branch passes
-  without jq, while the jq path asks.
-
-**CI.** The bookcraft fixture workflow on macOS and Ubuntu started pending when the draft
-opened. It does not run the guard suite.
+**Evidence.** 115 of 115 on macOS and on `ubuntu:24.04`. The shapes are 35/80 and 8/107, and
+the README is updated.

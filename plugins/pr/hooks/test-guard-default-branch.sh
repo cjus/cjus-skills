@@ -410,6 +410,12 @@ hj "a reason holding a quote still gates"  ask  "$(rawp default 'git -C /nonexis
 TOKREPO=$(mktemp -d); git -C "$TOKREPO" init -q -b main
 optin "$TOKREPO"; printf '{"repo":"t/t","mainGuard":{"approvalToken":"A\\"B"}}\n' > "$TOKREPO/.claude/pr-config.json"
 hj "a token name holding a quote still denies" deny "$(jq -nc --arg c "$TOKREPO" '{cwd:$c,permission_mode:"bypassPermissions",tool_input:{command:"git commit -m x"}}')" "$TOKREPO"
+# ...and the point of swapping the two apart: a reason with a quote in it loses only the
+# reason, not the recovery. A single swap for both would still deny, so only the text shows it.
+out=$(rawp bypassPermissions 'git -C /nonexistent/a"b commit -m x' | CLAUDE_PROJECT_DIR="$MAINREPO" PATH="$HALFJQ:$PATH" "$HOOK")
+if [[ $(echo "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null) == *"PR_ALLOW_MAIN=1"* ]]
+then PASS=$((PASS+1)); printf '  ok   %-56s kept\n' "a quoted reason keeps the recovery"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s dropped\n' "a quoted reason keeps the recovery"; fi
 
 echo
 echo "passed $PASS, failed $FAIL, skipped $SKIP  ($((PASS+FAIL+SKIP)) cases)"
