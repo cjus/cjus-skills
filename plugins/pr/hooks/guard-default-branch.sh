@@ -34,6 +34,8 @@
 #   branch undeterminable / no jq        -> same (fail toward the operator)
 #   payload unparseable / not an object  -> deny (nothing in it is trustworthy,
 #                                           the mode least of all)
+#   no jq, and the payload did not       -> deny, for the same reason
+#     arrive whole (cut short, or empty)
 #
 # ON EVIDENCE: nearly every defence below exists because the obvious spelling was
 # measured to fail open. Reading this file is not evidence that it works; two of
@@ -236,6 +238,47 @@ if [[ "$HAVE_JQ" == 1 ]]; then
 else
   # Degraded: match against the raw payload. Over-matches, never under-matches.
   #
+  # FIRST, PROVE THE PAYLOAD ARRIVED WHOLE. This is the no-jq counterpart of the
+  # sentinel above, and without it this branch under-matched: a payload cut inside
+  # `command` before the git verb left nothing for GIT_VERB to find, so the branch
+  # exited 0 and the commit ran unguarded. Measured, as was the empty payload, which
+  # took the same exit. Whole means both of these:
+  #   - a `command` key whose string value CLOSES, on an unescaped `"`. The value is
+  #     read as JSON escapes (`\\` is a backslash, `\"` a quote), so a command that
+  #     ends in a backslash still closes on the `\\"` that follows it.
+  #   - the payload ENDS in `}`, trailing whitespace aside.
+  # Either half alone misses a cut. The closing quote alone passes a cut after the
+  # command but before the object ends; the brace alone passes a cut just after a `}`
+  # INSIDE the command. The suite pins each half with a case that only it catches.
+  #
+  # The closing-quote half proves the COMMAND closed only because `command` is the only
+  # key of that name in the payload, which holds for every documented PreToolUse shape.
+  # Text inside a value cannot match, since every `"` there arrives as `\"`. A key
+  # named `command` added anywhere AHEAD of tool_input's would break that assumption,
+  # and this half with it.
+  #
+  # The cuts both halves pass land just after a `}` that follows the command's close:
+  # tool_input's own, or one inside a later value. The command is whole there, so every
+  # test below still reads all of it. A cut can drop only text after the command, and
+  # with it only a match GIT_VERB would have over-made there, one the jq path would not
+  # gate either. The suite pins the first.
+  #
+  # It runs BEFORE the approval token and the mode recovery on purpose, and gates
+  # with MODE still empty, so a cut payload is DENIED in every mode, as the
+  # unparseable-payload gate above denies. The fragment can carry the token (cut after
+  # `PR_ALLOW_MAIN=1 git `) and a `permission_mode` the rest of the object never
+  # confirmed, and neither is trustworthy for the same reason jq's partial output is not.
+  #
+  # This runs on EVERY Bash call without jq, so it must never trip on a whole payload:
+  # the suite runs escaped quotes, a trailing backslash, newlines, non-ASCII and
+  # pretty-printed JSON through it. Bash's regex needs no process, so the check is
+  # cheap: measured at under 0.1s for a 1MB command under bash 3.2.
+  PAYLOAD_CMD_RAW='"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"'
+  PAYLOAD_END_RAW='[}][[:space:]]*$'
+  if ! [[ $INPUT =~ $PAYLOAD_CMD_RAW && $INPUT =~ $PAYLOAD_END_RAW ]]; then
+    gate "jq not found, and the PreToolUse payload did not arrive whole, so the default-branch commit guard cannot read the command."
+  fi
+
   # The approval token is honoured here too, otherwise this branch gates every git
   # command with no way past it while still printing "re-run prefixed with …" as
   # though that worked. Matched with bash's built-in regex rather than grep, so
@@ -265,7 +308,8 @@ else
   # it denied in every mode, which inverted the degraded path's contract in the
   # annoying direction. Deliberately NOT shared with the unparseable-payload gate
   # above: there the mode comes from a payload that just failed to parse and is not
-  # trustworthy; here the payload is well-formed and only the parser is missing.
+  # trustworthy; here the payload was just shown to have arrived whole and only the
+  # parser is missing.
   if [[ $INPUT =~ $MODE_RAW ]]; then MODE="${BASH_REMATCH[1]}"; fi
 
   [[ $INPUT =~ $GIT_VERB ]] &&
