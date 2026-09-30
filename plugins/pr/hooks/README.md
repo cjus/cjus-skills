@@ -131,52 +131,61 @@ hook is not evidence.** Run the probe suite after any edit:
   "${CLAUDE_PLUGIN_ROOT}"/hooks/guard-default-branch.sh
 ```
 
-91 cases covering the refspec forms, chained and multi-line commands, commit messages that must
-not forge or trip the guard, redirection through `-C` and `--git-dir`, undeterminable branches,
-malformed payloads, the branch names that must **not** gate, the unconfigured repo that must be
-left untouched, the linked worktree whose config lives at its main checkout's root, the
-payloads whose `cwd` is absent or empty, which must resolve through `CLAUDE_PROJECT_DIR` rather
-than the hook's own working directory, and the raw-payload path the hook takes without `jq`: a
-whole payload gets the decision it always did, and a payload cut short or empty is denied.
+115 cases, covering:
+
+- the refspec forms, chained and multi-line commands, and redirection through `-C` and
+  `--git-dir`
+- commit messages that must not forge or trip the guard, and the branch names that must **not**
+  gate
+- undeterminable branches and malformed payloads
+- the unconfigured repo that must be left untouched, and the linked worktree whose config lives
+  at its main checkout's root
+- payloads whose `cwd` is absent or empty, which must resolve through `CLAUDE_PROJECT_DIR`
+  rather than the hook's own working directory
+- the raw-payload path the hook takes without `jq`. A whole payload gets the decision it always
+  did, including one whose verb sits beside JSON syntax, such as the string's closing quote or an
+  escaped newline or tab. A payload cut short or empty is denied.
+- a `jq` that is on `PATH` but cannot run, which takes that same path
+- a `jq` that fails only while building the decision, which must still yield one
+
 Requires `jq` and `git`, and writes only to throwaway repos under the system temp directory.
 The no-`jq` cases hide `jq` from the hook alone, through a folder of links to the few tools that
 path runs. Dropping a directory from `PATH` does not hide it, because macOS ships its own
-`/usr/bin/jq`.
+`/usr/bin/jq`. The broken-`jq` cases put a stub that exits 126 first on the hook's `PATH`.
 
 The totals line names all three buckets and the case count, so a short run is legible as a short
 run rather than as a suite that lost cases:
 
 ```
-passed 91, failed 0, skipped 0  (91 cases)
-passed 89, failed 0, skipped 2  (91 cases)   # linked-worktree fixture could not be built
+passed 115, failed 0, skipped 0  (115 cases)
+passed 113, failed 0, skipped 2  (115 cases)   # linked-worktree fixture could not be built
 ```
 
 **The parenthesised total is the number to compare against this document.** Only the two
 linked-worktree cases can skip, and only where `git worktree add` fails; every other case runs
-everywhere. A total that is not 91 means the suite itself changed and this line is stale.
+everywhere. A total that is not 115 means the suite itself changed and this line is stale.
 
 **A mass failure is more often `jq` than the hook.** The suite builds every payload and reads
 every decision with `jq`, so a `jq` that is broken or missing fails most cases without the hook
 being at fault. It leaves one of two shapes:
 
 ```
-passed 33, failed 58, skipped 0  (91 cases)   # jq cannot run, or is missing
-passed 6, failed 85, skipped 0  (91 cases)    # jq missing, run from inside a configured repo
+passed 35, failed 80, skipped 0  (115 cases)   # jq missing or cannot run
+passed 8, failed 107, skipped 0  (115 cases)   # the same, run from inside a configured repo
 ```
 
-In both shapes the no-`jq` sections behave the same way. They hide `jq` from the hook, so it
-denies the empty payloads the suite could not build, and only two of their cases pass: the check
-that `jq` is hidden, and the unconfigured-repo case. The other sections are where the shapes
-differ:
+Which one depends on where the suite was run, not on what is wrong with `jq`. The hook treats a
+`jq` that cannot run, such as a stray x86 build on Apple Silicon, exactly as a missing one. Either
+way, every case reaches its no-`jq` path with an empty payload, which it denies as cut short
+wherever the repo opted in. That path reads no `cwd` from the payload, so activation resolves
+from `CLAUDE_PROJECT_DIR`, or failing that from the directory the suite was run in:
 
-- **`jq` present but cannot run**, such as a stray x86 build on Apple Silicon. The hook still
-  finds it and then emits nothing at all, so only the cases expecting no output pass.
-- **`jq` missing.** Every case takes the no-`jq` path with an empty payload. That path reads no
-  `cwd` from the payload, so activation resolves from `CLAUDE_PROJECT_DIR`, or failing that from
-  the directory the suite was run in:
-  - Inside a repo that opted in, the hook denies those payloads as cut short. Only the cases that
-    point `CLAUDE_PROJECT_DIR` at an unconfigured repo pass.
-  - Anywhere else, the hook stays inert and the shape is the first one.
+- **Outside a configured repo**, the hook stays inert, so the cases expecting no output pass.
+  The exception is the degraded-`jq` sections, which point `CLAUDE_PROJECT_DIR` at a configured
+  repo. Only four of their cases pass: the checks that the hook's `jq` is hidden and that it is
+  broken, and the two unconfigured-repo cases.
+- **Inside a configured repo**, the hook denies everything. Only those two checks pass, along
+  with the cases that point `CLAUDE_PROJECT_DIR` at an unconfigured repo.
 
 The tell is on stderr, which the counts do not show: `Bad CPU type in executable`, or
 `command not found`. Run `jq --version` before reading either shape as a regression.
