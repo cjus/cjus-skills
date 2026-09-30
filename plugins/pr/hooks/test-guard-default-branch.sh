@@ -264,6 +264,83 @@ out=$( (cd "$MAINREPO" && jq -nc '{cwd:"",permission_mode:"default",tool_input:{
 if [[ -z "$out" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s pass\n' "empty payload cwd, unconfigured project dir"
 else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=<no output>\n' "empty payload cwd, unconfigured project dir" "$out"; fi
 
+# The hook with jq off its PATH, which sends it down the raw-payload branch. The PATH is
+# a folder of links to ONLY the tools that branch runs besides bash's builtins, because
+# dropping a directory is not enough: macOS ships its own /usr/bin/jq beside whatever a
+# package manager installed, so PATH=/usr/bin:/bin still takes the jq path. Every case
+# below would then pass vacuously, since the jq path denies a truncated payload anyway,
+# which is why the first case checks that jq really is hidden.
+#
+# CLAUDE_PROJECT_DIR is set per case because this branch never reads the payload's cwd,
+# so activation resolves through it. Inherited, it is whatever repo the suite was
+# launched from inside a Claude Code session.
+NOJQ=$(mktemp -d)
+for tool in cat git grep dirname; do ln -s "$(type -P "$tool")" "$NOJQ/$tool"; done
+
+# A whole payload in the harness's key order: permission_mode ahead of tool_input, and
+# keys after the command, so a cut can land after the command closes but before the
+# object does.
+rawp() { # mode, command
+  jq -nc --arg c "$MAINREPO" --arg m "$1" --arg cmd "$2" \
+    '{session_id:"s",cwd:$c,permission_mode:$m,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$cmd,description:"d"},tool_use_id:"t"}'
+}
+
+nj() { # name, expected, payload[, project dir]
+  local out got
+  out=$(printf '%s' "$3" | CLAUDE_PROJECT_DIR="${4:-$MAINREPO}" PATH="$NOJQ" "$HOOK")
+  if [[ -z "$out" ]]; then got=pass
+  else got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null); fi
+  if [[ "$got" == "$2" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s %s\n' "$1" "$got"
+  else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=%s\n' "$1" "${got:-<none>}" "$2"; fi
+}
+
+echo "== jq absent: a whole payload behaves as it always did =="
+if PATH="$NOJQ" /bin/bash -c 'command -v jq' >/dev/null 2>&1; then
+  FAIL=$((FAIL+1)); printf '  FAIL %-56s jq found on %s\n' "jq is hidden from the hook" "$NOJQ"
+else PASS=$((PASS+1)); printf '  ok   %-56s hidden\n' "jq is hidden from the hook"; fi
+nj "commit asks"                           ask  "$(rawp default 'git commit -m x')"
+nj "commit under bypassPermissions denies" deny "$(rawp bypassPermissions 'git commit -m x')"
+nj "approval token passes"                 pass "$(rawp default 'PR_ALLOW_MAIN=1 git commit -m x')"
+nj "message forging the token still gates" ask  "$(rawp default 'git commit -m "PR_ALLOW_MAIN=1 git x"')"
+
+# This branch runs on EVERY Bash call when jq is missing, so a whole payload that trips
+# the completeness check blocks commands that have nothing to do with git. The escape
+# case ends the command in a backslash, so the JSON closes on `\\"`, and puts the
+# command LAST so no later string offers a quote to close on instead: a check that
+# never lets `\"` close misreads that payload as a cut.
+echo "== jq absent: a whole non-git payload must not gate =="
+nj "non-git command passes"                pass "$(rawp default 'ls -la')"
+nj "escaped quotes, trailing backslash"    pass "$(jq -nc --arg cmd 'echo "a b" c\' '{permission_mode:"default",tool_input:{command:$cmd}}')"
+nj "multi-line command passes"             pass "$(rawp default "$(printf 'cd /x\nls')")"
+nj "non-ASCII command passes"              pass "$(rawp default 'echo é ✓')"
+nj "pretty-printed payload passes"         pass "$(jq -n --arg c "$MAINREPO" '{cwd:$c,permission_mode:"default",tool_input:{command:"ls"}}')"
+
+# The defect these close: with no git verb left in what arrived, the branch used to find
+# nothing to gate and exit 0. Each is cut from a whole payload in mode `default`, so a
+# check that recovered the mode from the fragment would answer `ask`, not `deny`. The
+# `}` case pins the closing-quote half of the check, since the fragment ends in a brace,
+# and its leading `echo "a"` pins how that half reads escapes: a check that lets `\"`
+# close the value finds a close there that never came. The after-the-command case pins
+# the trailing-brace half, since its command is whole.
+echo "== jq absent: a truncated payload fails closed =="
+P=$(rawp default 'cd /x && git commit -m x')
+nj "cut inside the command, before the verb" deny "${P%%git commit*}"
+P=$(rawp default 'echo "a" && f() { :; }; git commit -m x')
+nj "cut just after a } inside the command"  deny "${P%%; git commit*}"
+P=$(rawp default 'ls')
+nj "cut after the command, before the end" deny "${P%%,\"description\"*}"
+nj "cut before the command key"            deny "${P%%\"tool_input\"*}"
+nj "empty payload"                         deny ""
+P=$(rawp default 'PR_ALLOW_MAIN=1 git commit -m x')
+nj "cut after the approval token"          deny "${P%%commit -m x*}"
+# The one cut the check cannot see: after tool_input closes. The command is whole by
+# then, so the verb test still reads all of it, and this is what makes that blind spot
+# harmless rather than a second hole.
+P=$(rawp default 'git commit -m x')
+nj "cut after tool_input closes still gates" ask "${P%%,\"tool_use_id\"*}"
+P=$(rawp default 'cd /x && git commit -m x')
+nj "truncated, unconfigured repo is inert" pass "${P%%git commit*}" "$NOCFG"
+
 echo
 echo "passed $PASS, failed $FAIL, skipped $SKIP  ($((PASS+FAIL+SKIP)) cases)"
 [[ "$FAIL" == 0 ]]
