@@ -251,9 +251,17 @@ else
   # command but before the object ends; the brace alone passes a cut just after a `}`
   # INSIDE the command. The suite pins each half with a case that only it catches.
   #
-  # The one cut both halves pass is just after a nested `}` that follows the command,
-  # such as tool_input's own. The command is whole there, so GIT_VERB still reads all
-  # of it and a commit still gates, which the suite also pins.
+  # The closing-quote half proves the COMMAND closed only because `command` is the only
+  # key of that name in the payload, which holds for every documented PreToolUse shape.
+  # Text inside a value cannot match, since every `"` there arrives as `\"`. A key
+  # named `command` added anywhere AHEAD of tool_input's would break that assumption,
+  # and this half with it.
+  #
+  # The cuts both halves pass land just after a `}` that follows the command's close:
+  # tool_input's own, or one inside a later value. The command is whole there, so every
+  # test below still reads all of it. A cut can drop only text after the command, and
+  # with it only a match GIT_VERB would have over-made there, one the jq path would not
+  # gate either. The suite pins the first.
   #
   # It runs BEFORE the approval token and the mode recovery on purpose, and gates
   # with MODE still empty, so a cut payload is DENIED in every mode, as the

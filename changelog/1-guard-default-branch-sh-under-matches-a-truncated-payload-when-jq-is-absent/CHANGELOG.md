@@ -10,117 +10,87 @@ payload and deny it, as the jq path already does, and adds a test probe that fai
 
 ## Changes
 
+`pr-summary-2026-09-30.md` has the full narrative: the code examples, the plan-alignment table
+and the mutation table. The review findings are in `pr-review-2026-09-30.md` and
+`pr-review-2026-09-30-close.md`. All three timestamps below are kept, and each entry is
+condensed to its decisions and their evidence.
+
 ### 2026-09-30 10:55:58 MDT — Phase 1: reproduced against `main` @ `3dea6ba`
 
-The hook ran directly, as the harness runs it, against two throwaway repos opted in with
-`.claude/pr-config.json`: one on `main` and one on `feature/1-x`. To hide jq, its `PATH` was
-a folder of links to only `cat`, `git`, `grep` and `dirname`, under `env -i`. Dropping
-`/opt/homebrew/bin` from `PATH` is not enough: macOS also ships `/usr/bin/jq`
-(`jq-1.7.1-apple`), so `PATH=/usr/bin:/bin` still takes the jq path. The Phase 2 probe needs
-the same links-only folder. The payload uses the harness's key order, with `permission_mode`
-ahead of `tool_input`. The truncated payload is the whole one cut just before `git commit`,
-so it ends in `"command":"cd /x && `.
+The hook was run directly against opted-in throwaway repos. Its `PATH` was a folder of links to
+only `cat`, `git`, `grep` and `dirname`. Dropping a directory from `PATH` does not hide jq,
+because macOS also ships `/usr/bin/jq`.
 
-| Payload | jq absent | jq present |
-|---|---|---|
-| whole `git commit`, repo on `main` | `ask`, "jq not found …" | `ask`, "On main …" |
-| whole `git commit`, repo on feature branch | `ask`, "jq not found …" | — |
-| cut inside `command`, before the verb | **exit 0, no output** | `deny`, "could not be parsed" |
-| empty stdin | **exit 0, no output** | `deny`, "could not be parsed" |
+With jq absent:
 
-The two bold cells are the fail-open. The ticket names only the first. The empty-stdin row is
-the same hole at the extreme cut, and it is the case the jq path's sentinel was added to close.
-The jq path denies both.
+- A whole `git commit` got `ask`.
+- The same payload cut before the verb exited 0 with no output.
+- **Empty stdin** also exited 0 with no output. The ticket did not name this case.
 
-The feature-branch row shows that the no-jq branch gates every commit or push without looking
-up the branch. It returns before the branch lookup, which the header's `no jq -> same (fail
-toward the operator)` row describes. So the probe needs only an opted-in repo, not one on the
-default branch. It does need the opt-in: `gate()` calls `pr_repo_configured` first and exits 0
-without it.
+The jq path denied both of the failing payloads. The no-jq branch gates any commit without
+looking up the branch, so a probe needs only an opted-in repo. `gate()` exits 0 without the
+opt-in.
 
 ### 2026-09-30 11:14:19 MDT — Phases 2–5: probes, the completeness check, mutation proof, docs
 
-**Probes first (Phase 2).** `test-guard-default-branch.sh` has three new sections that run the
-hook with jq off its `PATH`. They are the first cases to cover the no-jq branch at all. The
-`PATH` is the Phase 1 links-only folder. `CLAUDE_PROJECT_DIR` is set per case, because this
-branch never reads the payload's `cwd`, so activation resolves through it. The first case
-checks that jq really is hidden. Without that check, every case in the sections could pass by
-accident, since the jq path also denies a truncated payload. Against the unfixed hook the run
-was `passed 85, failed 6  (91 cases)`, and the 6 failures were exactly the truncation cases.
-The 73 existing cases were unchanged.
+**Probes.** 18 cases were added in three no-jq sections: 73 → 91. They are the first cases to
+cover this path. The first checks that jq is hidden, because otherwise the jq path's own deny
+lets every case pass vacuously. `CLAUDE_PROJECT_DIR` is set per case, because this path ignores
+the payload's `cwd`. Against the unfixed hook the run was 85/6, and the 6 failures were exactly
+the truncation cases.
 
-**The check (Phase 3).** A payload counts as whole when both of these hold:
+**The check.** A payload counts as whole only if both of these hold:
 
-- a `command` key has a string value that closes on an unescaped quote:
-  `"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"`
-- the payload ends in `}`, allowing trailing whitespace.
+- a `command` key has a string value that closes on an unescaped `"`
+- the payload ends in `}`
 
-It runs before the approval token and before the mode is recovered from the payload. When it
-fails, it calls `gate()` with `MODE` still empty, so the answer is `deny` in every mode, the
-same as the jq path's unparseable-payload gate. It uses bash's built-in regex, so it starts no
-process. It took 0.08s on a 1MB command under bash 3.2.57.
+The check runs before the approval token and the mode recovery, and gates with `MODE` empty,
+so a cut payload is `deny` in every mode. That settles all four open questions in the plan.
 
-The plan's open questions were settled like this:
+**Evidence.**
 
-- **What counts as whole:** both halves of the check above. Each alone misses a cut.
-- **Deny a cut payload with no git verb in it:** yes. That payload is exactly the ticket's
-  hole, and the jq path already denies it.
-- **The approval token:** it doesn't count on a cut payload, because the check runs first.
-- **Hiding jq:** the links-only folder.
+- **Prefix sweep.** Every prefix of four sample payloads was tried under `C` and UTF-8. No cut
+  inside the command got through, and no whole payload was rejected.
+- **Cost.** 0.08s for a 1MB command.
+- **Mutants.** Seven mutants were each caught by their own case, with 85 to 90 of 91 passing.
+  Two probes were reshaped until the any-quote mutant and the heuristic-close mutant failed.
+- **Acceptance.** 42 of 42.
 
-Before writing the check, a prototype tried every strict prefix of four sample payloads under
-both the C locale (every byte offset) and UTF-8 (every character offset). The samples covered
-a nested `}` inside the command, escaped quotes, a trailing backslash, non-ASCII text and a
-multi-line command. No cut inside the command got through. Only two cuts passed the check,
-both after the command had closed: one after tool_input's `}`, and one after a `}` inside the
-description. No whole payload was rejected, with or without a trailing newline.
+**Found in passing.** Under a UTF-8 locale, an invalid UTF-8 byte used to make every `=~` in
+this path match nothing, which let a commit through. The check now denies it. This case is
+parked under Deferred.
 
-**Mutation proof (Phase 4).** Each mutation was applied to a copy of the fixed hook and the
-full suite was run against it:
+**Docs.**
 
-| Mutation | Result | Caught by |
-|---|---|---|
-| none | 91/91 | — |
-| check removed | 85/91 | all 6 truncation cases |
-| closing-quote half only | 90/91 | cut after the command, before the end |
-| trailing-brace half only | 90/91 | cut just after a `}` inside the command |
-| any `"` closes the value (`[^"]*"`) | 90/91 | same `}` case, through its leading `echo "a"` |
-| a `"` closes unless a backslash precedes it | 90/91 | escaped quotes, trailing backslash |
-| approval token honoured before the check | 90/91 | cut after the approval token |
-| mode recovered before the check | 86/91 | 5 truncation cases answer `ask` |
+- The hook's comment block and decision table describe the check.
+- The README count is now 91.
+- The README's mass-failure shapes were measured again. The old 31/42 was reproduced from
+  `main` first, and the new shapes are 33/58 and 6/85.
+- `pr` goes from 0.2.9 to 0.2.10.
 
-Two probes were reshaped until each of those last three mutants failed:
+### 2026-09-30 — Pre-test: draft PR #53, review APPROVE, escalation filed as #54
 
-- The `}` case gained `echo "a"` ahead of the cut. Without it, the any-quote mutant passes.
-- The trailing-backslash case moved to a payload where the command is the last string. With
-  a `description` after the command, a sloppy check can take its closing quote from that key.
+**Reviews.** The first review was APPROVE. It swept every byte prefix of 11 payloads on macOS
+and on Ubuntu (bash 5.2, glibc) and found nothing that got through. Its four findings were all
+applied:
 
-The first try at the heuristic mutant, `"(|...)"`, would not compile on macOS. Every payload
-then failed the check, so it measured nothing and was replaced.
+- The README claimed whole-payload parity with jq, which is not true. It now says a whole
+  payload gets "the decision it always did".
+- The mass-failure paragraph's explanation of why each shape occurs was fixed.
+- The blind-spot comment now names a class of cuts and states what the check guarantees.
+- The comment now says the closing-quote half relies on `command` being the only key of that
+  name in the payload.
 
-The Phase 1 repro against the fixed hook: a whole commit still gets `ask` on both branches.
-The truncated payload and the empty payload now get `deny`. `test-acceptance.sh` against the
-source tree passed 42 of 42.
+The close-gate review was also APPROVE. It corrected the blind-spot wording again: GIT_VERB
+reads the whole raw payload, so the guarantee is that the command is read whole, not that the
+input is identical.
 
-**Found in passing:** a payload with an invalid UTF-8 byte used to let a commit through the
-no-jq branch. Under a UTF-8 locale, bash's `=~` fails to match anything in such a payload,
-even `}` at the end, so GIT_VERB found nothing and `git commit -m x` exited 0. Under `LC_ALL=C`
-it was gated. The new check fails closed on it: it answers `deny`, with the "did not arrive
-whole" reason. Claude Code sends valid UTF-8, so this is edge-case hardening, not a live hole.
-No probe pins it, because a probe would need a UTF-8 locale to be installed. It is listed under
-Deferred.
+**Escalated.** The review found two pre-existing fail-opens, and I reproduced both on `main`
+and on the branch:
 
-**Docs (Phase 5).**
+- With no jq, a whole payload whose command ends in its verb, or has the verb at the start of
+  a later line, passes.
+- With a jq that cannot run, the hook passes everything.
 
-- **The hook.** The no-jq comment block describes the check, both of its halves, the one cut
-  it cannot see, and why it runs first. The header's decision table has a row for it.
-- **`plugins/pr/hooks/README.md`.**
-  - The case count goes from 73 to 91, and the list of what the suite covers now includes the
-    no-jq path.
-  - A note explains why dropping a directory from `PATH` doesn't hide jq.
-  - The mass-failure paragraph now gives two measured shapes instead of one. The old
-    `31/42 (73)` figure was reproduced from `main` first, to check the method. A jq that can't
-    run gives 33/58. A missing jq gives 33/58 from outside a configured repo, and 6/85 from
-    inside one. The difference comes from the new deny: the suite's empty payloads now reach a
-    path that denies them. That path takes activation from the directory the suite runs in.
-- **The version.** `pr` goes from 0.2.9 to 0.2.10.
+Under the scope contract's rule for pre-existing security defects, both were filed as one issue:
+#54.

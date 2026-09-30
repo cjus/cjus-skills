@@ -137,7 +137,7 @@ malformed payloads, the branch names that must **not** gate, the unconfigured re
 left untouched, the linked worktree whose config lives at its main checkout's root, the
 payloads whose `cwd` is absent or empty, which must resolve through `CLAUDE_PROJECT_DIR` rather
 than the hook's own working directory, and the raw-payload path the hook takes without `jq`: a
-whole payload behaves as it does with `jq`, and a payload cut short or empty is denied.
+whole payload gets the decision it always did, and a payload cut short or empty is denied.
 Requires `jq` and `git`, and writes only to throwaway repos under the system temp directory.
 The no-`jq` cases hide `jq` from the hook alone, through a folder of links to the few tools that
 path runs. Dropping a directory from `PATH` does not hide it, because macOS ships its own
@@ -164,13 +164,21 @@ passed 33, failed 58, skipped 0  (91 cases)   # jq cannot run, or is missing
 passed 6, failed 85, skipped 0  (91 cases)    # jq missing, run from inside a configured repo
 ```
 
-A `jq` that cannot run, such as a stray x86 build on Apple Silicon, is still found by the hook,
-which then emits nothing at all, so only the cases expecting no output pass. A missing `jq`
-sends the hook down its no-`jq` path with the empty payloads the suite could not build. That
-path reads no `cwd` from the payload, so activation resolves from the directory the suite was
-run in: inside a repo that opted in, the hook denies those payloads as cut short and only the
-unconfigured-repo cases pass; anywhere else it stays inert and the shape is the first one. The
-tell is on stderr, which the counts do not show: `Bad CPU type in executable`, or
+In both shapes the no-`jq` sections behave the same way. They hide `jq` from the hook, so it
+denies the empty payloads the suite could not build, and only two of their cases pass: the check
+that `jq` is hidden, and the unconfigured-repo case. The other sections are where the shapes
+differ:
+
+- **`jq` present but cannot run**, such as a stray x86 build on Apple Silicon. The hook still
+  finds it and then emits nothing at all, so only the cases expecting no output pass.
+- **`jq` missing.** Every case takes the no-`jq` path with an empty payload. That path reads no
+  `cwd` from the payload, so activation resolves from `CLAUDE_PROJECT_DIR`, or failing that from
+  the directory the suite was run in:
+  - Inside a repo that opted in, the hook denies those payloads as cut short. Only the cases that
+    point `CLAUDE_PROJECT_DIR` at an unconfigured repo pass.
+  - Anywhere else, the hook stays inert and the shape is the first one.
+
+The tell is on stderr, which the counts do not show: `Bad CPU type in executable`, or
 `command not found`. Run `jq --version` before reading either shape as a regression.
 
 **It invokes the hook directly rather than through `bash`, deliberately**, for the reason given

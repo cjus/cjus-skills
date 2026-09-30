@@ -333,9 +333,9 @@ nj "cut before the command key"            deny "${P%%\"tool_input\"*}"
 nj "empty payload"                         deny ""
 P=$(rawp default 'PR_ALLOW_MAIN=1 git commit -m x')
 nj "cut after the approval token"          deny "${P%%commit -m x*}"
-# The one cut the check cannot see: after tool_input closes. The command is whole by
-# then, so the verb test still reads all of it, and this is what makes that blind spot
-# harmless rather than a second hole.
+# A cut the check cannot see: after tool_input closes. The command is whole by then, so
+# every later test still reads all of it, which is what makes that blind spot harmless
+# rather than a second hole.
 P=$(rawp default 'git commit -m x')
 nj "cut after tool_input closes still gates" ask "${P%%,\"tool_use_id\"*}"
 P=$(rawp default 'cd /x && git commit -m x')
