@@ -114,7 +114,7 @@ No comments on the issue at start.
   it out on a path that runs for every Bash call. `GIT_VERB_RAW` adds one escape class,
   `\\([bfnrt]|u[0-9a-fA-F]{4})`, before `git`, in whitespace runs and after the verb, and
   accepts the unescaped closing `"` after the verb. The differential test found no under-match
-  in 160,000 checks on macOS and 80,000 on Linux. The worst 1MB case took 0.32s. The `\\n`
+  in 160,000 checks on macOS and 80,000 on Linux. The worst 1MB case took about 0.4s. The `\\n`
   risk became two precision probes.
 - **Where should item 2 be caught?**
   - Probe jq at start-up, so that `HAVE_JQ` means "jq runs" rather than "jq is on `PATH`".

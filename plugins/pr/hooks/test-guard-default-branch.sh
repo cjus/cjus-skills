@@ -404,6 +404,12 @@ echo "== jq fails only when gate() builds the decision =="
 hj "commit still asks"                     ask  "$(rawp default 'git commit -m x')"
 hj "bypassPermissions still denies"        deny "$(rawp bypassPermissions 'git commit -m x')"
 hj "a reason holding a quote still gates"  ask  "$(rawp default 'git -C /nonexistent/a"b commit -m x')"
+# The deny instruction names the configured token, so it is the other part printf may
+# be handed unsafe. It is swapped on its own, which is what lets a reason with a quote
+# in it keep the recovery.
+TOKREPO=$(mktemp -d); git -C "$TOKREPO" init -q -b main
+optin "$TOKREPO"; printf '{"repo":"t/t","mainGuard":{"approvalToken":"A\\"B"}}\n' > "$TOKREPO/.claude/pr-config.json"
+hj "a token name holding a quote still denies" deny "$(jq -nc --arg c "$TOKREPO" '{cwd:$c,permission_mode:"bypassPermissions",tool_input:{command:"git commit -m x"}}')" "$TOKREPO"
 
 echo
 echo "passed $PASS, failed $FAIL, skipped $SKIP  ($((PASS+FAIL+SKIP)) cases)"

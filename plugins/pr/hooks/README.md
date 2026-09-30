@@ -131,7 +131,7 @@ hook is not evidence.** Run the probe suite after any edit:
   "${CLAUDE_PLUGIN_ROOT}"/hooks/guard-default-branch.sh
 ```
 
-113 cases, covering:
+114 cases, covering:
 
 - the refspec forms, chained and multi-line commands, and redirection through `-C` and
   `--git-dir`
@@ -157,21 +157,21 @@ The totals line names all three buckets and the case count, so a short run is le
 run rather than as a suite that lost cases:
 
 ```
-passed 113, failed 0, skipped 0  (113 cases)
-passed 111, failed 0, skipped 2  (113 cases)   # linked-worktree fixture could not be built
+passed 114, failed 0, skipped 0  (114 cases)
+passed 112, failed 0, skipped 2  (114 cases)   # linked-worktree fixture could not be built
 ```
 
 **The parenthesised total is the number to compare against this document.** Only the two
 linked-worktree cases can skip, and only where `git worktree add` fails; every other case runs
-everywhere. A total that is not 113 means the suite itself changed and this line is stale.
+everywhere. A total that is not 114 means the suite itself changed and this line is stale.
 
 **A mass failure is more often `jq` than the hook.** The suite builds every payload and reads
 every decision with `jq`, so a `jq` that is broken or missing fails most cases without the hook
 being at fault. It leaves one of two shapes:
 
 ```
-passed 35, failed 78, skipped 0  (113 cases)   # jq missing or cannot run
-passed 8, failed 105, skipped 0  (113 cases)   # the same, run from inside a configured repo
+passed 35, failed 79, skipped 0  (114 cases)   # jq missing or cannot run
+passed 8, failed 106, skipped 0  (114 cases)   # the same, run from inside a configured repo
 ```
 
 Which one depends on where the suite was run, not on what is wrong with `jq`. The hook treats a

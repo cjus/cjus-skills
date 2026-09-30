@@ -159,12 +159,18 @@ pr_repo_configured() {
 # the no-jq branch instead, but no route through gate() may end without a decision,
 # whatever its jq does.
 #
-# A reason printf would have to escape (a `"`, a `\` or a control character) is
-# swapped for a fixed one, because printf cannot escape it. Only a reason carrying a
-# path, a branch name or a configured token name can hold one, and it reaches printf
-# only when jq failed here after it parsed the payload. Every reason the no-jq branch
-# passes is a fixed literal.
-JSON_UNSAFE='["[:cntrl:]]|\\'
+# printf cannot escape, so the reason and the deny instruction are each printed only
+# if they have a SAFE SHAPE: no `"`, no `\` and no control character. (A backslash
+# inside brackets is a literal in POSIX ERE, so the class below holds exactly those.)
+# A part that fails the test is swapped for a fixed one. The test is phrased as "is
+# safe", not "is unsafe", so that if bash's regex ever fails to evaluate, as it does
+# on invalid UTF-8 under a UTF-8 locale, the swap happens rather than being skipped.
+#
+# Only a reason carrying a path or a branch name, or an instruction carrying a
+# configured token name, can fail the test, and those reach printf only when jq
+# failed here after it parsed the payload. Everything the no-jq branch passes is a
+# fixed literal and prints in full.
+JSON_SAFE='^[^"\[:cntrl:]]*$'
 gate() {
   # Activation, checked HERE rather than at each call site so that EVERY gating path
   # honours it: the parsed path, the no-jq and no-grep paths that run before the config
@@ -172,7 +178,7 @@ gate() {
   # chokepoint through which every block must pass.
   pr_repo_configured || exit 0
 
-  local reason="$1" decision
+  local reason="$1" decision stop=""
   case "$MODE" in
     default | acceptEdits | plan) decision="ask" ;;
     # Everything else, including `auto`, `dontAsk`, an empty mode, and any mode
@@ -184,11 +190,11 @@ gate() {
   esac
 
   [[ "$decision" == "deny" ]] &&
-    reason="${reason} STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1. Never add that yourself."
+    stop=" STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1. Never add that yourself."
 
   local out=""
   [[ "$HAVE_JQ" == 1 ]] &&
-    out=$(jq -nc --arg d "$decision" --arg r "$reason" \
+    out=$(jq -nc --arg d "$decision" --arg r "${reason}${stop}" \
       '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}' 2>/dev/null)
   if [[ -n "$out" ]]; then
     printf '%s\n' "$out"
@@ -197,12 +203,13 @@ gate() {
     # that branch honours the raw-token pattern so the instruction actually works
     # there. Both halves are load-bearing: a degraded path is graceful only if it
     # degrades the diagnosis while keeping the recovery, and printing a recovery that
-    # does nothing is worse than printing none.
-    if [[ $reason =~ $JSON_UNSAFE ]]; then
+    # does nothing is worse than printing none. Swapping the two parts separately is
+    # what keeps the recovery when only the reason held a character printf cannot take.
+    [[ $reason =~ $JSON_SAFE ]] ||
       reason="The default-branch commit guard needs operator approval for this commit or push. jq failed while building the full reason."
-      [[ "$decision" == "deny" ]] && reason="${reason} STOP and ask the operator in conversation."
-    fi
-    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' "$decision" "$reason"
+    [[ $stop =~ $JSON_SAFE ]] ||
+      stop=" STOP and ask the operator in conversation."
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' "$decision" "${reason}${stop}"
   fi
   exit 0
 }
@@ -375,8 +382,9 @@ if [[ "$HAVE_JQ" == 0 ]]; then
   # DECODING THE COMMAND FIRST LOOKS SIMPLER AND IS NOT AN OPTION. With bash builtins
   # alone it means `${s//pattern/replacement}`, which under bash 3.2 grows roughly with
   # the cube of the length: measured at 1s for a 10KB command and 66s for 40KB, on a
-  # path that runs for every Bash call. This regex was measured at 0.32s at worst on a
-  # 1MB payload built to stress it.
+  # path that runs for every Bash call. This regex stayed under half a second on every
+  # 1MB payload built to stress it: about 0.4s at worst, for a body of repeated
+  # `git \t-a\tb\t`.
   #
   # Checked against the decoded command matched with GIT_VERB: 40,000 generated
   # commands, each both as JSON.stringify writes it and with every non-ASCII character

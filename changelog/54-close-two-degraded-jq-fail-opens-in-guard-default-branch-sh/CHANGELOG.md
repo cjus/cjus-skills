@@ -145,3 +145,51 @@ fix that reaches too far, and the mutants below turn each of them red.
   same way, so the text explains the shape by where the suite ran, not by what is wrong with
   jq.
 - **Version.** `pr` goes from 0.2.10 to 0.2.11.
+
+### 2026-09-30 14:34:22 MDT: Pre-test, draft PR #57, review APPROVE, two escalations filed
+
+**Review.** `pr-review-2026-09-30.md` gives APPROVE. The reviewer ran its own differential test,
+stricter than Phase 1's, over 180,000 checks:
+
+- the jq side used the hook's real logic: `grep -E` line by line, plus the approval token
+- the alphabet was all of ASCII plus Unicode spaces and surrogates
+- three encoders and two locales
+
+It found no under-match. The same test caught 53 under-matches in `main`'s regex, and 32 with
+the closing-quote alternative removed. The reviewer also reproduced both of the README's
+mass-failure shapes.
+
+**Suggestions applied.**
+
+- **Timing claim.** The comment said "0.32s at worst", but the reviewer found a shape that took
+  0.42s: a 1MB body of repeated `git \t-a\tb\t`. I measured it at 0.40s. The comment now says
+  about 0.4s at worst and names the shape.
+- **`gate()` fallback.** It now checks for a safe shape, `JSON_SAFE='^[^"\[:cntrl:]]*$'`, rather
+  than an unsafe one, so a regex that fails to evaluate swaps rather than skips. The deny
+  instruction is kept in `stop` and checked separately, so a reason with a `"` in it keeps the
+  approval-token instruction. Both spellings of the class gave identical results on bash 3.2 and
+  on bash 5.2 with glibc.
+- **New probe.** "A token name holding a quote still denies" uses a fixture repo whose config
+  sets `mainGuard.approvalToken` to `A"B`. The suite goes from 113 to 114 cases.
+
+**Evidence.**
+
+- 114 of 114 on macOS and in `ubuntu:24.04`.
+- 13 mutants: the 12 earlier ones plus a separate mutant for each swap, and every one caught.
+- The jq path's stdout is byte-identical to `main`'s for commit, `-C` with a quote, push, `ls`
+  and three malformed payloads, in both modes.
+- The mass-failure shapes, measured again, are 35/79 and 8/106. The README is updated.
+
+**Escalated.** The review found two pre-existing under-matches, which I reproduced identically
+on `main`. Each was filed immediately as its own issue under the scope contract's rule for
+pre-existing security defects:
+
+- **#58.** `GIT_VERB`'s trailing group rejects `)`, `>` and a backtick. `(cd /x && git push)`,
+  `echo $(git push)`, `git push>/dev/null` and ``x=`git push` `` all pass on the default branch
+  on every path, jq included.
+- **#59.** The no-jq approval token is honoured across a `\n` inside an assignment's value. A
+  command of `PR_ALLOW_MAIN=1 X=`, a newline, then a push naming the default branch passes
+  without jq, while the jq path asks.
+
+**CI.** The bookcraft fixture workflow on macOS and Ubuntu started pending when the draft
+opened. It does not run the guard suite.
