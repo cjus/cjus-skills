@@ -229,8 +229,9 @@ fi
 
 # attach_scripts rewrites link annotations, so the contents page's own links
 # have to come out of it still opening their pages. The check is the bind
-# fixture's.
-links=$("$py" "$here/../bind/contents-links.py" "$pdf" Contents 2>&1); rc=$?
+# fixture's. This book's index is empty (it harvests no terms), so its links are
+# the bind fixture's to check.
+links=$("$py" "$here/../bind/page-links.py" "$pdf" Contents 2>&1); rc=$?
 if [ "$rc" -eq 0 ]; then
   report 0 "every Contents row still links to the page it prints"
 else

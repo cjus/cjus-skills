@@ -65,8 +65,8 @@ try:
     from playwright.sync_api import sync_playwright
     from pypdf import PdfWriter
     from pypdf.generic import (ArrayObject, DecodedStreamObject,
-                               DictionaryObject, NameObject, NumberObject,
-                               TextStringObject)
+                               DictionaryObject, FloatObject, NameObject,
+                               NumberObject, TextStringObject)
 except ImportError as exc:  # pragma: no cover - setup guidance
     # Resolved from this file rather than from CLAUDE_PLUGIN_ROOT, so the line
     # stays copy-pasteable when the script is run directly and that variable is
@@ -2821,6 +2821,85 @@ def locate(pages_text: list[str]):
     return chapters, index_page, figures, lof_page, cover_end, gloss_page
 
 
+# pdftotext -bbox's output: one <page> per page, one <word> per word, in points
+# from the top left.
+BBOX_PAGE_RE = re.compile(r'<page width="[\d.]+" height="([\d.]+)">(.*?)</page>',
+                          re.S)
+BBOX_WORD_RE = re.compile(r'<word xMin="([\d.]+)" yMin="([\d.]+)" '
+                          r'xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)</word>')
+# render()'s bottom margin, where the running footer prints its page number.
+FOOTER_BAND_PT = 0.95 * 72
+
+
+def link_pages(pdf: Path, entries, index_page: int) -> int:
+    """Link every page number the index prints to the page it names.
+
+    The contents rows' links are drawn by Chromium from an anchor laid over each
+    row, which is out of the text's flow. An anchor around each index number
+    would be in it, and would split a list of numbers into one inline item per
+    number, each rounded to the layout unit on its own. Measured, an entry of
+    seven numbers came out 0.14px wider, and in a full-length book that wrapped
+    one entry's last number onto a line of its own. So the index's page stays
+    exactly as it was, and the links are laid onto the finished PDF.
+
+    Each number is found where it printed, with `pdftotext -raw -bbox`. Raw
+    order is the content stream's, which follows the index as written across
+    both columns, where pdftotext's reading order interleaves them. Words are
+    matched in that order against the index's own page references, so a word is
+    linked only when it is the next number the index printed, and a number
+    inside a term is passed over. Each link covers its word, comma included, and
+    opens its page in the /XYZ form Chromium's outline uses.
+
+    Rewrites `pdf` in place and returns the links made. Raises RuntimeError when
+    any reference was not found, because the index would then print numbers that
+    do not do what the rest of them do.
+    """
+    wanted = [p for _, pgs in entries for p in pgs]
+    if not wanted:
+        return 0
+    found = subprocess.run(
+        ["pdftotext", "-raw", "-bbox", "-f", str(index_page), str(pdf), "-"],
+        capture_output=True, text=True, check=True).stdout
+    writer = PdfWriter(clone_from=str(pdf))
+    made = 0
+    for offset, (height, words) in enumerate(BBOX_PAGE_RE.findall(found)):
+        page = writer.pages[index_page - 1 + offset]
+        h = float(height)
+        annots = page.get("/Annots")
+        annots = annots.get_object() if annots is not None else ArrayObject()
+        for x0, y0, x1, y1, word in BBOX_WORD_RE.findall(words):
+            if made == len(wanted):
+                break
+            if float(y0) > h - FOOTER_BAND_PT or word.rstrip(",") != str(wanted[made]):
+                continue
+            target = writer.pages[wanted[made] - 1]
+            annots.append(writer._add_object(DictionaryObject({
+                NameObject("/Type"): NameObject("/Annot"),
+                NameObject("/Subtype"): NameObject("/Link"),
+                NameObject("/Rect"): ArrayObject([
+                    FloatObject(float(x0)), FloatObject(h - float(y1)),
+                    FloatObject(float(x1)), FloatObject(h - float(y0))]),
+                NameObject("/Border"): ArrayObject(
+                    [NumberObject(0), NumberObject(0), NumberObject(0)]),
+                NameObject("/Dest"): ArrayObject([
+                    target.indirect_reference, NameObject("/XYZ"),
+                    NumberObject(0), FloatObject(float(target.mediabox.top)),
+                    NumberObject(0)]),
+            })))
+            made += 1
+        if len(annots):
+            page[NameObject("/Annots")] = annots
+    if made != len(wanted):
+        raise RuntimeError(
+            f"{made} of its {len(wanted)} page references were found where they "
+            f"printed; the first not found is {wanted[made]}")
+    tmp = pdf.with_name(f".{pdf.name}.pages")
+    with open(tmp, "wb") as fh:
+        writer.write(fh)
+    tmp.replace(pdf)
+    return made
+
+
 def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
     """Carry every script the book asks the reader to save inside the PDF.
 
@@ -2956,7 +3035,7 @@ HEADING_RE = re.compile(r"<h([1-6])\b[^>]*>(.*?)</h\1>", re.S | re.I)
 
 def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
                   fm_title: str | None, has_figures: bool, has_glossary: bool,
-                  has_index: bool) -> dict[str, int]:
+                  has_index: bool, settled: dict) -> dict[str, int]:
     """Reshape the outline Chromium wrote into the one a reader navigates by.
 
     The outline is the PDF's bookmarks, and it is what a Kindle Scribe shows as
@@ -2978,9 +3057,12 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
     chapters.
 
     Every page the book binds must be one of Chromium's top-level entries, in
-    the order assemble() lays them out. An h1 the chapter's own markdown
+    the order assemble() lays them out, and where `settled` knows the page it
+    starts on, the entry must open that page. An h1 the chapter's own markdown
     rendered is a heading inside that chapter, so it is filed under it as one of
-    its sections. Raises RuntimeError when an expected entry is missing: a short
+    its sections. The page is what tells the two apart when such a heading
+    shares the next chapter's title: matched on text alone, it took that
+    chapter's entry, sent the reader into the chapter before, and passed. Raises RuntimeError when an expected entry is missing: a short
     outline sends the reader to the wrong chapter or to none, and a bind that
     ships one unremarked is the failure this exists to stop.
 
@@ -3032,17 +3114,29 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
     def title_of(ref) -> str:
         return str(ref.get_object().get("/Title", ""))
 
-    # (heading text, chapter or None), in assemble()'s order.
-    expected: list[tuple[str, dict | None]] = [(title, None), ("Contents", None)]
+    # (heading text, chapter or None, the page it opens or None where no probe
+    # reads one), in assemble()'s order.
+    expected: list[tuple[str, dict | None, int | None]] = [
+        (title, None, 1), ("Contents", None, None)]
     if fm_title:
-        expected.append((fm_title, None))
+        expected.append((fm_title, None, None))
     if has_figures:
-        expected.append(("Figures", None))
-    expected += [(ch["title"], ch) for ch in chapters]
+        expected.append(("Figures", None, settled.get("lof_page")))
+    expected += [(ch["title"], ch, settled["pages"].get(ch["num"]))
+                 for ch in chapters]
     if has_glossary:
-        expected.append(("Glossary", None))
+        expected.append(("Glossary", None, settled.get("gloss_page")))
     if has_index:
-        expected.append(("Index", None))
+        expected.append(("Index", None, settled.get("index_page")))
+
+    page_no = {p.indirect_reference.idnum: i + 1
+               for i, p in enumerate(writer.pages)}
+
+    def opens(ref) -> int | None:
+        dest = ref.get_object().get("/Dest")
+        if isinstance(dest, list) and dest:
+            return page_no.get(dest[0].idnum)
+        return None
 
     # Chromium drops the space at every line a wrapped heading breaks on, so
     # "The Data Model" set across two lines reaches the outline as
@@ -3071,19 +3165,23 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
     tops = children(outlines)
     found: list[tuple] = []     # (chapter or None, entry, its sections)
     for ref in tops:
-        if (len(found) < len(expected)
-                and key(title_of(ref)) == key(expected[len(found)][0])):
-            found.append((expected[len(found)][1], ref, children(ref)))
+        want = expected[len(found)] if len(found) < len(expected) else None
+        # A page either side doesn't know leaves the text to decide alone.
+        page = opens(ref)
+        if (want and key(title_of(ref)) == key(want[0])
+                and (want[2] is None or page is None or page == want[2])):
+            found.append((want[1], ref, children(ref)))
         elif found:
             found[-1][2].append(ref)
     if len(found) < len(expected):
         got = sum(1 for ch, _, _ in found if ch)
+        miss, _, on = expected[len(found)]
         raise RuntimeError(
             f"it has {len(found)} of the {len(expected)} top-level entries the "
             f"book needs, {got} of them for the book's {len(chapters)} "
-            f"chapters, and the first missing is "
-            f"{expected[len(found)][0]!r}. Chromium's top-level entries: "
-            f"{[title_of(r) for r in tops[:12]]}")
+            f"chapters, and the first missing is {miss!r}"
+            f"{f' opening page {on}' if on else ''}. Chromium's top-level "
+            f"entries: {[(title_of(r), opens(r)) for r in tops[:12]]}")
 
     sections = cfg.get("sections") or []
     counts = {"chapters": 0, "sections": 0, "parts": 0, "pages": 0}
@@ -4039,9 +4137,15 @@ def main(argv: list[str]) -> int:
     try:
         outline = build_outline(out, page_html, args.title, chapters, cfg,
                                 fm_title, bool(figures), bool(glossary),
-                                want_index)
+                                want_index, state)
     except RuntimeError as exc:
         print(f"error: the outline in {out} is incomplete: {exc}",
+              file=sys.stderr)
+        return 1
+    try:
+        link_pages(out, entries, index_page)
+    except RuntimeError as exc:
+        print(f"error: the index's page links in {out} are incomplete: {exc}",
               file=sys.stderr)
         return 1
     try:
@@ -4301,8 +4405,8 @@ def main(argv: list[str]) -> int:
               f"reference, starting on page {state['gloss_page']}")
     if want_index:
         refs = sum(len(p) for _, p in entries)
-        print(f"index: {len(entries)} entries, {refs} page references, "
-              f"starting on page {index_page}")
+        print(f"index: {len(entries)} entries, {refs} page references"
+              f"{', each a link' if refs else ''}, starting on page {index_page}")
         print(f"terms: {terms_source}")
         # A term that matches nothing subtracts itself silently: the index
         # simply comes up an entry short and the count above reads as ordinary

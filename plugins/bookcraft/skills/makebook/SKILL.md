@@ -111,7 +111,7 @@ Go through the chapters one at a time. For each, write a single line naming the 
 | 3 | Figures, listing every figure with its page, each row linking to its figure. Appears only when the book has figures |
 | Then | The chapters, each opening on a fresh page |
 | Then | Glossary, one column, each term with the chapter that defines it. Appears only when the folder holds a `glossary.md` |
-| Last | Index, two columns, terms with the pages they appear on |
+| Last | Index, two columns, terms with the pages they appear on. Each page number links to its page |
 
 **Every cover carries a creation stamp**, the bound book's version marker. Directly under the author name, in the byline's type, the PDF cover and the EPUB's cover both print a line like `Created: 2026-09-24 06:14:10 MDT`: the local time the binding ran, with the zone's abbreviation, or its UTC offset where the zone has none. Two bindings of one folder otherwise look the same to a reader, down to the EPUB's identifier, so the stamp is how you tell which one you are holding. It is read once per run, so the PDF and the EPUB from one binding carry the same stamp. A book with no `byline` still gets one, in the byline's place. There is no way to fix it to another time: every binding takes the time it ran.
 
@@ -142,7 +142,7 @@ The PDF carries an outline, the bookmarks a viewer lists beside the page. On a K
 - **A chapter or appendix expands to its sections**, its `##` headings, and no further. Its label matches its opening page, `Chapter 3: Title` or `Appendix 1: Title`. A title that already starts with its label prints it only once.
 - **Chapters start collapsed**, so the outline opens as a list of chapters.
 - **`sections` in `book.json` nests chapters under their parts**, the same grouping the contents page and the EPUB's nav use. A part has no page of its own, so its entry opens on its first chapter. Parts start expanded.
-- **An H1 inside a chapter's body** (any H1 after the title) is filed under that chapter as one of its sections.
+- **An H1 inside a chapter's body** (any H1 after the title) is filed under that chapter as one of its sections. That holds even when its text matches the next chapter's title, because an entry counts only if it also opens the page the binder found that chapter on.
 
 Chromium writes the outline from the page's headings, and only when `page.pdf()` is given **both `outline=True` and `tagged=True`**. Leave out `tagged` and no outline is written at all, with no error. That is why every page title and chapter title is an `h1` and a chapter's sections are `h2`: the heading level decides the nesting. The stylesheet sets every property that would differ between the two levels, so the layout doesn't depend on them. Tagging also writes a structure tree, which screen readers use.
 
@@ -150,9 +150,10 @@ The build then reshapes Chromium's outline and checks it. **If any page or chapt
 
 ## The linked contents
 
-**Every row on the contents page and the list of figures is a link**, so tapping it on a Kindle Scribe jumps to the page the row names. This doesn't depend on the outline flags. Chromium turns an in-document `<a href="#id">` into a PDF link to the page holding that `id`.
+**Every row on the contents page and the list of figures is a link, and so is every page number in the index**, so tapping one on a Kindle Scribe jumps to the page it names. None of this depends on the outline flags. Chromium turns an in-document `<a href="#id">` into a PDF link to the page holding that `id`.
 
-- **What links where.** The contents page links Figures, each chapter and appendix, Glossary and Index. The list of figures links each figure. The index's page numbers don't link.
+- **What links where.** The contents page links Figures, each chapter and appendix, Glossary and Index. The list of figures links each figure. The index links each page number.
+- **The index's links are added after rendering**, because an `<a>` around each number would move the page: it splits a list of numbers into separately rounded pieces, and in a full-length book that wrapped one entry's last number onto a new line. `link_pages` finds each number where it printed instead, using `pdftotext -raw -bbox`, whose content-stream order follows the index as written across both columns. It matches the numbers in order against the index's own page references and lays a link over each one. A number inside a term is passed over, and the bind fails if any reference isn't found.
 - **The ids are prefixed** (`mb-ch-3`, `mb-fig-001`, `mb-glossary` and so on), because a chapter's raw HTML can carry ids of its own, and a duplicate would send a link to the wrong page.
 - **The whole row is the tap target.** The link is an empty anchor laid over the row, covering the title, the leader dots and the number. That's also why the page doesn't move. Making the row itself an `<a>` would shift the first part heading after a Figures row, because `.toc-group:first-of-type` counts element type. Wrapping the title and number in an `<a>` would take away their flex sizing.
 

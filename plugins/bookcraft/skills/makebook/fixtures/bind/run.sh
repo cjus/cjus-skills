@@ -17,19 +17,23 @@
 #                                   rasterised from the PDF's cover page, and
 #                                   the PDF's outline lists every page, each
 #                                   chapter collapsed over its sections and
-#                                   none of its ### headings; every Contents
-#                                   and Figures row links to the page it
-#                                   prints, on both binds
+#                                   none of its ### headings; every link on
+#                                   the Contents, Figures and Index pages
+#                                   opens the page it prints, on both binds;
+#                                   and build_outline refuses an outline that
+#                                   is missing or a chapter short
 #   with a declared cover_image,    PDF page 1 and EPUB/cover.xhtml carry the
-#   parts, and a stray H1           same Created: stamp, in bind_stamp's form;
+#   parts, and two stray H1s        same Created: stamp, in bind_stamp's form;
 #                                   the outline nests each chapter under its
 #                                   part, and files an H1 in a chapter's body
-#                                   under that chapter, retitled with the
-#                                   spaces Chromium drops where it wraps
+#                                   under that chapter: one retitled with the
+#                                   spaces Chromium drops where it wraps, and
+#                                   one sharing the next chapter's title, which
+#                                   only its page tells apart from that title
 #
-# The second bind takes its parts and its stray H1 on board only because a
-# third bind would cost the suite another full render. Neither reaches the
-# stamp it checks.
+# The second bind takes its parts and its stray H1s on board only because a
+# third bind would cost the suite another full render. None of them reaches
+# the stamp it checks.
 #
 # The EPUB keeps a text cover page, and so a stamp a script can read, only
 # behind declared art. Rasterised art stands in for that page and carries the
@@ -177,21 +181,72 @@ EOF
   fi
 }
 
-# links_open <label> <pdf> <listing>...: every row of each listing named links
-# to the page it prints. See contents-links.py.
+# links_open <label> <pdf> <listing>...: every link on each listing named opens
+# the page it prints (see page-links.py). The index's links are also held to
+# the bind's own count of page references, read from $bind_out, so a number
+# printed without a link cannot pass.
 links_open() {
-  local label=$1 out rc
+  local label=$1 out rc want got names
   shift
-  out=$("$py" "$here/contents-links.py" "$@" 2>&1); rc=$?
+  out=$("$py" "$here/page-links.py" "$@" 2>&1); rc=$?
+  names=$(printf '%s, ' "${@:2}" | sed 's/, $//; s/, \([^,]*\)$/ and \1/')
+  case " $* " in
+    *" Index "*)
+      want=$(printf '%s\n' "$bind_out" | sed -n 's/^index: [0-9]* entries, \([0-9]*\) page references.*/\1/p')
+      got=$(printf '%s\n' "$out" | sed -n 's/.*Index: \([0-9]*\) links.*/\1/p')
+      if [ -z "$want" ] || [ "$got" != "$want" ]; then
+        rc=1
+        out="$out
+the bind reported ${want:-no} page references and the index carries ${got:-no} links"
+      fi
+      ;;
+  esac
   if [ "$rc" -eq 0 ]; then
-    report 0 "$label: every $(printf '%s and ' "${@:2}" | sed 's/ and $//') row links to the page it prints"
+    report 0 "$label: every link on the $names pages opens the page it prints"
   else
-    report 1 "$label: a listing row links somewhere other than the page it prints"
+    report 1 "$label: a link on the $names pages opens a page other than the one it prints"
     printf '%s\n' "$out" | sed 's/^/      | /'
   fi
 }
 
-links_open "as declared" "$pdf" Contents Figures
+links_open "as declared" "$pdf" Contents Figures Index
+
+# The bind's refusal, tested where no book could reach it. Two pages go through
+# the binder's own render(): one with no heading, so Chromium writes no outline,
+# and one that is a chapter short.
+refusals=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+page = "<section style='break-before: page'><h1>{}</h1><p>Text.</p></section>"
+cases = [
+    ("no outline", "<p>No heading at all.</p>", []),
+    ("a chapter short", "".join(page.format(t) for t in ("T", "Contents", "One")),
+     [{"num": 1, "title": "One"}, {"num": 2, "title": "Two"}]),
+]
+for name, body, chapters in cases:
+    html = f"<!DOCTYPE html><html><body>{body}</body></html>"
+    pdf = out / f"refusal-{len(chapters)}.pdf"
+    binder.render(html, out, pdf, "T")
+    try:
+        binder.build_outline(pdf, html, "T", chapters, {}, None, False, False,
+                             False, {"pages": {1: 3, 2: 4}})
+        print(f"{name}: accepted")
+    except RuntimeError as exc:
+        print(f"{name}: {exc}")
+EOF
+)
+if printf '%s\n' "$refusals" | grep -qF "no outline: Chromium wrote no outline at all" \
+  && printf '%s\n' "$refusals" | grep -qF "a chapter short: it has 3 of the 4 top-level entries" \
+  && printf '%s\n' "$refusals" | grep -qF "the first missing is 'Two' opening page 4"; then
+  report 0 "build_outline refuses a PDF with no outline, and one a chapter short"
+else
+  report 1 "build_outline should refuse a PDF with no outline and one a chapter short"
+  printf '%s\n' "$refusals" | sed 's/^/      | /'
+fi
 
 # The ### headings under "What this chapter uses" are absent: a chapter
 # expands to its sections and stops.
@@ -219,8 +274,10 @@ TREE
 # Checked, because a failed edit would bind with no cover_image and report a
 # missing stamp, blaming the binder for a fault in the fixture.
 #
-# The stray H1 is long enough to wrap at any type size, and Chromium drops the
-# space at the wrap from the outline entry it writes.
+# Chapter 2's stray H1 is long enough to wrap at any type size, and Chromium
+# drops the space at the wrap from the outline entry it writes. Chapter 1's
+# shares chapter 2's title: matched on text alone, it took chapter 2's entry
+# and sent the reader into chapter 1.
 if ! edit_out=$("$py" - "$tmp/book" 2>&1 <<'EOF'
 import json, sys
 from pathlib import Path
@@ -230,6 +287,10 @@ cfg["cover_image"] = "diagrams/the-two-profiles.svg"
 cfg["sections"] = [{"title": "Part One: Profiles", "chapters": [1]},
                    {"title": "Part Two: Checking", "chapters": [2]}]
 (book / "book.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+ch1 = book / "guide-fixture-01-what-a-profile-selects.md"
+ch1.write_text(ch1.read_text(encoding="utf-8") + (
+    "\n# What the Checker Reads\n\nA heading inside chapter 1 that shares "
+    "chapter 2's title.\n"), encoding="utf-8")
 ch2 = book / "guide-fixture-02-what-the-checker-reads.md"
 ch2.write_text(ch2.read_text(encoding="utf-8") + (
     "\n# A heading set at the top level inside a chapter, long enough that it "
@@ -237,7 +298,7 @@ ch2.write_text(ch2.read_text(encoding="utf-8") + (
     "## A heading under it\n\nAnother paragraph.\n"), encoding="utf-8")
 EOF
 ); then
-  report 1 "cover_image: could not add cover_image, sections and a stray H1 to the copy"
+  report 1 "cover_image: could not add cover_image, sections and the stray H1s to the copy"
   printf '%s\n' "$edit_out" | sed 's/^/      | /'
   exit 1
 fi
@@ -271,11 +332,12 @@ fi
 
 # A Figures row above the first part heading is the layout a contents row
 # turned into an <a> would have moved (see .toc-link).
-links_open "parts and a stray H1" "$pdf" Contents Figures
+links_open "parts and stray H1s" "$pdf" Contents Figures Index
 
-# Parts open over chapters that stay collapsed. The stray H1 is the last of
-# chapter 2's sections, and the H2 under it is gone with the other subsections.
-outline_is "parts and a stray H1" "$pdf" "$(cat <<'TREE'
+# Parts open over chapters that stay collapsed. Each stray H1 is the last of its
+# chapter's sections, and the H2 under chapter 2's is gone with the other
+# subsections.
+outline_is "parts and stray H1s" "$pdf" "$(cat <<'TREE'
   Guide Fixture
   Contents
   Figures
@@ -285,6 +347,7 @@ outline_is "parts and a stray H1" "$pdf" "$(cat <<'TREE'
           Why two sets rather than one
           What this chapter uses
           Suggested reading
+          What the Checker Reads
 + Part Two: Checking
     - Chapter 2: What the Checker Reads
           In short

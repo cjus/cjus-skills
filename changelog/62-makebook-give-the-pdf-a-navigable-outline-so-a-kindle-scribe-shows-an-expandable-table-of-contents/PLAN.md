@@ -128,9 +128,11 @@ project and a specific bound book by path. Those details are given here in gener
 
 ## Plan
 
-Status as of 2026-10-03: phases 1 to 8 are committed and pushed (`9fb320f`). Phases 10 to 15,
-from the 2026-10-03 amendment, are done and uncommitted. Phase 9 and its re-run are done
-except for the device checks, which only the operator can run.
+Status as of 2026-10-03: every phase is done. Phases 1 to 8 are in `9fb320f`, phases 10 to
+15 in `d485edf`, and phases 16 to 18 are uncommitted. On 2026-10-03 the operator tested
+the bound book with the outline and the contents links and reported that it "looks great",
+which closes the device checks in Phase 9 and its re-run. The index links in Phase 17 came
+after that test, so they haven't been tried on the device.
 
 - [x] Phase 1: Pass `outline=True, tagged=True` to `page.pdf()` in `render()`
       (`build-book.py:2599`), and confirm every edition and type size goes through it.
@@ -165,11 +167,11 @@ except for the device checks, which only the operator can run.
       order, or the bind exits 1 naming the first one missing.*
 - [x] Phase 8: Document the outline in `makebook/SKILL.md`, including the `tagged=True`
       dependency.
-- [ ] Phase 9: Verify the acceptance bar on a full-length book: outline shape, identical
+- [x] Phase 9: Verify the acceptance bar on a full-length book: outline shape, identical
       `pdftotext -layout` before and after, and the Kindle Scribe check.
       *Outline shape and `pdftotext -layout` are done: three binds (default edition at 14pt
       and 17pt, reading edition at 14pt) match the binds from `main` on every line except
-      the `Created:` stamp. **The Kindle Scribe check is the operator's to run.***
+      the `Created:` stamp. The operator ran the device check on 2026-10-03.*
 
 Added 2026-10-03, from the amendment:
 
@@ -228,18 +230,48 @@ Added 2026-10-03, from the amendment:
       bind now goes through a `clone_from` copy in `build_outline`, so the warning would have
       shown. If it appears, find its cause before shipping; don't silence it.
       *Not seen in any bind with the links in place either.*
-- [ ] Re-run Phase 9's acceptance with the links in place: identical `pdftotext -layout`, and
+- [x] Re-run Phase 9's acceptance with the links in place: identical `pdftotext -layout`, and
       on the Scribe, a tapped contents entry jumps to its page.
       *`pdftotext -layout` is done: all three full binds still match `main` on every line
       except the `Created:` stamp. Every Contents and Figures row in them opens its page.
       Binds take 1 s longer than without the links (29 s, 20 s, 28 s) and about 17 KB bigger.
-      **The Scribe tap is the operator's to check.***
+      The operator ran the device check on 2026-10-03.*
+
+Added 2026-10-03, from the operator's answers at `/pr:close`'s triage. That close halted at
+step 6b, and PR #63 stays open for its re-run:
+
+- [x] Phase 16: Match each outline entry on the page it opens as well as its text. This is
+      the close review's important finding: a body `h1` that shares the next chapter's
+      title took that chapter's entry and the bind passed.
+      *Done. `build_outline` takes the settled page map, and an entry counts only when its
+      `/Dest` opens the page the binder found it on. A page either side doesn't know leaves
+      the text to decide. The second bind in `fixtures/bind/run.sh` reproduces the case in
+      chapter 1. A new check runs `build_outline` through the binder's own `render()` on two
+      tiny pages and asserts both refusals, which closes the review's "no automated test"
+      gap. A broken binder without the page check fails the tree.*
+- [x] Phase 17: Link every page number in the index. The operator chose to do this on this
+      branch rather than ticket it.
+      *Done after rendering, in `link_pages`. A first version wrapped each number in an
+      `<a>` to a marker URI. It worked, but it moved the page: splitting a number list into
+      inline items rounds each one separately, so an entry of seven numbers measured 0.14px
+      wider, and one entry's last number wrapped in the 14pt default edition. So the index
+      HTML is now byte-identical to `main`. `link_pages` reads `pdftotext -raw -bbox` (raw,
+      because reading order interleaves the two columns), matches words in order against
+      the index's page references, and lays a `/Link` over each one. The bind fails if any
+      reference isn't found. Results: 1612, 1096 and 1643 links in the three full binds,
+      every one opening the page printed under it; `pdftotext -layout` identical to `main`.
+      Two broken binders fail the fixture (no links, and links a page early). The cost is
+      about 290 KB per book.*
+- [x] Phase 18: Rewrite issue #62's body in generic terms, at the operator's request. It
+      named another repository, a course code and a file path in that repository.
+      *Done, and audited clean. GitHub keeps the old revision under the issue's "edited"
+      menu until the operator deletes it.*
 
 ## Open Questions
 
 - ~~Should the list of figures and the index's page numbers link too?~~ Answered by the
-  operator on 2026-10-03: **figures yes, index skipped for now.** Phase 12 links the list of
-  figures only, and the index link is under Deferred.
+  operator on 2026-10-03: **figures yes, index skipped for now.** At the close's triage
+  the same day, the operator chose to link the index on this branch after all (Phase 17).
 
 The four earlier questions were answered by the operator on 2026-10-02:
 
@@ -255,9 +287,19 @@ The four earlier questions were answered by the operator on 2026-10-02:
 
 ## Deferred
 
-- Linking the index's page numbers, which the operator skipped for now on 2026-10-03. No
-  element marks the top of a page, so it would need a step after rendering: a pypdf link
-  annotation over each number, placed using `pdftotext -bbox`, pointing at its page.
+From the close review (`pr-review-2026-10-03.md`, verdict APPROVE). The important finding,
+the missing failure-path test and the index links were resolved in Phases 16 and 17. The
+rest is parked for triage:
+
+- With tagging on, `attach_scripts` replaces link annotations and orphans their structure
+  references: 7 of the 10 `/OBJR`s in the save-scripts book. Keeping the annotation's
+  object number would avoid it. Similarly, `link_pages` adds its index links without a
+  `/StructParent`, so they aren't in the structure tree.
+- The reading edition's endnotes heading (`h2`) appears as a "Notes" section under every
+  chapter. `SKILL.md` doesn't mention it, and no test covers that edition's outline.
+- `fixtures/bind/page-links.py` checks only the first page of the contents and of the list
+  of figures. It reads the index to the end.
+- A letter-labelled title such as "Appendix A: …" on Appendix 1 gets a second label.
 
 - `.chapter .endnotes-title` (0,2,0) has always lost to `.chapter h2:not(.chapter-title)`
   (0,2,1). The reading edition's Notes heading therefore prints at the section-heading size,
