@@ -231,6 +231,15 @@ for bad in '' 'null' '[]' '42' '{"cwd":'; do
   else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "malformed payload: ${bad:-<empty>}" "${got:-<none>}"; fi
 done
 
+# Invalid JSON that still LOOKS whole to the no-jq path: a trailing comma, a closed command
+# and a closing brace. jq runs here, so the payload is at fault and is denied. Handing every
+# failed parse to the no-jq path, rather than only the ones where jq itself cannot run,
+# would recover `default` from this payload and ask.
+out=$(printf '%s' '{"permission_mode":"default","tool_input":{"command":"git commit -m x",}}' | CLAUDE_PROJECT_DIR="$MAINREPO" "$HOOK")
+got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null)
+if [[ "$got" == "deny" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s deny\n' "malformed but whole-looking payload"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=deny\n' "malformed but whole-looking payload" "${got:-<none>}"; fi
+
 # The mirror. An unparseable payload is the one path whose contract is to deny, so if
 # activation is ever resolved from something other than the session's project dir this
 # is where it fails OPEN -- the defect class this plugin exists to prevent, on the path
@@ -285,14 +294,17 @@ rawp() { # mode, command
     '{session_id:"s",cwd:$c,permission_mode:$m,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$cmd,description:"d"},tool_use_id:"t"}'
 }
 
-nj() { # name, expected, payload[, project dir]
+# Output that is not JSON reads as <none>, never as pass, so a case cannot mistake a
+# broken decision for no decision.
+pj() { # name, expected, payload, the hook's PATH[, project dir]
   local out got
-  out=$(printf '%s' "$3" | CLAUDE_PROJECT_DIR="${4:-$MAINREPO}" PATH="$NOJQ" "$HOOK")
+  out=$(printf '%s' "$3" | CLAUDE_PROJECT_DIR="${5:-$MAINREPO}" PATH="$4" "$HOOK")
   if [[ -z "$out" ]]; then got=pass
   else got=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision' 2>/dev/null); fi
   if [[ "$got" == "$2" ]]; then PASS=$((PASS+1)); printf '  ok   %-56s %s\n' "$1" "$got"
   else FAIL=$((FAIL+1)); printf '  FAIL %-56s got=%s want=%s\n' "$1" "${got:-<none>}" "$2"; fi
 }
+nj() { pj "$1" "$2" "$3" "$NOJQ" "$4"; } # name, expected, payload[, project dir]
 
 echo "== jq absent: a whole payload behaves as it always did =="
 if PATH="$NOJQ" /bin/bash -c 'command -v jq' >/dev/null 2>&1; then
@@ -314,6 +326,23 @@ nj "escaped quotes, trailing backslash"    pass "$(jq -nc --arg cmd 'echo "a b" 
 nj "multi-line command passes"             pass "$(rawp default "$(printf 'cd /x\nls')")"
 nj "non-ASCII command passes"              pass "$(rawp default 'echo é ✓')"
 nj "pretty-printed payload passes"         pass "$(jq -n --arg c "$MAINREPO" '{cwd:$c,permission_mode:"default",tool_input:{command:"ls"}}')"
+
+# Without jq, the characters on either side of the verb are JSON's, not the command's: the
+# string's closing quote after a command's last word, and an escape such as `\n` or `\t`
+# wherever the command has whitespace. Each gating case here once passed silently while
+# the jq path asked. The last two pin the precision: only an UNESCAPED quote ends the
+# command, and `\\n` is a backslash and an n, not a newline, so neither is a boundary.
+echo "== jq absent: a verb beside JSON syntax still gates =="
+nj "command ends in push"                  ask  "$(rawp default 'git push')"
+nj "command ends in commit"                ask  "$(rawp default 'git commit')"
+nj "chain ends in its verb"                ask  "$(rawp default 'cd /x && git push')"
+nj "verb starts a later line"              ask  "$(rawp default "$(printf 'git add -A\ngit commit -m x')")"
+nj "push starts a later line"              ask  "$(rawp default "$(printf 'ls\ngit push origin main')")"
+nj "verb before a newline"                 ask  "$(rawp default "$(printf 'git push\necho done')")"
+nj "tab between git and its verb"          ask  "$(rawp default "$(printf 'git\tpush')")"
+nj "ends in its verb, bypassPermissions"   deny "$(rawp bypassPermissions 'git push')"
+nj "verb before an escaped quote passes"   pass "$(rawp default 'echo "git push"')"
+nj "verb before a literal \\n passes"      pass "$(rawp default "printf 'git push\\n'")"
 
 # The defect these close: with no git verb left in what arrived, the branch used to find
 # nothing to gate and exit 0. Each is cut from a whole payload in mode `default`, so a
@@ -340,6 +369,53 @@ P=$(rawp default 'git commit -m x')
 nj "cut after tool_input closes still gates" ask "${P%%,\"tool_use_id\"*}"
 P=$(rawp default 'cd /x && git commit -m x')
 nj "truncated, unconfigured repo is inert" pass "${P%%git commit*}" "$NOCFG"
+
+# A jq that is on PATH but cannot run, such as a stray x86 build on Apple Silicon, which
+# exits 126: a stub that does exactly that, first on the hook's PATH. The parse failed and
+# so did gate()'s own jq, so the hook printed nothing and every commit passed. Only the
+# parser is missing, as when jq is absent, so it must behave as the no-jq path does: ask
+# or deny by the payload's mode, pass a non-git command, and deny a payload that did not
+# arrive whole. Denying on the parse failure instead would gate EVERY Bash call, git or not.
+BADJQ=$(mktemp -d)
+printf '#!/bin/sh\nexit 126\n' > "$BADJQ/jq"; chmod +x "$BADJQ/jq"
+bj() { pj "$1" "$2" "$3" "$BADJQ:$PATH" "$4"; } # name, expected, payload[, project dir]
+
+echo "== jq present but unable to run =="
+if PATH="$BADJQ:$PATH" /bin/bash -c 'jq -n true' >/dev/null 2>&1; then
+  FAIL=$((FAIL+1)); printf '  FAIL %-56s the stub ran\n' "the hook's jq cannot run"
+else PASS=$((PASS+1)); printf '  ok   %-56s broken\n' "the hook's jq cannot run"; fi
+bj "commit asks"                           ask  "$(rawp default 'git commit -m x')"
+bj "commit under bypassPermissions denies" deny "$(rawp bypassPermissions 'git commit -m x')"
+bj "command ending in its verb asks"       ask  "$(rawp default 'git push')"
+bj "approval token passes"                 pass "$(rawp default 'PR_ALLOW_MAIN=1 git commit -m x')"
+bj "non-git command passes"                pass "$(rawp default 'ls -la')"
+bj "empty payload denies"                  deny ""
+bj "unconfigured repo is inert"            pass "$(rawp default 'git commit -m x')" "$NOCFG"
+
+# A jq that parses and then fails when gate() builds the decision. No real jq is known to
+# fail this selectively, hence the stub; what it pins is that gate() cannot end silently
+# whatever its jq does. The quoted path is the reason printf cannot encode safely.
+HALFJQ=$(mktemp -d)
+printf '#!/bin/sh\n[ "$1" = -nc ] && exit 126\nexec "%s" "$@"\n' "$(type -P jq)" > "$HALFJQ/jq"
+chmod +x "$HALFJQ/jq"
+hj() { pj "$1" "$2" "$3" "$HALFJQ:$PATH" "$4"; } # name, expected, payload[, project dir]
+
+echo "== jq fails only when gate() builds the decision =="
+hj "commit still asks"                     ask  "$(rawp default 'git commit -m x')"
+hj "bypassPermissions still denies"        deny "$(rawp bypassPermissions 'git commit -m x')"
+hj "a reason holding a quote still gates"  ask  "$(rawp default 'git -C /nonexistent/a"b commit -m x')"
+# The deny instruction names the configured token, so it is the other part printf may
+# be handed unsafe. It is swapped on its own, which is what lets a reason with a quote
+# in it keep the recovery.
+TOKREPO=$(mktemp -d); git -C "$TOKREPO" init -q -b main
+optin "$TOKREPO"; printf '{"repo":"t/t","mainGuard":{"approvalToken":"A\\"B"}}\n' > "$TOKREPO/.claude/pr-config.json"
+hj "a token name holding a quote still denies" deny "$(jq -nc --arg c "$TOKREPO" '{cwd:$c,permission_mode:"bypassPermissions",tool_input:{command:"git commit -m x"}}')" "$TOKREPO"
+# ...and the point of swapping the two apart: a reason with a quote in it loses only the
+# reason, not the recovery. A single swap for both would still deny, so only the text shows it.
+out=$(rawp bypassPermissions 'git -C /nonexistent/a"b commit -m x' | CLAUDE_PROJECT_DIR="$MAINREPO" PATH="$HALFJQ:$PATH" "$HOOK")
+if [[ $(echo "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null) == *"PR_ALLOW_MAIN=1"* ]]
+then PASS=$((PASS+1)); printf '  ok   %-56s kept\n' "a quoted reason keeps the recovery"
+else FAIL=$((FAIL+1)); printf '  FAIL %-56s dropped\n' "a quoted reason keeps the recovery"; fi
 
 echo
 echo "passed $PASS, failed $FAIL, skipped $SKIP  ($((PASS+FAIL+SKIP)) cases)"

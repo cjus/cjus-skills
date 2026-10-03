@@ -32,8 +32,9 @@
 #                                           refspec checks below still apply
 #   push whose refspec names it          -> same, whatever branch is checked out
 #   branch undeterminable / no jq        -> same (fail toward the operator)
+#   jq on PATH but unable to run         -> treated exactly as no jq
 #   payload unparseable / not an object  -> deny (nothing in it is trustworthy,
-#                                           the mode least of all)
+#     by a jq that runs                     the mode least of all)
 #   no jq, and the payload did not       -> deny, for the same reason
 #     arrive whole (cut short, or empty)
 #
@@ -86,6 +87,8 @@ CWD=""
 MODE_RAW='[{,][[:space:]]*"permission_mode"[[:space:]]*:[[:space:]]*"([a-zA-Z]+)"'
 
 MODE=""
+# jq is on PATH. Whether it RUNS is only asked if the payload parse fails, below, so
+# the happy path pays nothing for it.
 HAVE_JQ=0
 command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 
@@ -147,8 +150,27 @@ pr_repo_configured() {
 # Emit a decision. The reason is interpolated, so it is built with `jq --arg`
 # rather than printf: a repo path containing a double quote otherwise produces
 # unparseable stdout on the one branch designed to fail toward the operator, which
-# loses the decision entirely. The printf fallback is reached only when jq is
-# missing, and there the reason is a fixed literal with nothing to escape.
+# loses the decision entirely.
+#
+# printf is the fallback when jq is missing or cannot run, AND when jq ran here but
+# printed nothing. Without the second, a jq on PATH that could not run left EVERY gate
+# silent: it failed the payload parse, and then failed again building this output, so
+# the hook exited 0 with nothing on stdout and the commit ran. That path now reaches
+# the no-jq branch instead, but no route through gate() may end without a decision,
+# whatever its jq does.
+#
+# printf cannot escape, so the reason and the deny instruction are each printed only
+# if they have a SAFE SHAPE: no `"`, no `\` and no control character. (A backslash
+# inside brackets is a literal in POSIX ERE, so the class below holds exactly those.)
+# A part that fails the test is swapped for a fixed one. The test is phrased as "is
+# safe", not "is unsafe", so that if bash's regex ever fails to evaluate, as it does
+# on invalid UTF-8 under a UTF-8 locale, the swap happens rather than being skipped.
+#
+# Only a reason carrying a path or a branch name, or an instruction carrying a
+# configured token name, can fail the test, and those reach printf only when jq
+# failed here after it parsed the payload. Everything the no-jq branch passes is a
+# fixed literal and prints in full.
+JSON_SAFE='^[^"\[:cntrl:]]*$'
 gate() {
   # Activation, checked HERE rather than at each call site so that EVERY gating path
   # honours it: the parsed path, the no-jq and no-grep paths that run before the config
@@ -156,7 +178,7 @@ gate() {
   # chokepoint through which every block must pass.
   pr_repo_configured || exit 0
 
-  local reason="$1" decision
+  local reason="$1" decision stop=""
   case "$MODE" in
     default | acceptEdits | plan) decision="ask" ;;
     # Everything else, including `auto`, `dontAsk`, an empty mode, and any mode
@@ -168,21 +190,26 @@ gate() {
   esac
 
   [[ "$decision" == "deny" ]] &&
-    reason="${reason} STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1. Never add that yourself."
+    stop=" STOP and ask the operator in conversation. Only if they approve, re-run the command prefixed with ${ALLOW_NAME:-$ALLOW_NAME_DEFAULT}=1. Never add that yourself."
 
-  if [[ "$HAVE_JQ" == 1 ]]; then
-    jq -nc --arg d "$decision" --arg r "$reason" \
-      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
+  local out=""
+  [[ "$HAVE_JQ" == 1 ]] &&
+    out=$(jq -nc --arg d "$decision" --arg r "${reason}${stop}" \
+      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}' 2>/dev/null)
+  if [[ -n "$out" ]]; then
+    printf '%s\n' "$out"
   else
-    # Reached only from the no-jq branch, which calls gate() with a fixed literal,
-    # so nothing caller-controlled reaches this format string.
-    #
-    # The reason is printed IN FULL, escape hatch included, and that branch honours
-    # the raw-token pattern so the instruction actually works there. Both halves
-    # are load-bearing: a degraded path is graceful only if it degrades the
-    # diagnosis while keeping the recovery, and printing a recovery that does
-    # nothing is worse than printing none.
-    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' "$decision" "$reason"
+    # From the no-jq branch the reason is printed IN FULL, escape hatch included, and
+    # that branch honours the raw-token pattern so the instruction actually works
+    # there. Both halves are load-bearing: a degraded path is graceful only if it
+    # degrades the diagnosis while keeping the recovery, and printing a recovery that
+    # does nothing is worse than printing none. Swapping the two parts separately is
+    # what keeps the recovery when only the reason held a character printf cannot take.
+    [[ $reason =~ $JSON_SAFE ]] ||
+      reason="The default-branch commit guard needs operator approval for this commit or push. jq failed while building the full reason."
+    [[ $stop =~ $JSON_SAFE ]] ||
+      stop=" STOP and ask the operator in conversation."
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' "$decision" "${reason}${stop}"
   fi
   exit 0
 }
@@ -226,17 +253,37 @@ if [[ "$HAVE_JQ" == 1 ]]; then
   # than a repeat of the degraded path's always-deny defect. `permission_mode`
   # comes out of the same payload that just failed to parse, so there is nothing
   # here to trust, and guessing permissively is the unsafe direction.
+  #
+  # BUT ONLY WHEN jq CAN RUN, which is what `jq -n true` asks. A jq that is on PATH
+  # and cannot run, such as a stray x86 build on Apple Silicon, fails every parse,
+  # and denying here would gate EVERY Bash call, git or not. It used to be worse:
+  # gate() built its output with the same jq, printed nothing, and every commit
+  # passed. The payload is not at fault there; only the parser is missing, which is
+  # exactly the state the no-jq branch below exists for, so it goes there, with its
+  # completeness check, approval token and mode recovery.
+  #
+  # The question is put only after a failed parse, so the happy path pays nothing.
+  # jq's exit status would name only the failures known in advance, 126 and 127;
+  # this catches any jq that cannot evaluate a constant. Handing EVERY failed parse
+  # to the no-jq branch instead is wrong: that branch recovers the mode from a
+  # payload that looks whole, so invalid JSON with a closed command in it, such as a
+  # trailing comma, would ask where this denies. The suite pins that.
   if [[ "$JQ_RC" != 0 || "$PAYLOAD" != *"--PR-GUARD-END--" ]]; then
-    gate "The PreToolUse payload could not be parsed, so the default-branch commit guard cannot read the command."
+    jq -n true >/dev/null 2>&1 &&
+      gate "The PreToolUse payload could not be parsed, so the default-branch commit guard cannot read the command."
+    HAVE_JQ=0
+  else
+    CWD=${PAYLOAD%%$'\n'*}
+    PAYLOAD=${PAYLOAD#*$'\n'}
+    MODE=${PAYLOAD%%$'\n'*}
+    PAYLOAD=${PAYLOAD#*$'\n'}
+    CMD=${PAYLOAD%$'\n'--PR-GUARD-END--}
   fi
+fi
 
-  CWD=${PAYLOAD%%$'\n'*}
-  PAYLOAD=${PAYLOAD#*$'\n'}
-  MODE=${PAYLOAD%%$'\n'*}
-  PAYLOAD=${PAYLOAD#*$'\n'}
-  CMD=${PAYLOAD%$'\n'--PR-GUARD-END--}
-else
+if [[ "$HAVE_JQ" == 0 ]]; then
   # Degraded: match against the raw payload. Over-matches, never under-matches.
+  # Reached when jq is missing, or on PATH but unable to run (see above).
   #
   # FIRST, PROVE THE PAYLOAD ARRIVED WHOLE. This is the no-jq counterpart of the
   # sentinel above, and without it this branch under-matched: a payload cut inside
@@ -276,7 +323,7 @@ else
   PAYLOAD_CMD_RAW='"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"'
   PAYLOAD_END_RAW='[}][[:space:]]*$'
   if ! [[ $INPUT =~ $PAYLOAD_CMD_RAW && $INPUT =~ $PAYLOAD_END_RAW ]]; then
-    gate "jq not found, and the PreToolUse payload did not arrive whole, so the default-branch commit guard cannot read the command."
+    gate "jq is missing or cannot run, and the PreToolUse payload did not arrive whole, so the default-branch commit guard cannot read the command."
   fi
 
   # The approval token is honoured here too, otherwise this branch gates every git
@@ -312,8 +359,41 @@ else
   # parser is missing.
   if [[ $INPUT =~ $MODE_RAW ]]; then MODE="${BASH_REMATCH[1]}"; fi
 
-  [[ $INPUT =~ $GIT_VERB ]] &&
-    gate "jq not found, so the default-branch commit guard cannot read the command."
+  # GIT_VERB, widened for the raw payload. Here the regex reads JSON, not the command,
+  # so what sits either side of the verb can be JSON syntax: the string's closing quote
+  # after a command's last word, or an escape such as `\n` or `\t` wherever the command
+  # has whitespace. GIT_VERB accepts neither, so `git push`, `cd /x && git push`, a
+  # verb starting a later line and `git<TAB>push` all passed here while the jq path
+  # asked.
+  #
+  # RAW_ESC is any JSON escape except `\"`, `\\` and `\/`: each decodes to a control
+  # character or a `\u` code point. It is accepted before `git`, in every whitespace
+  # run, and after the verb, where the unescaped closing `"` is accepted too. Every
+  # group is GIT_VERB's with alternatives ADDED and none removed, so this matches
+  # everything GIT_VERB does. It over-matches, which is this branch's contract: `\b`
+  # and a `\u` escape for a non-space character count as whitespace, and a literal
+  # backslash-n before `git` (`\\n` in JSON) counts as a boundary.
+  #
+  # Only an UNESCAPED `"` ends the verb, because every quote inside the command arrives
+  # as `\"`: in `echo "git push"` the verb is followed by a backslash, which nothing
+  # here accepts. After the verb, `\\n` cannot pass for a newline either, since the
+  # escape must follow the verb directly. The suite pins both.
+  #
+  # DECODING THE COMMAND FIRST LOOKS SIMPLER AND IS NOT AN OPTION. With bash builtins
+  # alone it means `${s//pattern/replacement}`, which under bash 3.2 grows roughly with
+  # the cube of the length: measured at 1s for a 10KB command and 66s for 40KB, on a
+  # path that runs for every Bash call. This regex stayed under half a second on every
+  # 1MB payload built to stress it: about 0.4s at worst, for a body of repeated
+  # `git \t-a\tb\t`.
+  #
+  # Checked against the decoded command matched with GIT_VERB: 40,000 generated
+  # commands, each both as JSON.stringify writes it and with every non-ASCII character
+  # `\u`-escaped, under C and UTF-8, found no under-match on bash 3.2, and neither did
+  # a further 20,000 on Linux under bash 5.2. Keep it in step with GIT_VERB.
+  RAW_ESC='\\([bfnrt]|u[0-9a-fA-F]{4})'
+  GIT_VERB_RAW='(^|[^[:alnum:]_./-]|'"$RAW_ESC"')git([[:space:]]|'"$RAW_ESC"')+(-[^[:space:]]+([[:space:]]|'"$RAW_ESC"')+([^-[:space:]][^[:space:]]*([[:space:]]|'"$RAW_ESC"')+)?)*(commit|push)([[:space:]]|;|&|\||$|"|'"$RAW_ESC"')'
+  [[ $INPUT =~ $GIT_VERB_RAW ]] &&
+    gate "jq is missing or cannot run, so the default-branch commit guard cannot read the command."
   exit 0
 fi
 
