@@ -14,9 +14,10 @@ and page to the number. This branch adds two things:
 - **Links on every listing.** Each row on the contents page and in the list of figures, and
   each page number in the index, links to the page it names.
 
-Neither feature moves anything on the page. Three full-length binds (the default edition at
-14pt and 17pt, the reading edition at 14pt) give the same `pdftotext -layout` output as the
-same books bound from `main`, on every line except the `Created:` stamp.
+Neither feature moves anything on the page. Four full-length binds give the same
+`pdftotext -layout` output as the same books bound from `main`, on every line except the
+`Created:` stamp. They cover each edition at 14pt and 17pt, and one of them has a curated
+`terms.txt`.
 
 The operator tested the outline and the contents links on the device, and reported that it
 "looks great". The index links came later, at the close's triage, and haven't been tried on
@@ -46,8 +47,8 @@ the device.
   - Each contents and list-of-figures row carries an empty anchor laid over the row
     (`toc_link`, `.toc-link`).
   - **`link_pages()`, new**, adds the index's links after rendering. It finds each number
-    with `pdftotext -raw -bbox`, taking an entry's numbers as the run that follows the last
-    word of its term, and lays a `/Link` over each one. The index's HTML is unchanged from
+    with `pdftotext -raw -bbox`, taking an entry's numbers as the run its whole term comes
+    just before, compared on letters and digits only, and lays a `/Link` over each one. The index's HTML is unchanged from
     `main`.
 - **`build_front_matter()`** returns `(title, html)`, so the outline can tell that page's
   `h1` apart from one in its body.
@@ -92,18 +93,26 @@ for ref in tops:
         found[-1][2].append(ref)
 ```
 
-`build-book.py`, `link_pages()`. Each index number is found where it printed, in
-content-stream order, and matched against the index's own references:
+`build-book.py`, `link_pages()`. An entry's numbers are the run of printed words, read in
+content-stream order, that its whole term comes just before. The term is compared on its
+letters and digits only, so a digit inside it is never taken for a page number, and a line
+break after a hyphen doesn't matter:
 
 ```python
-for x0, y0, x1, y1, word in BBOX_WORD_RE.findall(words):
-    if made == len(wanted):
-        break
-    if float(y0) > h - FOOTER_BAND_PT or word.rstrip(",") != str(wanted[made]):
-        continue
-    target = writer.pages[wanted[made] - 1]
-    annots.append(writer._add_object(DictionaryObject({ ... "/Dest": [target, /XYZ, ...] })))
-    made += 1
+for display, pgs in entries:
+    run = [f"{p}," for p in pgs[:-1]] + [str(pgs[-1])]
+    term = bare(display)
+    for k in range(max(at, 1), len(words) - len(run) + 1):
+        if [w[6] for w in words[k:k + len(run)]] != run:
+            continue
+        tail, j = "", k
+        while j > at and len(tail) < len(term):
+            j -= 1
+            tail = bare(words[j][6]) + tail
+        if tail.endswith(term):
+            break
+    else:
+        raise RuntimeError(f"the page numbers of {display!r} (...) were not found after its term")
 ```
 
 `build-book.py`, a contents row's link. The row stays a `div`, and its spans stay its flex
@@ -116,7 +125,7 @@ items:
 
 ## Plan alignment
 
-All nineteen phases in `PLAN.md` are complete. These are the operator's decisions:
+All twenty phases in `PLAN.md` are complete. These are the operator's decisions:
 
 - **Depth:** sections only.
 - **Labels:** `Chapter N: Title` and `Appendix N: Title`.
@@ -132,7 +141,10 @@ records that as a dated amendment and leaves the original objective as written.
 **The first close halted at triage, on the operator's choices.** The review's important
 finding was fixed then, the index was linked on this branch, and the ticket's GitHub body
 was restated in generic terms. **The second close halted at triage too:** its review's
-important finding, a number inside an index term taking a link, was fixed then.
+important finding, a number inside an index term taking a link, was fixed then. **The third
+close stopped at its review**, which found that the fix anchored on a term's last word and
+so failed a bind when that word wrapped at a hyphen. The operator chose the reviewer's
+whole-term anchor.
 
 ### Deviations and discoveries
 
@@ -164,8 +176,11 @@ important finding, a number inside an index term taking a link, was fixed then.
   - **Both refusals**, with their messages.
   - **No number inside an index term gets a link**, checked on "Top 2 lists  2, 3" and
     "Week 4  4" through the binder's own `render()`.
+  - **A curated term that wraps at its hyphen still links at 17pt**, using the real
+    stylesheet and `build_index()`. The check asserts the wrap first. It also checks that
+    numbers which never printed fail the bind.
 - **`save-scripts/run.sh`** checks the Contents links after the attachments.
-- **Eleven deliberately broken binders were run against the fixtures, and each failed them:**
+- **Twelve deliberately broken binders were run against the fixtures, and each failed them:**
   - no retitle
   - no depth pruning
   - no `tagged=True` (the bind refuses)
@@ -177,12 +192,13 @@ important finding, a number inside an index term taking a link, was fixed then.
   - no `link_pages`
   - `link_pages` links a page early
   - `link_pages` matching each number on its own, as before the second review's fix
+  - `link_pages` anchoring on a term's last word, as before the third review's fix
 
 ### By hand
 
-- The three full-length binds above, compared with `main` under `pdftotext -layout`.
-- Every link in them was checked: 1612, 1096 and 1643 index links, plus every Contents and
-  Figures row.
+- The four full-length binds above, compared with `main` under `pdftotext -layout`.
+- Every link in them was checked: 1612, 1096, 1643 and 1068 index links, plus every
+  Contents and Figures row. The 1068 are curated terms at 17pt.
 - The operator's device test.
 
 To check by hand: bind any book and open the PDF in Preview. ⌥⌘3 shows the outline in the
@@ -198,14 +214,15 @@ an index number jumps to its page.
 - Figures above the parts on the contents page.
 - An index of two columns spanning pages, and an empty index.
 - Digits inside an index term, including one that equals the entry's own page number.
+- A curated index term that wraps at its hyphen, at 17pt.
 - The running footer's page number on index pages.
 - No outline at all, and a short outline.
 - Links surviving every pypdf rewrite.
 
 ## Impact assessment
 
-- **Size of the change:** 11 files changed, 1509 insertions and 44 deletions, 733 of them
-  outside `changelog/`. `build-book.py` gains 347 lines net (378 added, 31 removed). Most of the rest is
+- **Size of the change:** 12 files changed, 1818 insertions and 44 deletions, 809 of them
+  outside `changelog/`. `build-book.py` gains 367 lines net (398 added, 31 removed). Most of the rest is
   fixtures and documentation.
 - **Dependencies:** none new. The `page.pdf()` flags need Playwright 1.42 or later, and
   `requirements.txt` already asks for 1.44. `pdftotext` was already required.

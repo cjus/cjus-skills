@@ -129,7 +129,7 @@ project and a specific bound book by path. Those details are given here in gener
 ## Plan
 
 Status as of 2026-10-03: every phase is done. Phases 1 to 8 are in `9fb320f`, phases 10 to
-15 in `d485edf`, phases 16 to 18 in `17283a1`, and Phase 19 is uncommitted. On 2026-10-03 the operator tested
+15 in `d485edf`, phases 16 to 18 in `17283a1`, Phase 19 in `f7ba3da`, and Phase 20 is uncommitted. On 2026-10-03 the operator tested
 the bound book with the outline and the contents links and reported that it "looks great",
 which closes the device checks in Phase 9 and its re-run. The index links in Phase 17 came
 after that test, so they haven't been tried on the device.
@@ -277,6 +277,20 @@ step 6b, and PR #63 stays open for its re-run:
       printed number has a link and neither term digit does, and the previous matcher fails
       it. The three full binds found every entry's run, still match `main` exactly, and
       every index link opens the page printed under it.*
+- [x] Phase 20: Anchor an index entry's numbers on its whole term. The third close review
+      (`pr-review-2026-10-03-3.md`, NEEDS_DISCUSSION) found that Phase 19's last-word anchor
+      failed the bind whenever a curated term's last word wrapped at its hyphen, which is a
+      regression from `main`. The operator chose the reviewer's fix.
+      *Done as the reviewer proposed and tested it. The stripped, NFKC-normalized,
+      casefolded text just before the run must end with the whole stripped term. A new
+      `bind/run.sh` check renders "large language model pre-training" at 17pt through the
+      real stylesheet and `build_index()`. It asserts the wrap, then the 4 links, then the
+      refusal of numbers that never printed, which is the raise path's first test. Phase
+      19's matcher fails it. The error message no longer doubles its commas. Four full
+      binds were re-checked: each edition at 14pt and 17pt, including the curated reading
+      edition at 17pt, which the reviewer noted had never been tried. All four match
+      `main` exactly under `pdftotext -layout`, and every link opens its page (1612, 1096,
+      1643 and 1068 index links).*
 
 ## Open Questions
 

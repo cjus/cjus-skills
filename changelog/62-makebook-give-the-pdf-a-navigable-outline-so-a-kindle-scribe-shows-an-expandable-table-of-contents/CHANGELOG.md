@@ -57,3 +57,8 @@ Every row on the contents page and the list of figures now links to its page.
   `link_pages` takes an entry's numbers as the run that follows its term's last word, so a
   number inside a term is never linked. The bind fails, naming the entry, when a run isn't
   found. A new check covers "Top 2 lists  2, 3", and the per-number matcher fails it.
+- **The third close stopped at its review (NEEDS_DISCUSSION).** Anchoring on a term's last
+  word failed a bind when a curated term wrapped at its hyphen, a regression from `main`.
+  `link_pages` now anchors on the whole term, stripped to letters and digits. A 17pt check
+  with a wrapping hyphenated term, which also covers the refusal path, fails the last-word
+  matcher.

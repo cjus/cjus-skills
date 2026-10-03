@@ -304,6 +304,46 @@ else
   printf '%s\n' "$term_digits" | sed 's/^/      | /'
 fi
 
+# A term whose last word wraps at its hyphen still links, and numbers that never
+# printed fail the bind. Anchored on the term's last word, "pre-training" set as
+# "pre-" / "training" at 17pt and failed a bind that main would have passed. The
+# real stylesheet and build_index() are used, because the wrap depends on both,
+# and the wrap is asserted before the links, so a probe that stopped wrapping
+# fails rather than passing without testing anything.
+hyphen=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, subprocess, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+entries = [("large language model pre-training", [2, 3, 4, 5])]
+filler = "".join(f"<section style='break-before: page'><p>Page {n}.</p></section>"
+                 for n in (2, 3, 4, 5))
+html = (f"<!DOCTYPE html><html><head><style>{binder.build_css(binder.MAX_BODY_PT)}"
+        f"</style></head><body>{binder.build_index(entries)}{filler}</body></html>")
+pdf = out / "hyphen.pdf"
+binder.render(html, out, pdf, "T")
+text = subprocess.run(["pdftotext", "-raw", "-f", "1", "-l", "1", str(pdf), "-"],
+                      capture_output=True, text=True, check=True).stdout.split()
+print("wraps" if "pre-" in text and "training" in text else f"does not wrap: {text[-8:]}")
+print(f"links={binder.link_pages(pdf, entries, 1)}")
+try:
+    binder.link_pages(pdf, entries + [("Never printed", [2, 3])], 1)
+    print("unprinted: accepted")
+except RuntimeError as exc:
+    print(f"unprinted: {exc}")
+EOF
+)
+if [ "$(printf '%s\n' "$hyphen" | sed -n 1p)" = "wraps" ] \
+  && [ "$(printf '%s\n' "$hyphen" | sed -n 2p)" = "links=4" ] \
+  && printf '%s\n' "$hyphen" | grep -qF "unprinted: the page numbers of 'Never printed' (2, 3) were not found after its term"; then
+  report 0 "link_pages links a term that wraps at its hyphen at 17pt, and refuses numbers that never printed"
+else
+  report 1 "link_pages should link a term that wraps at its hyphen, and refuse numbers that never printed"
+  printf '%s\n' "$hyphen" | sed 's/^/      | /'
+fi
+
 # The ### headings under "What this chapter uses" are absent: a chapter
 # expands to its sections and stops.
 outline_is "as declared" "$pdf" "$(cat <<'TREE'

@@ -52,6 +52,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -2845,12 +2846,15 @@ def link_pages(pdf: Path, entries, index_page: int) -> int:
     Each number is found where it printed, with `pdftotext -raw -bbox`. Raw
     order is the content stream's, which follows the index as written across
     both columns, where pdftotext's reading order interleaves them. An entry's
-    numbers are the run of words that follows the last word of its term and
-    reads exactly as the index printed them, `2,` then `3`. A number inside a
+    numbers are the run of words that reads exactly as the index printed them,
+    `2,` then `3`, and that its whole term comes just before. A number inside a
     term is therefore never taken for one, which matching each number on its own
     did: in "Top 2 lists  2, 3" the term's 2 took the first link and the printed
-    2 went without. Each link covers its word, comma included, and opens its
-    page in the /XYZ form Chromium's outline uses.
+    2 went without. The term is compared with everything but letters and digits
+    stripped, because a line can break after a hyphen and split its last word in
+    two: anchored on that word alone, "pre-training" printed as "pre-" and
+    "training" at 17pt and failed the bind. Each link covers its word, comma
+    included, and opens its page in the /XYZ form Chromium's outline uses.
 
     Rewrites `pdf` in place and returns the links made. Raises RuntimeError,
     naming the entry, when an entry's numbers are not found after its term,
@@ -2873,23 +2877,28 @@ def link_pages(pdf: Path, entries, index_page: int) -> int:
                   for x0, y0, x1, y1, text in BBOX_WORD_RE.findall(body)
                   if float(y0) <= h - FOOTER_BAND_PT]
 
-    # Punctuation and case off, so a term's last word compares however
-    # pdftotext splits the marks around it.
+    # Only letters and digits, in one Unicode form and one case, so a term
+    # compares however a line breaks it and however terms.txt was saved.
     def bare(text: str) -> str:
-        return re.sub(r"\W+", "", text).casefold()
+        return re.sub(r"\W+", "", unicodedata.normalize("NFKC", text)).casefold()
 
     placed, at = [], 0
     for display, pgs in entries:
         run = [f"{p}," for p in pgs[:-1]] + [str(pgs[-1])]
-        last = bare(display.split()[-1]) if display.split() else ""
+        term = bare(display)
         for k in range(max(at, 1), len(words) - len(run) + 1):
-            if (bare(words[k - 1][6]) == last
-                    and [w[6] for w in words[k:k + len(run)]] == run):
+            if [w[6] for w in words[k:k + len(run)]] != run:
+                continue
+            tail, j = "", k
+            while j > at and len(tail) < len(term):
+                j -= 1
+                tail = bare(words[j][6]) + tail
+            if tail.endswith(term):
                 break
         else:
             raise RuntimeError(
-                f"the page numbers of {display!r} ({', '.join(run)}) were not "
-                f"found after its term")
+                f"the page numbers of {display!r} "
+                f"({', '.join(map(str, pgs))}) were not found after its term")
         placed += zip(words[k:k + len(run)], pgs)
         at = k + len(run)
 
