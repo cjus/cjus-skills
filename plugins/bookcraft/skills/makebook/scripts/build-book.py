@@ -65,8 +65,8 @@ try:
     from playwright.sync_api import sync_playwright
     from pypdf import PdfWriter
     from pypdf.generic import (ArrayObject, DecodedStreamObject,
-                               DictionaryObject, NameObject, NumberObject,
-                               TextStringObject)
+                               DictionaryObject, FloatObject, NameObject,
+                               NumberObject, TextStringObject)
 except ImportError as exc:  # pragma: no cover - setup guidance
     # Resolved from this file rather than from CLAUDE_PLUGIN_ROOT, so the line
     # stays copy-pasteable when the script is run directly and that variable is
@@ -248,7 +248,13 @@ body {
 
 /* ---- Contents ---- */
 .frontmatter { break-before: page; }
-h2.section-title {
+/* Every page title is an h1, as is each chapter title, because the PDF's
+   outline is built from heading levels: an h1 is a top-level entry and the
+   chapter's own h2s nest under it (see build_outline). This rule and
+   .chapter h1.chapter-title each set the font size, weight and margins, every
+   property the UA styles differently for the two levels, so neither title
+   moves on the page for being an h1. */
+h1.section-title {
   font-size: ${sectitle}pt; font-weight: 400; margin: 0 0 0.06in;
   padding-bottom: 0.09in; border-bottom: 2px solid #1a1a1a;
 }
@@ -264,8 +270,14 @@ h2.section-title {
 .toc-group:first-of-type { margin-top: 0.05in; }
 .toc-row {
   display: flex; align-items: baseline; font-size: ${tocrow}pt;
-  margin: 0.028in 0; break-inside: avoid;
+  margin: 0.028in 0; break-inside: avoid; position: relative;
 }
+/* The row's link is an empty anchor laid over the whole row, so a tap on the
+   title, the leader or the number all jump. The row stays a div and its spans
+   stay its flex items. An <a> row would hand .toc-group:first-of-type, which
+   counts element type, to the first part heading after a Figures row, and an <a>
+   around the spans would take their flex sizing. Either moves the page. */
+.toc-link { position: absolute; inset: 0; }
 .toc-num {
   flex: 0 0 1.9em; color: #6b6b6b; font-variant-numeric: tabular-nums;
 }
@@ -296,7 +308,7 @@ h2.section-title {
   font-size: ${chnum}pt; letter-spacing: 0.14em; text-transform: uppercase;
   color: #1a1a1a; font-weight: 700;
 }
-.chapter h2.chapter-title {
+.chapter h1.chapter-title {
   font-size: ${chtitle}pt; font-weight: 400; line-height: 1.16;
   margin: 0 0 0.2in; letter-spacing: -0.005em;
 }
@@ -305,6 +317,9 @@ h2.section-title {
   margin: 0 0 0.62em; text-align: justify; hyphens: none;
   orphans: 2; widows: 2;
 }
+/* The :not() matches every h2 now that the chapter title is an h1, and it stays
+   for its specificity: at 0,2,1 this outranks .chapter .endnotes-title, and the
+   reading edition's Notes heading has always printed in this rule's size. */
 .chapter h2:not(.chapter-title) {
   font-size: ${h2}pt; font-weight: 600; margin: 1.1em 0 0.35em;
   break-after: avoid;
@@ -483,7 +498,7 @@ li.task-list-item input[type=checkbox] { margin-right: 0.4em; }
   font-family: system-ui, -apple-system, sans-serif;
   font-size: ${glossch}pt; color: #4a4a4a; margin: 0.25em 0 0; text-indent: 0;
 }
-.chapter h2, .chapter h3 { clear: both; }
+.chapter h1.chapter-title, .chapter h2, .chapter h3 { clear: both; }
 .gloss-ch {
   font-family: system-ui, -apple-system, sans-serif;
   font-size: ${glossch}pt; color: #4a4a4a; letter-spacing: 0.03em;
@@ -1598,6 +1613,24 @@ def group_for(num: int, sections: list[dict]) -> str | None:
     return None
 
 
+# The ids the contents and the list of figures link to. Prefixed because a
+# chapter's raw HTML can carry ids of its own, and a duplicate would send a link
+# to whichever page Chromium meets first.
+def chapter_id(num: int) -> str:
+    return f"mb-ch-{num}"
+
+
+def figure_id(gid: int) -> str:
+    return f"mb-fig-{gid:03d}"
+
+
+def toc_link(target: str) -> str:
+    """A row's link, laid over the row by `.toc-link`. Chromium writes each
+    in-document href as a link annotation to the named destination of its id,
+    and it does so for an anchor with no text as long as it has a box."""
+    return f'<a class="toc-link" href="#{target}"></a>'
+
+
 def build_toc(chapters, cfg, pages, index_page, has_index,
               has_figures=False, lof_page=None,
               has_glossary=False, gloss_page=None) -> str:
@@ -1610,7 +1643,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Figures</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{lof}</span></div>'
+            f'<span class="toc-page">{lof}</span>'
+            f'{toc_link("mb-figures")}</div>'
         )
     for ch in chapters:
         grp = group_for(ch["num"], sections)
@@ -1627,7 +1661,7 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             f'<span class="toc-title">{html_mod.escape(ch["title"])}</span>'
             '<span class="toc-dots"></span>'
             f'<span class="toc-page">{pg}</span>'
-            "</div>"
+            f'{toc_link(chapter_id(ch["num"]))}</div>'
         )
     if has_glossary:
         gl = str(gloss_page) if gloss_page else "&nbsp;"
@@ -1636,7 +1670,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Glossary</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{gl}</span></div>'
+            f'<span class="toc-page">{gl}</span>'
+            f'{toc_link("mb-glossary")}</div>'
         )
     if has_index:
         back = str(index_page) if index_page else "&nbsp;"
@@ -1645,7 +1680,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Index</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{back}</span></div>'
+            f'<span class="toc-page">{back}</span>'
+            f'{toc_link("mb-index")}</div>'
         )
     lead = cfg.get(
         "contents_note",
@@ -1653,9 +1689,9 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
         "reader's page indicator.",
     )
     return (
-        '<section class="frontmatter">'
+        '<section class="frontmatter" id="mb-contents">'
         + probe("TOCSTART")
-        + '<h2 class="section-title">Contents</h2>'
+        + '<h1 class="section-title">Contents</h1>'
         + f'<p class="lead">{html_mod.escape(lead)}</p>'
         + "".join(rows)
         + "</section>"
@@ -1986,7 +2022,8 @@ def figurize(body_html: str, chapter_num: int, counter: list[int],
                f'{" " + html_mod.escape(caption) if caption else ""}'
                f'{probe(f"FIG{gid:03d}")}</figcaption>')
         token = f"@@MAKEBOOKFIG{gid}@@"
-        slots[token] = f'<figure class="figure{wide}">{inner}{cap}</figure>'
+        slots[token] = (f'<figure class="figure{wide}" id="{figure_id(gid)}">'
+                        f'{inner}{cap}</figure>')
         return token
 
     def from_fence(m: re.Match) -> str:
@@ -2227,14 +2264,15 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
         body = inject_colgroups(body, ch["num"], col_plan or {})
         body = script_notes(body, ch)
         out.append(
-            f'<section class="chapter" data-ch="{ch["num"]}">'
+            f'<section class="chapter" id="{chapter_id(ch["num"])}" '
+            f'data-ch="{ch["num"]}">'
             '<div class="chapter-head">'
             '<div class="chapter-eyebrow">'
             f'<span class="chapter-number">'
             f'{"Appendix" if ch.get("appendix") else "Chapter"} '
             f'{ch.get("label_num", ch["num"])}</span>'
             f'{tail}{probe(f"CH{ch["num"]:03d}")}</div>'
-            f'<h2 class="chapter-title">{html_mod.escape(ch["title"])}</h2>'
+            f'<h1 class="chapter-title">{html_mod.escape(ch["title"])}</h1>'
             '<div class="rule"></div></div>'
             f"{body}</section>"
         )
@@ -2250,12 +2288,13 @@ def build_figure_list(figures, fig_pages) -> str:
             f'<span class="toc-num">{fig["number"]}</span>'
             f'<span class="toc-title">{html_mod.escape(fig["caption"])}</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{pg}</span></div>'
+            f'<span class="toc-page">{pg}</span>'
+            f'{toc_link(figure_id(fig["id"]))}</div>'
         )
     return (
-        '<section class="frontmatter">'
+        '<section class="frontmatter" id="mb-figures">'
         + probe("LOFSTART")
-        + '<h2 class="section-title">Figures</h2>'
+        + '<h1 class="section-title">Figures</h1>'
         '<p class="lead">Numbered by chapter. Every figure is vector art, so it '
         "stays sharp at any zoom and in print.</p>"
         + "".join(rows)
@@ -2263,13 +2302,16 @@ def build_figure_list(figures, fig_pages) -> str:
     )
 
 
-def build_front_matter(path: Path) -> str:
+def build_front_matter(path: Path) -> tuple[str, str]:
     """The about-this-book page: what the book was built from, and what it fills in.
 
     Rendered from markdown like a chapter, but it is not one: no paragraph tags,
     no provenance marks, no concept list, and no entry on the contents page. It
     sits between the contents and the book the way a preface does, and a reader
     who skips it loses only the provenance, never the argument.
+
+    Returns (title, html). The title goes to build_outline, which has to tell
+    this page's h1 apart from one inside its body.
     """
     md = markdown_renderer()
     text = PROVENANCE_RE.sub("", path.read_text(encoding="utf-8"))
@@ -2278,10 +2320,10 @@ def build_front_matter(path: Path) -> str:
         title, body_md = lines[0][2:].strip(), "\n".join(lines[1:]).strip()
     else:
         title, body_md = "About This Book", text.strip()
-    return (
-        '<section class="front-matter">'
+    return title, (
+        '<section class="front-matter" id="mb-about">'
         + probe("FMSTART")
-        + f'<h2 class="section-title">{html_mod.escape(title)}</h2>'
+        + f'<h1 class="section-title">{html_mod.escape(title)}</h1>'
         + md.render(body_md)
         + "</section>"
     )
@@ -2305,9 +2347,9 @@ def build_glossary(entries) -> str:
             f'{inline_code_html(body)}</div>'
         )
     return (
-        '<section class="glossary">'
+        '<section class="glossary" id="mb-glossary">'
         + probe("GLOSSTART")
-        + '<h2 class="section-title">Glossary</h2>'
+        + '<h1 class="section-title">Glossary</h1>'
         '<p class="lead">Every term this book defines, with the chapter that '
         "defines it. The chapter is where the term is explained in context; "
         "this page is the reminder.</p>"
@@ -2328,9 +2370,9 @@ def build_index(entries) -> str:
             f'<span class="pages">{nums}</span></div>'
         )
     return (
-        '<section class="index">'
+        '<section class="index" id="mb-index">'
         + probe("IDXSTART")
-        + '<h2 class="section-title">Index</h2>'
+        + '<h1 class="section-title">Index</h1>'
         '<p class="lead">Page numbers run in order, so a term is usually '
         "introduced at the first page listed. For a term the book uses on most "
         "pages, only the pages that discuss it are listed.</p>"
@@ -2605,6 +2647,12 @@ def render(html_str: str, base_dir: Path, out_path: Path, title: str,
                     display_header_footer=True,
                     header_template=EMPTY_HEADER,
                     footer_template=footer_template(title, body_pt),
+                    # The outline is what a Kindle Scribe shows as an
+                    # expandable contents. Chromium builds it from the
+                    # structure tree, so `outline` alone writes none at all,
+                    # and build_outline then fails the bind.
+                    outline=True,
+                    tagged=True,
                 )
                 # After the PDF, never before: this widens the body to the
                 # printed page area to read the tables at the width they
@@ -2773,6 +2821,85 @@ def locate(pages_text: list[str]):
     return chapters, index_page, figures, lof_page, cover_end, gloss_page
 
 
+# pdftotext -bbox's output: one <page> per page, one <word> per word, in points
+# from the top left.
+BBOX_PAGE_RE = re.compile(r'<page width="[\d.]+" height="([\d.]+)">(.*?)</page>',
+                          re.S)
+BBOX_WORD_RE = re.compile(r'<word xMin="([\d.]+)" yMin="([\d.]+)" '
+                          r'xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)</word>')
+# render()'s bottom margin, where the running footer prints its page number.
+FOOTER_BAND_PT = 0.95 * 72
+
+
+def link_pages(pdf: Path, entries, index_page: int) -> int:
+    """Link every page number the index prints to the page it names.
+
+    The contents rows' links are drawn by Chromium from an anchor laid over each
+    row, which is out of the text's flow. An anchor around each index number
+    would be in it, and would split a list of numbers into one inline item per
+    number, each rounded to the layout unit on its own. Measured, an entry of
+    seven numbers came out 0.14px wider, and in a full-length book that wrapped
+    one entry's last number onto a line of its own. So the index's page stays
+    exactly as it was, and the links are laid onto the finished PDF.
+
+    Each number is found where it printed, with `pdftotext -raw -bbox`. Raw
+    order is the content stream's, which follows the index as written across
+    both columns, where pdftotext's reading order interleaves them. Words are
+    matched in that order against the index's own page references, so a word is
+    linked only when it is the next number the index printed, and a number
+    inside a term is passed over. Each link covers its word, comma included, and
+    opens its page in the /XYZ form Chromium's outline uses.
+
+    Rewrites `pdf` in place and returns the links made. Raises RuntimeError when
+    any reference was not found, because the index would then print numbers that
+    do not do what the rest of them do.
+    """
+    wanted = [p for _, pgs in entries for p in pgs]
+    if not wanted:
+        return 0
+    found = subprocess.run(
+        ["pdftotext", "-raw", "-bbox", "-f", str(index_page), str(pdf), "-"],
+        capture_output=True, text=True, check=True).stdout
+    writer = PdfWriter(clone_from=str(pdf))
+    made = 0
+    for offset, (height, words) in enumerate(BBOX_PAGE_RE.findall(found)):
+        page = writer.pages[index_page - 1 + offset]
+        h = float(height)
+        annots = page.get("/Annots")
+        annots = annots.get_object() if annots is not None else ArrayObject()
+        for x0, y0, x1, y1, word in BBOX_WORD_RE.findall(words):
+            if made == len(wanted):
+                break
+            if float(y0) > h - FOOTER_BAND_PT or word.rstrip(",") != str(wanted[made]):
+                continue
+            target = writer.pages[wanted[made] - 1]
+            annots.append(writer._add_object(DictionaryObject({
+                NameObject("/Type"): NameObject("/Annot"),
+                NameObject("/Subtype"): NameObject("/Link"),
+                NameObject("/Rect"): ArrayObject([
+                    FloatObject(float(x0)), FloatObject(h - float(y1)),
+                    FloatObject(float(x1)), FloatObject(h - float(y0))]),
+                NameObject("/Border"): ArrayObject(
+                    [NumberObject(0), NumberObject(0), NumberObject(0)]),
+                NameObject("/Dest"): ArrayObject([
+                    target.indirect_reference, NameObject("/XYZ"),
+                    NumberObject(0), FloatObject(float(target.mediabox.top)),
+                    NumberObject(0)]),
+            })))
+            made += 1
+        if len(annots):
+            page[NameObject("/Annots")] = annots
+    if made != len(wanted):
+        raise RuntimeError(
+            f"{made} of its {len(wanted)} page references were found where they "
+            f"printed; the first not found is {wanted[made]}")
+    tmp = pdf.with_name(f".{pdf.name}.pages")
+    with open(tmp, "wb") as fh:
+        writer.write(fh)
+    tmp.replace(pdf)
+    return made
+
+
 def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
     """Carry every script the book asks the reader to save inside the PDF.
 
@@ -2901,6 +3028,202 @@ def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
         writer.write(fh)
     tmp.replace(pdf)
     return placed
+
+
+HEADING_RE = re.compile(r"<h([1-6])\b[^>]*>(.*?)</h\1>", re.S | re.I)
+
+
+def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
+                  fm_title: str | None, has_figures: bool, has_glossary: bool,
+                  has_index: bool, settled: dict) -> dict[str, int]:
+    """Reshape the outline Chromium wrote into the one a reader navigates by.
+
+    The outline is the PDF's bookmarks, and it is what a Kindle Scribe shows as
+    a contents whose entries expand and collapse. Chromium builds it from the
+    heading levels, one top-level entry per h1 with every heading beneath it
+    nested down to h6. Its destinations are kept and four things change:
+
+    - Depth. A top-level entry keeps its own children, a chapter's sections,
+      and drops theirs, so a chapter expands to its sections and stops there.
+    - Titles. Each is the heading's text as `html_text` has it. Chromium's
+      loses the space wherever the heading wraps.
+    - Labels. A chapter reads "Chapter 3: Title" and an appendix "Appendix 1:
+      Title", as the chapter's opening page prints them.
+    - Parts. Where book.json's `sections` groups chapters, they nest under an
+      entry for the part, as on the contents page and in the EPUB's nav. A part
+      has no page of its own, so its entry opens its first chapter.
+
+    Chapters start collapsed and parts open, so the panel opens on the list of
+    chapters.
+
+    Every page the book binds must be one of Chromium's top-level entries, in
+    the order assemble() lays them out, and where `settled` knows the page it
+    starts on, the entry must open that page. An h1 the chapter's own markdown
+    rendered is a heading inside that chapter, so it is filed under it as one of
+    its sections. The page is what tells the two apart when such a heading
+    shares the next chapter's title: matched on text alone, it took that
+    chapter's entry, sent the reader into the chapter before, and passed. Raises RuntimeError when an expected entry is missing: a short
+    outline sends the reader to the wrong chapter or to none, and a bind that
+    ships one unremarked is the failure this exists to stop.
+
+    Rewrites `pdf` in place and returns the counts the bind reports.
+    """
+    writer = PdfWriter(clone_from=str(pdf))
+    root = writer._root_object
+    outlines = root.raw_get("/Outlines") if "/Outlines" in root else None
+    if outlines is None or "/First" not in outlines.get_object():
+        raise RuntimeError(
+            "Chromium wrote no outline at all, and it writes one only when "
+            "page.pdf() is given both outline=True and tagged=True")
+
+    # Chromium's own entries are relinked rather than new ones written, so each
+    # keeps the /Dest it opens and the /SE tying it to its heading in the
+    # structure tree, and nothing it wrote is left unreferenced in the file but
+    # the subsections dropped. The links are the PDF's own: each entry names its
+    # /Parent, /Prev and /Next, and a parent its /First and /Last child.
+    def children(ref) -> list:
+        node, kids = ref.get_object(), []
+        nxt = node.raw_get("/First") if "/First" in node else None
+        while nxt is not None:
+            kids.append(nxt)
+            item = nxt.get_object()
+            nxt = item.raw_get("/Next") if "/Next" in item else None
+        return kids
+
+    def link(parent, kids: list, count: int = 0) -> None:
+        """Make `kids` the whole of `parent`'s children. `count` is the PDF's
+        /Count, negative for a closed entry, and a leaf carries none, as
+        Chromium writes it."""
+        node = parent.get_object()
+        for k in ("/First", "/Last", "/Count"):
+            node.pop(k, None)
+        for i, ref in enumerate(kids):
+            item = ref.get_object()
+            item[NameObject("/Parent")] = parent
+            item.pop("/Prev", None)
+            item.pop("/Next", None)
+            if i:
+                item[NameObject("/Prev")] = kids[i - 1]
+            if i + 1 < len(kids):
+                item[NameObject("/Next")] = kids[i + 1]
+        if kids:
+            node[NameObject("/First")] = kids[0]
+            node[NameObject("/Last")] = kids[-1]
+            node[NameObject("/Count")] = NumberObject(count)
+
+    def title_of(ref) -> str:
+        return str(ref.get_object().get("/Title", ""))
+
+    # (heading text, chapter or None, the page it opens or None where no probe
+    # reads one), in assemble()'s order.
+    expected: list[tuple[str, dict | None, int | None]] = [
+        (title, None, 1), ("Contents", None, None)]
+    if fm_title:
+        expected.append((fm_title, None, None))
+    if has_figures:
+        expected.append(("Figures", None, settled.get("lof_page")))
+    expected += [(ch["title"], ch, settled["pages"].get(ch["num"]))
+                 for ch in chapters]
+    if has_glossary:
+        expected.append(("Glossary", None, settled.get("gloss_page")))
+    if has_index:
+        expected.append(("Index", None, settled.get("index_page")))
+
+    page_no = {p.indirect_reference.idnum: i + 1
+               for i, p in enumerate(writer.pages)}
+
+    def opens(ref) -> int | None:
+        dest = ref.get_object().get("/Dest")
+        if isinstance(dest, list) and dest:
+            return page_no.get(dest[0].idnum)
+        return None
+
+    # Chromium drops the space at every line a wrapped heading breaks on, so
+    # "The Data Model" set across two lines reaches the outline as
+    # "The DataModel". Entries are matched with their whitespace removed,
+    # and every entry kept is retitled from its heading's text in the page.
+    def key(text: str) -> str:
+        return "".join(text.split()).casefold()
+
+    heading_text: dict[str, str] = {}
+    for m in HEADING_RE.finditer(html_text):
+        text = " ".join(html_mod.unescape(TAG_RE.sub("", m.group(2))).split())
+        heading_text.setdefault(key(text), text)
+    unmatched = 0
+
+    def retitle(ref, label: str | None = None) -> None:
+        nonlocal unmatched
+        text = heading_text.get(key(title_of(ref)))
+        if text is None:
+            unmatched += 1
+            text = title_of(ref)
+        # A title that already opens with its label keeps it once.
+        if label and not re.match(rf"{re.escape(label)}\b", text, re.I):
+            text = f"{label}: {text}"
+        ref.get_object()[NameObject("/Title")] = TextStringObject(text)
+
+    tops = children(outlines)
+    found: list[tuple] = []     # (chapter or None, entry, its sections)
+    for ref in tops:
+        want = expected[len(found)] if len(found) < len(expected) else None
+        # A page either side doesn't know leaves the text to decide alone.
+        page = opens(ref)
+        if (want and key(title_of(ref)) == key(want[0])
+                and (want[2] is None or page is None or page == want[2])):
+            found.append((want[1], ref, children(ref)))
+        elif found:
+            found[-1][2].append(ref)
+    if len(found) < len(expected):
+        got = sum(1 for ch, _, _ in found if ch)
+        miss, _, on = expected[len(found)]
+        raise RuntimeError(
+            f"it has {len(found)} of the {len(expected)} top-level entries the "
+            f"book needs, {got} of them for the book's {len(chapters)} "
+            f"chapters, and the first missing is {miss!r}"
+            f"{f' opening page {on}' if on else ''}. Chromium's top-level "
+            f"entries: {[(title_of(r), opens(r)) for r in tops[:12]]}")
+
+    sections = cfg.get("sections") or []
+    counts = {"chapters": 0, "sections": 0, "parts": 0, "pages": 0}
+    top: list = []
+    parts: list[tuple] = []
+    current = None
+    for ch, ref, kids in found:
+        for kid in kids:
+            link(kid, [])
+            retitle(kid)
+        link(ref, kids, -len(kids))
+        counts["sections"] += len(kids)
+        # Grouped as build_toc and epub_toc group them, so the three agree.
+        grp = group_for(ch["num"], sections) if ch else None
+        if grp != current:
+            current = grp
+            if grp:
+                part = writer._add_object(DictionaryObject({
+                    NameObject("/Title"): TextStringObject(grp),
+                    NameObject("/Dest"): ref.get_object()["/Dest"],
+                }))
+                parts.append((part, []))
+                top.append(part)
+        (parts[-1][1] if grp else top).append(ref)
+        if ch:
+            retitle(ref, f'{"Appendix" if ch.get("appendix") else "Chapter"} '
+                         f'{ch.get("label_num", ch["num"])}')
+            counts["chapters"] += 1
+        else:
+            retitle(ref)
+            counts["pages"] += 1
+    for part, kids in parts:
+        link(part, kids, len(kids))
+    counts["parts"] = len(parts)
+    counts["unmatched"] = unmatched
+    link(outlines, top, len(top) + sum(len(kids) for _, kids in parts))
+
+    tmp = pdf.with_name(f".{pdf.name}.outline")
+    with open(tmp, "wb") as fh:
+        writer.write(fh)
+    tmp.replace(pdf)
+    return counts
 
 
 # --------------------------------------------------------------------------
@@ -3668,7 +3991,8 @@ def main(argv: list[str]) -> int:
     # Built once, before the fixed-point loop: its content does not depend on
     # page numbers, so re-rendering it on every pass would only cost time.
     fm_path = src / fm_name
-    front_matter = build_front_matter(fm_path) if fm_path.is_file() else None
+    fm_title, front_matter = (build_front_matter(fm_path) if fm_path.is_file()
+                              else (None, None))
 
     # A glossary is bound when the folder holds one. `"glossary": true` in
     # book.json is a declaration rather than a switch: it says this book is
@@ -3808,8 +4132,22 @@ def main(argv: list[str]) -> int:
     if not markers_hidden:
         tables = render(page_html, src, out, args.title, body_pt)
         final = page_texts(out)
-    # Last, onto the finished file, because it rewrites the PDF rather than the
-    # page: no render after this could keep what it adds.
+    # Last, onto the finished file, because these rewrite the PDF rather than
+    # the page: no render after them could keep what they add.
+    try:
+        outline = build_outline(out, page_html, args.title, chapters, cfg,
+                                fm_title, bool(figures), bool(glossary),
+                                want_index, state)
+    except RuntimeError as exc:
+        print(f"error: the outline in {out} is incomplete: {exc}",
+              file=sys.stderr)
+        return 1
+    try:
+        link_pages(out, entries, index_page)
+    except RuntimeError as exc:
+        print(f"error: the index's page links in {out} are incomplete: {exc}",
+              file=sys.stderr)
+        return 1
     try:
         attached = attach_scripts(out, chapters)
     except RuntimeError as exc:
@@ -3819,6 +4157,15 @@ def main(argv: list[str]) -> int:
     total = len(final) - (1 if not final[-1].strip() else 0)
     print(f"wrote {out}")
     print(f"pages: {total}   chapters: {len(chapters)}")
+    grouped = (f", grouped into {outline['parts']} parts"
+               if outline["parts"] else "")
+    print(f"outline: {outline['chapters']} chapter entries{grouped}, "
+          f"{outline['sections']} sections beneath the entries, and "
+          f"{outline['pages']} other pages")
+    if outline["unmatched"]:
+        print(f"  warning: {outline['unmatched']} outline title(s) matched no "
+              f"heading in the page and keep Chromium's text, which joins the "
+              f"two words either side of a line the heading wrapped at.")
     # The size is the one input that changes the page count by more than half
     # and leaves no trace in the output, so say which one bound this book. Naming
     # both ends beside it means the edition someone actually wanted is one line
@@ -4058,8 +4405,8 @@ def main(argv: list[str]) -> int:
               f"reference, starting on page {state['gloss_page']}")
     if want_index:
         refs = sum(len(p) for _, p in entries)
-        print(f"index: {len(entries)} entries, {refs} page references, "
-              f"starting on page {index_page}")
+        print(f"index: {len(entries)} entries, {refs} page references"
+              f"{', each a link' if refs else ''}, starting on page {index_page}")
         print(f"terms: {terms_source}")
         # A term that matches nothing subtracts itself silently: the index
         # simply comes up an entry short and the count above reads as ordinary
