@@ -121,6 +121,33 @@ Go through the chapters one at a time. For each, write a single line naming the 
 
 Chapters come from `sorted(folder.glob("*.md"))`, so name files with a numeric prefix (`01-`, `02-`) when the reading order is not alphabetical. Each chapter's title is its first H1; a file with no H1 falls back to a prettified filename. Markdown inside a chapter renders normally: headings, lists, tables, code blocks, blockquotes, task lists, and images at relative paths.
 
+## The outline
+
+The PDF carries an outline, the bookmarks a viewer lists beside the page. On a Kindle Scribe it is the table of contents, with entries that expand and collapse:
+
+```
+  Book Title
+  Contents
+  About This Book
+▸ Chapter 1: Getting Started
+▾ Chapter 2: The Data Model
+      Tables and keys
+      Relationships
+▸ Appendix 1: Answer Key
+  Glossary
+  Index
+```
+
+- **Every page in the table above is a top-level entry**, and each one opens its page. About this book is listed here, although the contents page leaves it out.
+- **A chapter or appendix expands to its sections**, its `##` headings, and no further. Its label matches its opening page, `Chapter 3: Title` or `Appendix 1: Title`. A title that already starts with its label prints it only once.
+- **Chapters start collapsed**, so the outline opens as a list of chapters.
+- **`sections` in `book.json` nests chapters under their parts**, the same grouping the contents page and the EPUB's nav use. A part has no page of its own, so its entry opens on its first chapter. Parts start expanded.
+- **An H1 inside a chapter's body** (any H1 after the title) is filed under that chapter as one of its sections.
+
+Chromium writes the outline from the page's headings, and only when `page.pdf()` is given **both `outline=True` and `tagged=True`**. Leave out `tagged` and no outline is written at all, with no error. That is why every page title and chapter title is an `h1` and a chapter's sections are `h2`: the heading level decides the nesting. The stylesheet sets every property that would differ between the two levels, so the layout doesn't depend on them. Tagging also writes a structure tree, which screen readers use.
+
+The build then reshapes Chromium's outline and checks it. **If any page or chapter is missing from the outline, the bind fails** and names the first entry it couldn't find. A short outline sends the reader to the wrong chapter or nowhere, and nothing else would catch it.
+
 ## Page numbers are verified, not assumed
 
 This is the PDF's problem alone; the EPUB has no page numbers to verify.
@@ -139,6 +166,7 @@ different readings, which is why both are built every time:
 | Layout | Fixed. The page you see is the page everyone sees | Reflows to the reader's font size and screen |
 | Annotation | Full pen markup on a Kindle Scribe | Highlights and sticky notes, no freehand |
 | Page numbers | Real, verified, and printed in the contents and index | None. The format has no fixed pages |
+| Navigation | The outline, where each chapter expands to its sections (see **The outline**) | The nav document, built from the contents |
 | Best for | Reading with a pen, printing, handing to a room | Reading on a device, at whatever size your eyes want |
 
 Send it to a Kindle by emailing it to your Send to Kindle address, or through

@@ -13,10 +13,21 @@
 #
 #   as declared, no cover_image     both formats are written, page 2 of the
 #                                   PDF opens on Contents so the cover did not
-#                                   spill, and the EPUB's cover art is a PNG
-#                                   rasterised from the PDF's cover page
-#   with a declared cover_image     PDF page 1 and EPUB/cover.xhtml carry the
-#                                   same Created: stamp, in bind_stamp's form
+#                                   spill, the EPUB's cover art is a PNG
+#                                   rasterised from the PDF's cover page, and
+#                                   the PDF's outline lists every page, each
+#                                   chapter collapsed over its sections and
+#                                   none of its ### headings
+#   with a declared cover_image,    PDF page 1 and EPUB/cover.xhtml carry the
+#   parts, and a stray H1           same Created: stamp, in bind_stamp's form;
+#                                   the outline nests each chapter under its
+#                                   part, and files an H1 in a chapter's body
+#                                   under that chapter, retitled with the
+#                                   spaces Chromium drops where it wraps
+#
+# The second bind takes its parts and its stray H1 on board only because a
+# third bind would cost the suite another full render. Neither reaches the
+# stamp it checks.
 #
 # The EPUB keeps a text cover page, and so a stamp a script can read, only
 # behind declared art. Rasterised art stands in for that page and carries the
@@ -132,17 +143,83 @@ else
   report 1 "as declared: the EPUB has no rasterised cover art: $art"
 fi
 
-# --- with a declared cover_image ---------------------------------------------
+# outline_is <label> <pdf> <expected tree>: compares the PDF's outline with the
+# tree given, one entry a line, four spaces a level. "- " marks a collapsed
+# entry with entries beneath it and "+ " an expanded one; a leaf has neither.
+# The whole tree is compared, so a fixture edit that changes a heading changes
+# this expectation with it, and the diff names the line.
+outline_is() {
+  local got
+  got=$("$py" - "$2" 2>&1 <<'EOF'
+import sys
+from pypdf import PdfReader
+
+def walk(node, depth):
+    item = node.get("/First")
+    while item is not None:
+        item = item.get_object()
+        count = item.get("/Count")
+        mark = "  " if count is None else ("+ " if count > 0 else "- ")
+        print("    " * depth + mark + str(item["/Title"]))
+        walk(item, depth + 1)
+        item = item.get("/Next")
+
+walk(PdfReader(sys.argv[1]).trailer["/Root"]["/Outlines"], 0)
+EOF
+)
+  if [ "$got" = "$3" ]; then
+    report 0 "$1: the PDF's outline has the expected tree"
+  else
+    report 1 "$1: the PDF's outline differs from the expected tree (< expected, > got)"
+    diff <(printf '%s\n' "$3") <(printf '%s\n' "$got") | sed 's/^/      | /'
+  fi
+}
+
+# The ### headings under "What this chapter uses" are absent: a chapter
+# expands to its sections and stops.
+outline_is "as declared" "$pdf" "$(cat <<'TREE'
+  Guide Fixture
+  Contents
+  Figures
+- Chapter 1: What a Profile Selects
+      In short
+      Why two sets rather than one
+      What this chapter uses
+      Suggested reading
+- Chapter 2: What the Checker Reads
+      In short
+      What makes a rule checkable
+      What is left to reading
+      Suggested reading
+  Appendix 1: The Callout Labels
+  Glossary
+  Index
+TREE
+)"
+
+# --- with a declared cover_image, parts, and a stray H1 ----------------------
 # Checked, because a failed edit would bind with no cover_image and report a
 # missing stamp, blaming the binder for a fault in the fixture.
-if ! edit_out=$("$py" - "$tmp/book/book.json" 2>&1 <<'EOF'
+#
+# The stray H1 is long enough to wrap at any type size, and Chromium drops the
+# space at the wrap from the outline entry it writes.
+if ! edit_out=$("$py" - "$tmp/book" 2>&1 <<'EOF'
 import json, sys
-cfg = json.load(open(sys.argv[1], encoding="utf-8"))
+from pathlib import Path
+book = Path(sys.argv[1])
+cfg = json.loads((book / "book.json").read_text(encoding="utf-8"))
 cfg["cover_image"] = "diagrams/the-two-profiles.svg"
-json.dump(cfg, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
+cfg["sections"] = [{"title": "Part One: Profiles", "chapters": [1]},
+                   {"title": "Part Two: Checking", "chapters": [2]}]
+(book / "book.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+ch2 = book / "guide-fixture-02-what-the-checker-reads.md"
+ch2.write_text(ch2.read_text(encoding="utf-8") + (
+    "\n# A heading set at the top level inside a chapter, long enough that it "
+    "has to wrap onto a second line\n\nIts paragraph.\n\n"
+    "## A heading under it\n\nAnother paragraph.\n"), encoding="utf-8")
 EOF
 ); then
-  report 1 "cover_image: could not add cover_image to the copy's book.json"
+  report 1 "cover_image: could not add cover_image, sections and a stray H1 to the copy"
   printf '%s\n' "$edit_out" | sed 's/^/      | /'
   exit 1
 fi
@@ -173,6 +250,31 @@ elif [ "$pdf_stamp" != "$epub_stamp" ]; then
 else
   report 0 "cover_image: PDF page 1 and EPUB/cover.xhtml carry the same stamp"
 fi
+
+# Parts open over chapters that stay collapsed. The stray H1 is the last of
+# chapter 2's sections, and the H2 under it is gone with the other subsections.
+outline_is "parts and a stray H1" "$pdf" "$(cat <<'TREE'
+  Guide Fixture
+  Contents
+  Figures
++ Part One: Profiles
+    - Chapter 1: What a Profile Selects
+          In short
+          Why two sets rather than one
+          What this chapter uses
+          Suggested reading
++ Part Two: Checking
+    - Chapter 2: What the Checker Reads
+          In short
+          What makes a rule checkable
+          What is left to reading
+          Suggested reading
+          A heading set at the top level inside a chapter, long enough that it has to wrap onto a second line
+  Appendix 1: The Callout Labels
+  Glossary
+  Index
+TREE
+)"
 
 # --- appendix-slug -----------------------------------------------------------
 pdf="$tmp/appendix-slug-out/book.pdf"
