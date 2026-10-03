@@ -248,6 +248,62 @@ else
   printf '%s\n' "$refusals" | sed 's/^/      | /'
 fi
 
+# A number inside an index term is never taken for a page number. Matched one
+# number at a time, the 2 in "Top 2 lists" took the first link and the printed 2
+# went without, and nothing else here would notice: the link count still
+# matched, and the link still opened page 2. One page of index and three to link
+# to, through the binder's own render() and link_pages().
+term_digits=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, re, subprocess, sys
+from pathlib import Path
+from pypdf import PdfReader
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+entries = [("Top 2 lists", [2, 3]), ("Week 4", [4])]
+rows = "".join(f"<p>{d} {', '.join(map(str, p))}</p>" for d, p in entries)
+filler = "".join(f"<section style='break-before: page'><p>Page {n}.</p></section>"
+                 for n in (2, 3, 4))
+html = f"<!DOCTYPE html><html><body><h1>Index</h1>{rows}{filler}</body></html>"
+pdf = out / "term-digits.pdf"
+binder.render(html, out, pdf, "T")
+made = binder.link_pages(pdf, entries, 1)
+reader = PdfReader(str(pdf))
+page = reader.pages[0]
+h = float(page.mediabox.top)
+by_ref = {p.indirect_reference.idnum: i + 1 for i, p in enumerate(reader.pages)}
+links = [(tuple(float(v) for v in a.get_object()["/Rect"]),
+          by_ref[a.get_object()["/Dest"][0].idnum]) for a in page["/Annots"]]
+bbox = subprocess.run(["pdftotext", "-raw", "-bbox", "-f", "1", "-l", "1", str(pdf), "-"],
+                      capture_output=True, text=True, check=True).stdout
+words = [(float(a), h - float(d), float(c), h - float(b), t) for a, b, c, d, t in
+         re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" '
+                    r'yMax="([\d.]+)">([^<]*)</word>', bbox)]
+def under(rect):
+    cx, cy = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    return [w for w in words if w[0] <= cx <= w[2] and w[1] <= cy <= w[3]]
+problems = []
+for rect, target in links:
+    hit = under(rect)
+    if len(hit) != 1 or hit[0][4].rstrip(",") != str(target):
+        problems.append(f"a link opening page {target} lies over {[w[4] for w in hit]}")
+for i, w in enumerate(words[1:], 1):
+    if w[4] in ("2", "4") and words[i - 1][4] in ("Top", "Week"):
+        if any(under(r) == [w] for r, _ in links):
+            problems.append(f"the {w[4]} in the term after {words[i - 1][4]!r} carries a link")
+print(f"made={made} links={len(links)}")
+print("\n".join(problems) or "clean")
+EOF
+)
+if [ "$(printf '%s\n' "$term_digits" | sed -n 1p)" = "made=3 links=3" ] \
+  && [ "$(printf '%s\n' "$term_digits" | sed -n 2p)" = "clean" ]; then
+  report 0 "link_pages links each printed index number, and no number inside a term"
+else
+  report 1 "link_pages should link the three printed numbers and neither number inside a term"
+  printf '%s\n' "$term_digits" | sed 's/^/      | /'
+fi
+
 # The ### headings under "What this chapter uses" are absent: a chapter
 # expands to its sections and stops.
 outline_is "as declared" "$pdf" "$(cat <<'TREE'

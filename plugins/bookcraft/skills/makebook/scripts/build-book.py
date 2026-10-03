@@ -2844,60 +2844,80 @@ def link_pages(pdf: Path, entries, index_page: int) -> int:
 
     Each number is found where it printed, with `pdftotext -raw -bbox`. Raw
     order is the content stream's, which follows the index as written across
-    both columns, where pdftotext's reading order interleaves them. Words are
-    matched in that order against the index's own page references, so a word is
-    linked only when it is the next number the index printed, and a number
-    inside a term is passed over. Each link covers its word, comma included, and
-    opens its page in the /XYZ form Chromium's outline uses.
+    both columns, where pdftotext's reading order interleaves them. An entry's
+    numbers are the run of words that follows the last word of its term and
+    reads exactly as the index printed them, `2,` then `3`. A number inside a
+    term is therefore never taken for one, which matching each number on its own
+    did: in "Top 2 lists  2, 3" the term's 2 took the first link and the printed
+    2 went without. Each link covers its word, comma included, and opens its
+    page in the /XYZ form Chromium's outline uses.
 
-    Rewrites `pdf` in place and returns the links made. Raises RuntimeError when
-    any reference was not found, because the index would then print numbers that
-    do not do what the rest of them do.
+    Rewrites `pdf` in place and returns the links made. Raises RuntimeError,
+    naming the entry, when an entry's numbers are not found after its term,
+    because the index would then print numbers that do not do what the rest of
+    them do.
     """
-    wanted = [p for _, pgs in entries for p in pgs]
-    if not wanted:
+    entries = [(display, pgs) for display, pgs in entries if pgs]
+    if not entries:
         return 0
     found = subprocess.run(
         ["pdftotext", "-raw", "-bbox", "-f", str(index_page), str(pdf), "-"],
         capture_output=True, text=True, check=True).stdout
-    writer = PdfWriter(clone_from=str(pdf))
-    made = 0
-    for offset, (height, words) in enumerate(BBOX_PAGE_RE.findall(found)):
-        page = writer.pages[index_page - 1 + offset]
+    # (page offset, page height, x0, y0, x1, y1, text), in print order, with the
+    # running footer's words left out.
+    words = []
+    for offset, (height, body) in enumerate(BBOX_PAGE_RE.findall(found)):
         h = float(height)
+        words += [(offset, h, float(x0), float(y0), float(x1), float(y1),
+                   html_mod.unescape(text))
+                  for x0, y0, x1, y1, text in BBOX_WORD_RE.findall(body)
+                  if float(y0) <= h - FOOTER_BAND_PT]
+
+    # Punctuation and case off, so a term's last word compares however
+    # pdftotext splits the marks around it.
+    def bare(text: str) -> str:
+        return re.sub(r"\W+", "", text).casefold()
+
+    placed, at = [], 0
+    for display, pgs in entries:
+        run = [f"{p}," for p in pgs[:-1]] + [str(pgs[-1])]
+        last = bare(display.split()[-1]) if display.split() else ""
+        for k in range(max(at, 1), len(words) - len(run) + 1):
+            if (bare(words[k - 1][6]) == last
+                    and [w[6] for w in words[k:k + len(run)]] == run):
+                break
+        else:
+            raise RuntimeError(
+                f"the page numbers of {display!r} ({', '.join(run)}) were not "
+                f"found after its term")
+        placed += zip(words[k:k + len(run)], pgs)
+        at = k + len(run)
+
+    writer = PdfWriter(clone_from=str(pdf))
+    for (offset, h, x0, y0, x1, y1, _), number in placed:
+        page = writer.pages[index_page - 1 + offset]
+        target = writer.pages[number - 1]
         annots = page.get("/Annots")
         annots = annots.get_object() if annots is not None else ArrayObject()
-        for x0, y0, x1, y1, word in BBOX_WORD_RE.findall(words):
-            if made == len(wanted):
-                break
-            if float(y0) > h - FOOTER_BAND_PT or word.rstrip(",") != str(wanted[made]):
-                continue
-            target = writer.pages[wanted[made] - 1]
-            annots.append(writer._add_object(DictionaryObject({
-                NameObject("/Type"): NameObject("/Annot"),
-                NameObject("/Subtype"): NameObject("/Link"),
-                NameObject("/Rect"): ArrayObject([
-                    FloatObject(float(x0)), FloatObject(h - float(y1)),
-                    FloatObject(float(x1)), FloatObject(h - float(y0))]),
-                NameObject("/Border"): ArrayObject(
-                    [NumberObject(0), NumberObject(0), NumberObject(0)]),
-                NameObject("/Dest"): ArrayObject([
-                    target.indirect_reference, NameObject("/XYZ"),
-                    NumberObject(0), FloatObject(float(target.mediabox.top)),
-                    NumberObject(0)]),
-            })))
-            made += 1
-        if len(annots):
-            page[NameObject("/Annots")] = annots
-    if made != len(wanted):
-        raise RuntimeError(
-            f"{made} of its {len(wanted)} page references were found where they "
-            f"printed; the first not found is {wanted[made]}")
+        annots.append(writer._add_object(DictionaryObject({
+            NameObject("/Type"): NameObject("/Annot"),
+            NameObject("/Subtype"): NameObject("/Link"),
+            NameObject("/Rect"): ArrayObject([
+                FloatObject(x0), FloatObject(h - y1),
+                FloatObject(x1), FloatObject(h - y0)]),
+            NameObject("/Border"): ArrayObject(
+                [NumberObject(0), NumberObject(0), NumberObject(0)]),
+            NameObject("/Dest"): ArrayObject([
+                target.indirect_reference, NameObject("/XYZ"),
+                NumberObject(0), FloatObject(float(target.mediabox.top)),
+                NumberObject(0)]),
+        })))
+        page[NameObject("/Annots")] = annots
     tmp = pdf.with_name(f".{pdf.name}.pages")
     with open(tmp, "wb") as fh:
         writer.write(fh)
     tmp.replace(pdf)
-    return made
+    return len(placed)
 
 
 def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:

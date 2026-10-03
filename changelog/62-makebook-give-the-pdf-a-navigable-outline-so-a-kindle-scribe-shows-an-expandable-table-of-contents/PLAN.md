@@ -129,7 +129,7 @@ project and a specific bound book by path. Those details are given here in gener
 ## Plan
 
 Status as of 2026-10-03: every phase is done. Phases 1 to 8 are in `9fb320f`, phases 10 to
-15 in `d485edf`, and phases 16 to 18 are uncommitted. On 2026-10-03 the operator tested
+15 in `d485edf`, phases 16 to 18 in `17283a1`, and Phase 19 is uncommitted. On 2026-10-03 the operator tested
 the bound book with the outline and the contents links and reported that it "looks great",
 which closes the device checks in Phase 9 and its re-run. The index links in Phase 17 came
 after that test, so they haven't been tried on the device.
@@ -266,6 +266,17 @@ step 6b, and PR #63 stays open for its re-run:
       named another repository, a course code and a file path in that repository.
       *Done, and audited clean. GitHub keeps the old revision under the issue's "edited"
       menu until the operator deletes it.*
+- [x] Phase 19: Never link a number inside an index term. This is the second close review's
+      important finding, which the operator chose to fix at that close's triage. Matching
+      one number at a time, a bare number in a term that equals the entry's next page
+      number took that link.
+      *Done. `link_pages` now takes an entry's numbers as the run that follows the last word
+      of its term, read exactly as printed (`2,` then `3`). The bind fails, naming the
+      entry, if any run isn't found. A new check in `bind/run.sh` renders "Top 2 lists
+      2, 3" and "Week 4  4" through the binder's own `render()`. It asserts that every
+      printed number has a link and neither term digit does, and the previous matcher fails
+      it. The three full binds found every entry's run, still match `main` exactly, and
+      every index link opens the page printed under it.*
 
 ## Open Questions
 
@@ -297,6 +308,9 @@ rest is parked for triage:
   `/StructParent`, so they aren't in the structure tree.
 - The reading edition's endnotes heading (`h2`) appears as a "Notes" section under every
   chapter. `SKILL.md` doesn't mention it, and no test covers that edition's outline.
+- From the second close review (`pr-review-2026-10-03-2.md`, APPROVE): `FOOTER_BAND_PT`
+  restates `render()`'s 0.95in margin. The review's important finding, a number inside an
+  index term taking a link, was fixed in Phase 19.
 - `fixtures/bind/page-links.py` checks only the first page of the contents and of the list
   of figures. It reads the index to the end.
 - A letter-labelled title such as "Appendix A: …" on Appendix 1 gets a second label.

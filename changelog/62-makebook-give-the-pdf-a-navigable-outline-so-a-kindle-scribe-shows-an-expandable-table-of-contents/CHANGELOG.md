@@ -34,29 +34,26 @@ Every row on the contents page and the list of figures now links to its page.
 
 ### 2026-10-03
 
-- **The operator amended the ticket to add a linked contents page.** The list of figures
-  links too, and the index waits.
-- **Prefixed `id`s on every page and figure** (`mb-ch-N`, `mb-fig-NNN`, `mb-glossary`).
-  Each contents and list-of-figures row links to its target through an empty anchor laid
-  over the row. Making the row an `<a>` would move the first part heading after a Figures
-  row, through `.toc-group:first-of-type`. Wrapping the spans would break their flex sizing.
-- **Checked:** the full binds still match `main`, and every row's link opens the page it
-  prints, through `attach_scripts` too. `fixtures/bind/contents-links.py` holds the check,
-  and two broken binders fail it. Its first version misread a caption ending in "week 3"
-  as a row number.
-- **The operator tested the bound book on the device** and reported that it looks great.
-  The close review approved, with one important finding: an in-chapter `#` heading that
-  matches the next chapter's title takes that chapter's outline entry.
-- **The close halted at triage, on the operator's choices.** The misfile was fixed now,
-  the index was linked on this branch, and issue #62's body was restated in generic terms.
-- **Outline entries match on their page too.** `build_outline` takes the settled page map,
-  so a body `h1` that repeats the next chapter's title is filed as a section. A new
-  fixture check exercises both of the bind's refusals through the binder's own `render()`.
-- **The index links each page number, laid on after rendering.** Wrapping the numbers in
-  `<a>` worked, but it moved the page: per-item rounding made an entry 0.14px wider, and
-  one number wrapped in a full book. The index HTML is now `main`'s. `link_pages` finds
-  each number with `pdftotext -raw -bbox`, matched in order against the index's page
-  references. Raw order is used because reading order interleaves the columns. The full
-  binds match `main` exactly, and all 1612, 1096 and 1643 index links open the page printed
-  under them. `fixtures/bind/contents-links.py` became `page-links.py` and checks the index
-  by cropping to each link's rectangle.
+- **The ticket gained linked listings.** The operator amended it to add a linked contents
+  page. Each contents and list-of-figures row now links through an empty anchor laid over
+  the row, aimed at prefixed `id`s (`mb-ch-N`, `mb-fig-NNN`). Making the row an `<a>`, or
+  wrapping its spans in one, would have moved the page.
+- **The operator tested the outline and the contents links on the device**, and reported
+  that it looks great.
+- **The first close halted at triage, on the operator's choices:**
+  - The review's misfile was fixed. Outline entries now match on their settled page as well
+    as their text, and a fixture check exercises both of the bind's refusals.
+  - The index was linked on this branch. That is done after rendering (`link_pages`, with
+    `pdftotext -raw -bbox`), because inline anchors rounded an entry 0.14px wider and wrapped
+    a number.
+  - Issue #62's body was restated in generic terms.
+- **Checked:** the full binds match `main` exactly, and every Contents, Figures and Index
+  link opens the page printed under it, including 1612, 1096 and 1643 index links.
+  `fixtures/bind/page-links.py` holds the check, and broken binders fail it.
+- **The second close review approved.** It found that a bare number in a term which equals
+  the entry's next page number takes that link. The docs now say so, and the case is under
+  Deferred.
+- **The second close halted at triage, and the index-term finding was fixed.**
+  `link_pages` takes an entry's numbers as the run that follows its term's last word, so a
+  number inside a term is never linked. The bind fails, naming the entry, when a run isn't
+  found. A new check covers "Top 2 lists  2, 3", and the per-number matcher fails it.
