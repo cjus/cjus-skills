@@ -13,10 +13,27 @@
 #
 #   as declared, no cover_image     both formats are written, page 2 of the
 #                                   PDF opens on Contents so the cover did not
-#                                   spill, and the EPUB's cover art is a PNG
-#                                   rasterised from the PDF's cover page
-#   with a declared cover_image     PDF page 1 and EPUB/cover.xhtml carry the
-#                                   same Created: stamp, in bind_stamp's form
+#                                   spill, the EPUB's cover art is a PNG
+#                                   rasterised from the PDF's cover page, and
+#                                   the PDF's outline lists every page, each
+#                                   chapter collapsed over its sections and
+#                                   none of its ### headings; every link on
+#                                   the Contents, Figures and Index pages
+#                                   opens the page it prints, on both binds;
+#                                   and build_outline refuses an outline that
+#                                   is missing or a chapter short
+#   with a declared cover_image,    PDF page 1 and EPUB/cover.xhtml carry the
+#   parts, and two stray H1s        same Created: stamp, in bind_stamp's form;
+#                                   the outline nests each chapter under its
+#                                   part, and files an H1 in a chapter's body
+#                                   under that chapter: one retitled with the
+#                                   spaces Chromium drops where it wraps, and
+#                                   one sharing the next chapter's title, which
+#                                   only its page tells apart from that title
+#
+# The second bind takes its parts and its stray H1s on board only because a
+# third bind would cost the suite another full render. None of them reaches
+# the stamp it checks.
 #
 # The EPUB keeps a text cover page, and so a stamp a script can read, only
 # behind declared art. Rasterised art stands in for that page and carries the
@@ -132,17 +149,261 @@ else
   report 1 "as declared: the EPUB has no rasterised cover art: $art"
 fi
 
-# --- with a declared cover_image ---------------------------------------------
+# outline_is <label> <pdf> <expected tree>: compares the PDF's outline with the
+# tree given, one entry a line, four spaces a level. "- " marks a collapsed
+# entry with entries beneath it and "+ " an expanded one; a leaf has neither.
+# The whole tree is compared, so a fixture edit that changes a heading changes
+# this expectation with it, and the diff names the line.
+outline_is() {
+  local got
+  got=$("$py" - "$2" 2>&1 <<'EOF'
+import sys
+from pypdf import PdfReader
+
+def walk(node, depth):
+    item = node.get("/First")
+    while item is not None:
+        item = item.get_object()
+        count = item.get("/Count")
+        mark = "  " if count is None else ("+ " if count > 0 else "- ")
+        print("    " * depth + mark + str(item["/Title"]))
+        walk(item, depth + 1)
+        item = item.get("/Next")
+
+walk(PdfReader(sys.argv[1]).trailer["/Root"]["/Outlines"], 0)
+EOF
+)
+  if [ "$got" = "$3" ]; then
+    report 0 "$1: the PDF's outline has the expected tree"
+  else
+    report 1 "$1: the PDF's outline differs from the expected tree (< expected, > got)"
+    diff <(printf '%s\n' "$3") <(printf '%s\n' "$got") | sed 's/^/      | /'
+  fi
+}
+
+# links_open <label> <pdf> <listing>...: every link on each listing named opens
+# the page it prints (see page-links.py). The index's links are also held to
+# the bind's own count of page references, read from $bind_out, so a number
+# printed without a link cannot pass.
+links_open() {
+  local label=$1 out rc want got names
+  shift
+  out=$("$py" "$here/page-links.py" "$@" 2>&1); rc=$?
+  names=$(printf '%s, ' "${@:2}" | sed 's/, $//; s/, \([^,]*\)$/ and \1/')
+  case " $* " in
+    *" Index "*)
+      want=$(printf '%s\n' "$bind_out" | sed -n 's/^index: [0-9]* entries, \([0-9]*\) page references.*/\1/p')
+      got=$(printf '%s\n' "$out" | sed -n 's/.*Index: \([0-9]*\) links.*/\1/p')
+      if [ -z "$want" ] || [ "$got" != "$want" ]; then
+        rc=1
+        out="$out
+the bind reported ${want:-no} page references and the index carries ${got:-no} links"
+      fi
+      ;;
+  esac
+  if [ "$rc" -eq 0 ]; then
+    report 0 "$label: every link on the $names pages opens the page it prints"
+  else
+    report 1 "$label: a link on the $names pages opens a page other than the one it prints"
+    printf '%s\n' "$out" | sed 's/^/      | /'
+  fi
+}
+
+links_open "as declared" "$pdf" Contents Figures Index
+
+# The bind's refusal, tested where no book could reach it. Two pages go through
+# the binder's own render(): one with no heading, so Chromium writes no outline,
+# and one that is a chapter short.
+refusals=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+page = "<section style='break-before: page'><h1>{}</h1><p>Text.</p></section>"
+cases = [
+    ("no outline", "<p>No heading at all.</p>", []),
+    ("a chapter short", "".join(page.format(t) for t in ("T", "Contents", "One")),
+     [{"num": 1, "title": "One"}, {"num": 2, "title": "Two"}]),
+]
+for name, body, chapters in cases:
+    html = f"<!DOCTYPE html><html><body>{body}</body></html>"
+    pdf = out / f"refusal-{len(chapters)}.pdf"
+    binder.render(html, out, pdf, "T")
+    try:
+        binder.build_outline(pdf, html, "T", chapters, {}, None, False, False,
+                             False, {"pages": {1: 3, 2: 4}})
+        print(f"{name}: accepted")
+    except RuntimeError as exc:
+        print(f"{name}: {exc}")
+EOF
+)
+if printf '%s\n' "$refusals" | grep -qF "no outline: Chromium wrote no outline at all" \
+  && printf '%s\n' "$refusals" | grep -qF "a chapter short: it has 3 of the 4 top-level entries" \
+  && printf '%s\n' "$refusals" | grep -qF "the first missing is 'Two' opening page 4"; then
+  report 0 "build_outline refuses a PDF with no outline, and one a chapter short"
+else
+  report 1 "build_outline should refuse a PDF with no outline and one a chapter short"
+  printf '%s\n' "$refusals" | sed 's/^/      | /'
+fi
+
+# A number inside an index term is never taken for a page number. Matched one
+# number at a time, the 2 in "Top 2 lists" took the first link and the printed 2
+# went without, and nothing else here would notice: the link count still
+# matched, and the link still opened page 2. One page of index and three to link
+# to, through the binder's own render() and link_pages().
+term_digits=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, re, subprocess, sys
+from pathlib import Path
+from pypdf import PdfReader
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+entries = [("Top 2 lists", [2, 3]), ("Week 4", [4])]
+rows = "".join(f"<p>{d} {', '.join(map(str, p))}</p>" for d, p in entries)
+filler = "".join(f"<section style='break-before: page'><p>Page {n}.</p></section>"
+                 for n in (2, 3, 4))
+html = f"<!DOCTYPE html><html><body><h1>Index</h1>{rows}{filler}</body></html>"
+pdf = out / "term-digits.pdf"
+binder.render(html, out, pdf, "T")
+made = binder.link_pages(pdf, entries, 1)
+reader = PdfReader(str(pdf))
+page = reader.pages[0]
+h = float(page.mediabox.top)
+by_ref = {p.indirect_reference.idnum: i + 1 for i, p in enumerate(reader.pages)}
+links = [(tuple(float(v) for v in a.get_object()["/Rect"]),
+          by_ref[a.get_object()["/Dest"][0].idnum]) for a in page["/Annots"]]
+bbox = subprocess.run(["pdftotext", "-raw", "-bbox", "-f", "1", "-l", "1", str(pdf), "-"],
+                      capture_output=True, text=True, check=True).stdout
+words = [(float(a), h - float(d), float(c), h - float(b), t) for a, b, c, d, t in
+         re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" '
+                    r'yMax="([\d.]+)">([^<]*)</word>', bbox)]
+def under(rect):
+    cx, cy = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    return [w for w in words if w[0] <= cx <= w[2] and w[1] <= cy <= w[3]]
+problems = []
+for rect, target in links:
+    hit = under(rect)
+    if len(hit) != 1 or hit[0][4].rstrip(",") != str(target):
+        problems.append(f"a link opening page {target} lies over {[w[4] for w in hit]}")
+for i, w in enumerate(words[1:], 1):
+    if w[4] in ("2", "4") and words[i - 1][4] in ("Top", "Week"):
+        if any(under(r) == [w] for r, _ in links):
+            problems.append(f"the {w[4]} in the term after {words[i - 1][4]!r} carries a link")
+print(f"made={made} links={len(links)}")
+print("\n".join(problems) or "clean")
+EOF
+)
+if [ "$(printf '%s\n' "$term_digits" | sed -n 1p)" = "made=3 links=3" ] \
+  && [ "$(printf '%s\n' "$term_digits" | sed -n 2p)" = "clean" ]; then
+  report 0 "link_pages links each printed index number, and no number inside a term"
+else
+  report 1 "link_pages should link the three printed numbers and neither number inside a term"
+  printf '%s\n' "$term_digits" | sed 's/^/      | /'
+fi
+
+# A term whose last word wraps at its hyphen still links, and numbers the index
+# didn't print against their term fail the bind. Anchored on the term's last word,
+# "pre-training" set as "pre-" / "training" at 17pt and failed a bind that main
+# would have passed. Whether one string wraps depends on the font's widths, and a
+# single term that wrapped on macOS did not on the Linux runner, so the hyphen is
+# slid across the line end instead: eight entries, each one "model" longer. A
+# step is narrower than the window in which the hyphen is the last break that
+# fits, so one of them breaks there on any font of ordinary proportions. The real
+# stylesheet and build_index() are used, because the wrap depends on both, and a
+# wrap is asserted before the links, so a sweep that stopped wrapping fails
+# rather than passing without testing anything.
+hyphen=$("$py" - "$binder" "$tmp" 2>&1 <<'EOF'
+import importlib.util, subprocess, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("binder", sys.argv[1])
+binder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(binder)
+out = Path(sys.argv[2])
+entries = [(" ".join(["model"] * n) + " pre-training", [2, 3]) for n in range(1, 9)]
+filler = "".join(f"<section style='break-before: page'><p>Page {n}.</p></section>"
+                 for n in (2, 3))
+html = (f"<!DOCTYPE html><html><head><style>{binder.build_css(binder.MAX_BODY_PT)}"
+        f"</style></head><body>{binder.build_index(entries)}{filler}</body></html>")
+pdf = out / "hyphen.pdf"
+binder.render(html, out, pdf, "T")
+words = subprocess.run(["pdftotext", "-raw", "-f", "1", "-l", "1", str(pdf), "-"],
+                       capture_output=True, text=True, check=True).stdout.split()
+wraps = sum(1 for a, b in zip(words, words[1:]) if a == "pre-" and b == "training")
+print("wraps" if wraps else f"does not wrap: {words[-12:]}")
+print(f"links={binder.link_pages(pdf, entries, 1)}")
+for name, bad in (("unprinted", entries + [("Never printed", [2, 3])]),
+                  ("mismatched", [("model post-training", [2, 3])] + entries[1:])):
+    try:
+        binder.link_pages(pdf, bad, 1)
+        print(f"{name}: accepted")
+    except RuntimeError as exc:
+        print(f"{name}: {exc}")
+EOF
+)
+if [ "$(printf '%s\n' "$hyphen" | sed -n 1p)" = "wraps" ] \
+  && [ "$(printf '%s\n' "$hyphen" | sed -n 2p)" = "links=16" ] \
+  && printf '%s\n' "$hyphen" | grep -qF "unprinted: the page numbers of 'Never printed' (2, 3) were not found after its term" \
+  && printf '%s\n' "$hyphen" | grep -qF "mismatched: the page numbers of 'model post-training' (2, 3) were not found after its term"; then
+  report 0 "link_pages links terms that wrap at their hyphen at 17pt, and refuses numbers printed against no matching term"
+else
+  report 1 "link_pages should link terms that wrap at their hyphen, and refuse numbers printed against no matching term"
+  printf '%s\n' "$hyphen" | sed 's/^/      | /'
+fi
+
+# The ### headings under "What this chapter uses" are absent: a chapter
+# expands to its sections and stops.
+outline_is "as declared" "$pdf" "$(cat <<'TREE'
+  Guide Fixture
+  Contents
+  Figures
+- Chapter 1: What a Profile Selects
+      In short
+      Why two sets rather than one
+      What this chapter uses
+      Suggested reading
+- Chapter 2: What the Checker Reads
+      In short
+      What makes a rule checkable
+      What is left to reading
+      Suggested reading
+  Appendix 1: The Callout Labels
+  Glossary
+  Index
+TREE
+)"
+
+# --- with a declared cover_image, parts, and a stray H1 ----------------------
 # Checked, because a failed edit would bind with no cover_image and report a
 # missing stamp, blaming the binder for a fault in the fixture.
-if ! edit_out=$("$py" - "$tmp/book/book.json" 2>&1 <<'EOF'
+#
+# Chapter 2's stray H1 is long enough to wrap at any type size, and Chromium
+# drops the space at the wrap from the outline entry it writes. Chapter 1's
+# shares chapter 2's title: matched on text alone, it took chapter 2's entry
+# and sent the reader into chapter 1.
+if ! edit_out=$("$py" - "$tmp/book" 2>&1 <<'EOF'
 import json, sys
-cfg = json.load(open(sys.argv[1], encoding="utf-8"))
+from pathlib import Path
+book = Path(sys.argv[1])
+cfg = json.loads((book / "book.json").read_text(encoding="utf-8"))
 cfg["cover_image"] = "diagrams/the-two-profiles.svg"
-json.dump(cfg, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
+cfg["sections"] = [{"title": "Part One: Profiles", "chapters": [1]},
+                   {"title": "Part Two: Checking", "chapters": [2]}]
+(book / "book.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+ch1 = book / "guide-fixture-01-what-a-profile-selects.md"
+ch1.write_text(ch1.read_text(encoding="utf-8") + (
+    "\n# What the Checker Reads\n\nA heading inside chapter 1 that shares "
+    "chapter 2's title.\n"), encoding="utf-8")
+ch2 = book / "guide-fixture-02-what-the-checker-reads.md"
+ch2.write_text(ch2.read_text(encoding="utf-8") + (
+    "\n# A heading set at the top level inside a chapter, long enough that it "
+    "has to wrap onto a second line\n\nIts paragraph.\n\n"
+    "## A heading under it\n\nAnother paragraph.\n"), encoding="utf-8")
 EOF
 ); then
-  report 1 "cover_image: could not add cover_image to the copy's book.json"
+  report 1 "cover_image: could not add cover_image, sections and the stray H1s to the copy"
   printf '%s\n' "$edit_out" | sed 's/^/      | /'
   exit 1
 fi
@@ -173,6 +434,37 @@ elif [ "$pdf_stamp" != "$epub_stamp" ]; then
 else
   report 0 "cover_image: PDF page 1 and EPUB/cover.xhtml carry the same stamp"
 fi
+
+# A Figures row above the first part heading is the layout a contents row
+# turned into an <a> would have moved (see .toc-link).
+links_open "parts and stray H1s" "$pdf" Contents Figures Index
+
+# Parts open over chapters that stay collapsed. Each stray H1 is the last of its
+# chapter's sections, and the H2 under chapter 2's is gone with the other
+# subsections.
+outline_is "parts and stray H1s" "$pdf" "$(cat <<'TREE'
+  Guide Fixture
+  Contents
+  Figures
++ Part One: Profiles
+    - Chapter 1: What a Profile Selects
+          In short
+          Why two sets rather than one
+          What this chapter uses
+          Suggested reading
+          What the Checker Reads
++ Part Two: Checking
+    - Chapter 2: What the Checker Reads
+          In short
+          What makes a rule checkable
+          What is left to reading
+          Suggested reading
+          A heading set at the top level inside a chapter, long enough that it has to wrap onto a second line
+  Appendix 1: The Callout Labels
+  Glossary
+  Index
+TREE
+)"
 
 # --- appendix-slug -----------------------------------------------------------
 pdf="$tmp/appendix-slug-out/book.pdf"
