@@ -129,7 +129,8 @@ project and a specific bound book by path. Those details are given here in gener
 ## Plan
 
 Status as of 2026-10-03: every phase is done. Phases 1 to 8 are in `9fb320f`, phases 10 to
-15 in `d485edf`, phases 16 to 18 in `17283a1`, Phase 19 in `f7ba3da`, and Phase 20 is uncommitted. On 2026-10-03 the operator tested
+15 in `d485edf`, phases 16 to 18 in `17283a1`, Phase 19 in `f7ba3da`, and Phase 20 in `eeb7026`, with its check made font-proof
+afterwards (uncommitted). On 2026-10-03 the operator tested
 the bound book with the outline and the contents links and reported that it "looks great",
 which closes the device checks in Phase 9 and its re-run. The index links in Phase 17 came
 after that test, so they haven't been tried on the device.
@@ -291,6 +292,14 @@ step 6b, and PR #63 stays open for its re-run:
       edition at 17pt, which the reviewer noted had never been tried. All four match
       `main` exactly under `pdftotext -layout`, and every link opens its page (1612, 1096,
       1643 and 1068 index links).*
+      *The fourth close review (`pr-review-2026-10-03-4.md`, NEEDS_DISCUSSION) found that
+      the check's single term didn't wrap on the Linux CI runner's fonts. The binder was fine
+      there, but the check's wrap precondition failed (CI 17/1/0 on ubuntu). At the
+      operator's choice, the check became the reviewer's sweep: eight entries, each one word
+      longer, so that some step breaks at the hyphen on any font. It requires a wrap and all
+      16 links, and it adds a refusal for numbers printed against a term that doesn't match
+      ("post-training" against the printed "pre-training"). The last-word matcher still
+      fails it.*
 
 ## Open Questions
 

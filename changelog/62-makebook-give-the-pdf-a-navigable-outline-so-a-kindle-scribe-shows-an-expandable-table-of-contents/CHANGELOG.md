@@ -62,3 +62,7 @@ Every row on the contents page and the list of figures now links to its page.
   `link_pages` now anchors on the whole term, stripped to letters and digits. A 17pt check
   with a wrapping hyphenated term, which also covers the refusal path, fails the last-word
   matcher.
+- **The fourth close stopped at its review (NEEDS_DISCUSSION).** The 17pt check's term
+  didn't wrap on the Linux runner, so CI failed 17/1/0 there while the binder itself was
+  fine. The check now slides the hyphen across the line end over eight entries and requires
+  a wrap and all 16 links. It also gained a refusal for a term that doesn't match.

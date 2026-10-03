@@ -144,7 +144,8 @@ was restated in generic terms. **The second close halted at triage too:** its re
 important finding, a number inside an index term taking a link, was fixed then. **The third
 close stopped at its review**, which found that the fix anchored on a term's last word and
 so failed a bind when that word wrapped at a hyphen. The operator chose the reviewer's
-whole-term anchor.
+whole-term anchor. **The fourth stopped at its review too:** the new check's single term
+didn't wrap on Linux fonts, so it became a font-independent sweep.
 
 ### Deviations and discoveries
 
@@ -177,8 +178,10 @@ whole-term anchor.
   - **No number inside an index term gets a link**, checked on "Top 2 lists  2, 3" and
     "Week 4  4" through the binder's own `render()`.
   - **A curated term that wraps at its hyphen still links at 17pt**, using the real
-    stylesheet and `build_index()`. The check asserts the wrap first. It also checks that
-    numbers which never printed fail the bind.
+    stylesheet and `build_index()`. It runs as a sweep of eight entries, each one word
+    longer, so that one of them wraps on any font: a single term that wrapped on macOS
+    didn't on the Linux runner. The check asserts a wrap first. It also checks that
+    numbers which never printed, or which printed against a different term, fail the bind.
 - **`save-scripts/run.sh`** checks the Contents links after the attachments.
 - **Twelve deliberately broken binders were run against the fixtures, and each failed them:**
   - no retitle
@@ -221,8 +224,8 @@ an index number jumps to its page.
 
 ## Impact assessment
 
-- **Size of the change:** 12 files changed, 1818 insertions and 44 deletions, 809 of them
-  outside `changelog/`. `build-book.py` gains 367 lines net (398 added, 31 removed). Most of the rest is
+- **Size of the change:** 13 files changed, 2097 insertions and 44 deletions, 858 of them
+  outside `changelog/`. `build-book.py` gains 376 lines net (407 added, 31 removed). Most of the rest is
   fixtures and documentation.
 - **Dependencies:** none new. The `page.pdf()` flags need Playwright 1.42 or later, and
   `requirements.txt` already asks for 1.44. `pdftotext` was already required.
