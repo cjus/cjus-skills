@@ -224,7 +224,8 @@ an index number jumps to its page.
 
 ## Impact assessment
 
-- **Size of the change:** 13 files changed, 2097 insertions and 44 deletions, 858 of them
+- **Size of the change:** at `ef3347d`, before the close's own artifacts, 14 files changed,
+  2299 insertions and 44 deletions, 867 of them
   outside `changelog/`. `build-book.py` gains 376 lines net (407 added, 31 removed). Most of the rest is
   fixtures and documentation.
 - **Dependencies:** none new. The `page.pdf()` flags need Playwright 1.42 or later, and

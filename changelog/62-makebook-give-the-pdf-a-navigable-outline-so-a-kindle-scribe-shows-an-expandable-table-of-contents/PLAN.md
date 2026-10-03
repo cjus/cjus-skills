@@ -129,8 +129,8 @@ project and a specific bound book by path. Those details are given here in gener
 ## Plan
 
 Status as of 2026-10-03: every phase is done. Phases 1 to 8 are in `9fb320f`, phases 10 to
-15 in `d485edf`, phases 16 to 18 in `17283a1`, Phase 19 in `f7ba3da`, and Phase 20 in `eeb7026`, with its check made font-proof
-afterwards (uncommitted). On 2026-10-03 the operator tested
+15 in `d485edf`, phases 16 to 18 in `17283a1`, Phase 19 in `f7ba3da`, and Phase 20 in `eeb7026`, with its check made font-proof in
+`ef3347d`. CI passes on both legs at `ef3347d`, and the fifth close review approved. On 2026-10-03 the operator tested
 the bound book with the outline and the contents links and reported that it "looks great",
 which closes the device checks in Phase 9 and its re-run. The index links in Phase 17 came
 after that test, so they haven't been tried on the device.

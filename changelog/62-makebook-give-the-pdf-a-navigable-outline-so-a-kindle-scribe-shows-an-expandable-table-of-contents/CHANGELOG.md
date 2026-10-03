@@ -34,35 +34,23 @@ Every row on the contents page and the list of figures now links to its page.
 
 ### 2026-10-03
 
-- **The ticket gained linked listings.** The operator amended it to add a linked contents
-  page. Each contents and list-of-figures row now links through an empty anchor laid over
-  the row, aimed at prefixed `id`s (`mb-ch-N`, `mb-fig-NNN`). Making the row an `<a>`, or
-  wrapping its spans in one, would have moved the page.
-- **The operator tested the outline and the contents links on the device**, and reported
+- **The ticket gained linked listings.** Each contents and list-of-figures row links through
+  an empty anchor laid over the row, aimed at prefixed `id`s (`mb-ch-N`, `mb-fig-NNN`).
+  Making the row an `<a>`, or wrapping its spans in one, would have moved the page.
+- **The operator tested the outline and the contents links on the device** and reported
   that it looks great.
-- **The first close halted at triage, on the operator's choices:**
-  - The review's misfile was fixed. Outline entries now match on their settled page as well
-    as their text, and a fixture check exercises both of the bind's refusals.
-  - The index was linked on this branch. That is done after rendering (`link_pages`, with
-    `pdftotext -raw -bbox`), because inline anchors rounded an entry 0.14px wider and wrapped
-    a number.
-  - Issue #62's body was restated in generic terms.
-- **Checked:** the full binds match `main` exactly, and every Contents, Figures and Index
-  link opens the page printed under it, including 1612, 1096 and 1643 index links.
-  `fixtures/bind/page-links.py` holds the check, and broken binders fail it.
-- **The second close review approved.** It found that a bare number in a term which equals
-  the entry's next page number takes that link. The docs now say so, and the case is under
-  Deferred.
-- **The second close halted at triage, and the index-term finding was fixed.**
-  `link_pages` takes an entry's numbers as the run that follows its term's last word, so a
-  number inside a term is never linked. The bind fails, naming the entry, when a run isn't
-  found. A new check covers "Top 2 lists  2, 3", and the per-number matcher fails it.
-- **The third close stopped at its review (NEEDS_DISCUSSION).** Anchoring on a term's last
-  word failed a bind when a curated term wrapped at its hyphen, a regression from `main`.
-  `link_pages` now anchors on the whole term, stripped to letters and digits. A 17pt check
-  with a wrapping hyphenated term, which also covers the refusal path, fails the last-word
-  matcher.
-- **The fourth close stopped at its review (NEEDS_DISCUSSION).** The 17pt check's term
-  didn't wrap on the Linux runner, so CI failed 17/1/0 there while the binder itself was
-  fine. The check now slides the hyphen across the line end over eight entries and requires
-  a wrap and all 16 links. It also gained a refusal for a term that doesn't match.
+- **Four close rounds, each stopped by a finding and fixed at the operator's choice:**
+  - **Outline entries match on their settled page as well as their text.** A body `h1`
+    repeating the next chapter's title had taken that chapter's entry.
+  - **The index links every page number, laid on after rendering.** `link_pages` uses
+    `pdftotext -raw -bbox`, because inline anchors rounded an entry 0.14px wider and
+    wrapped a number. Issue #62's body was also restated in generic terms.
+  - **An entry's numbers are anchored on its whole term, stripped to letters and digits.**
+    Matched one number at a time, a term's digit could take a link. Anchored on the last
+    word, a term that wrapped at its hyphen failed the bind.
+  - **The 17pt wrap check slides the hyphen across eight entries**, so it wraps on any
+    font. A single term had not wrapped on the Linux runner.
+- **Checked:** four full binds, each edition at 14pt and 17pt, match `main` exactly. Every
+  Contents, Figures and Index link opens the page printed under it. The fixture suite passes
+  18/0/0, and CI passes on both legs at `ef3347d`. Each fix has a check that its
+  predecessor fails. The fifth close review approved.
