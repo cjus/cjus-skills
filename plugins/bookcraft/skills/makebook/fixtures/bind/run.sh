@@ -17,7 +17,9 @@
 #                                   rasterised from the PDF's cover page, and
 #                                   the PDF's outline lists every page, each
 #                                   chapter collapsed over its sections and
-#                                   none of its ### headings
+#                                   none of its ### headings; every Contents
+#                                   and Figures row links to the page it
+#                                   prints, on both binds
 #   with a declared cover_image,    PDF page 1 and EPUB/cover.xhtml carry the
 #   parts, and a stray H1           same Created: stamp, in bind_stamp's form;
 #                                   the outline nests each chapter under its
@@ -175,6 +177,22 @@ EOF
   fi
 }
 
+# links_open <label> <pdf> <listing>...: every row of each listing named links
+# to the page it prints. See contents-links.py.
+links_open() {
+  local label=$1 out rc
+  shift
+  out=$("$py" "$here/contents-links.py" "$@" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
+    report 0 "$label: every $(printf '%s and ' "${@:2}" | sed 's/ and $//') row links to the page it prints"
+  else
+    report 1 "$label: a listing row links somewhere other than the page it prints"
+    printf '%s\n' "$out" | sed 's/^/      | /'
+  fi
+}
+
+links_open "as declared" "$pdf" Contents Figures
+
 # The ### headings under "What this chapter uses" are absent: a chapter
 # expands to its sections and stops.
 outline_is "as declared" "$pdf" "$(cat <<'TREE'
@@ -250,6 +268,10 @@ elif [ "$pdf_stamp" != "$epub_stamp" ]; then
 else
   report 0 "cover_image: PDF page 1 and EPUB/cover.xhtml carry the same stamp"
 fi
+
+# A Figures row above the first part heading is the layout a contents row
+# turned into an <a> would have moved (see .toc-link).
+links_open "parts and a stray H1" "$pdf" Contents Figures
 
 # Parts open over chapters that stay collapsed. The stray H1 is the last of
 # chapter 2's sections, and the H2 under it is gone with the other subsections.

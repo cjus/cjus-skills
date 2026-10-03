@@ -270,8 +270,14 @@ h1.section-title {
 .toc-group:first-of-type { margin-top: 0.05in; }
 .toc-row {
   display: flex; align-items: baseline; font-size: ${tocrow}pt;
-  margin: 0.028in 0; break-inside: avoid;
+  margin: 0.028in 0; break-inside: avoid; position: relative;
 }
+/* The row's link is an empty anchor laid over the whole row, so a tap on the
+   title, the leader or the number all jump. The row stays a div and its spans
+   stay its flex items. An <a> row would hand .toc-group:first-of-type, which
+   counts element type, to the first part heading after a Figures row, and an <a>
+   around the spans would take their flex sizing. Either moves the page. */
+.toc-link { position: absolute; inset: 0; }
 .toc-num {
   flex: 0 0 1.9em; color: #6b6b6b; font-variant-numeric: tabular-nums;
 }
@@ -1607,6 +1613,24 @@ def group_for(num: int, sections: list[dict]) -> str | None:
     return None
 
 
+# The ids the contents and the list of figures link to. Prefixed because a
+# chapter's raw HTML can carry ids of its own, and a duplicate would send a link
+# to whichever page Chromium meets first.
+def chapter_id(num: int) -> str:
+    return f"mb-ch-{num}"
+
+
+def figure_id(gid: int) -> str:
+    return f"mb-fig-{gid:03d}"
+
+
+def toc_link(target: str) -> str:
+    """A row's link, laid over the row by `.toc-link`. Chromium writes each
+    in-document href as a link annotation to the named destination of its id,
+    and it does so for an anchor with no text as long as it has a box."""
+    return f'<a class="toc-link" href="#{target}"></a>'
+
+
 def build_toc(chapters, cfg, pages, index_page, has_index,
               has_figures=False, lof_page=None,
               has_glossary=False, gloss_page=None) -> str:
@@ -1619,7 +1643,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Figures</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{lof}</span></div>'
+            f'<span class="toc-page">{lof}</span>'
+            f'{toc_link("mb-figures")}</div>'
         )
     for ch in chapters:
         grp = group_for(ch["num"], sections)
@@ -1636,7 +1661,7 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             f'<span class="toc-title">{html_mod.escape(ch["title"])}</span>'
             '<span class="toc-dots"></span>'
             f'<span class="toc-page">{pg}</span>'
-            "</div>"
+            f'{toc_link(chapter_id(ch["num"]))}</div>'
         )
     if has_glossary:
         gl = str(gloss_page) if gloss_page else "&nbsp;"
@@ -1645,7 +1670,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Glossary</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{gl}</span></div>'
+            f'<span class="toc-page">{gl}</span>'
+            f'{toc_link("mb-glossary")}</div>'
         )
     if has_index:
         back = str(index_page) if index_page else "&nbsp;"
@@ -1654,7 +1680,8 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             '<span class="toc-num"></span>'
             '<span class="toc-title">Index</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{back}</span></div>'
+            f'<span class="toc-page">{back}</span>'
+            f'{toc_link("mb-index")}</div>'
         )
     lead = cfg.get(
         "contents_note",
@@ -1662,7 +1689,7 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
         "reader's page indicator.",
     )
     return (
-        '<section class="frontmatter">'
+        '<section class="frontmatter" id="mb-contents">'
         + probe("TOCSTART")
         + '<h1 class="section-title">Contents</h1>'
         + f'<p class="lead">{html_mod.escape(lead)}</p>'
@@ -1995,7 +2022,8 @@ def figurize(body_html: str, chapter_num: int, counter: list[int],
                f'{" " + html_mod.escape(caption) if caption else ""}'
                f'{probe(f"FIG{gid:03d}")}</figcaption>')
         token = f"@@MAKEBOOKFIG{gid}@@"
-        slots[token] = f'<figure class="figure{wide}">{inner}{cap}</figure>'
+        slots[token] = (f'<figure class="figure{wide}" id="{figure_id(gid)}">'
+                        f'{inner}{cap}</figure>')
         return token
 
     def from_fence(m: re.Match) -> str:
@@ -2236,7 +2264,8 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
         body = inject_colgroups(body, ch["num"], col_plan or {})
         body = script_notes(body, ch)
         out.append(
-            f'<section class="chapter" data-ch="{ch["num"]}">'
+            f'<section class="chapter" id="{chapter_id(ch["num"])}" '
+            f'data-ch="{ch["num"]}">'
             '<div class="chapter-head">'
             '<div class="chapter-eyebrow">'
             f'<span class="chapter-number">'
@@ -2259,10 +2288,11 @@ def build_figure_list(figures, fig_pages) -> str:
             f'<span class="toc-num">{fig["number"]}</span>'
             f'<span class="toc-title">{html_mod.escape(fig["caption"])}</span>'
             '<span class="toc-dots"></span>'
-            f'<span class="toc-page">{pg}</span></div>'
+            f'<span class="toc-page">{pg}</span>'
+            f'{toc_link(figure_id(fig["id"]))}</div>'
         )
     return (
-        '<section class="frontmatter">'
+        '<section class="frontmatter" id="mb-figures">'
         + probe("LOFSTART")
         + '<h1 class="section-title">Figures</h1>'
         '<p class="lead">Numbered by chapter. Every figure is vector art, so it '
@@ -2291,7 +2321,7 @@ def build_front_matter(path: Path) -> tuple[str, str]:
     else:
         title, body_md = "About This Book", text.strip()
     return title, (
-        '<section class="front-matter">'
+        '<section class="front-matter" id="mb-about">'
         + probe("FMSTART")
         + f'<h1 class="section-title">{html_mod.escape(title)}</h1>'
         + md.render(body_md)
@@ -2317,7 +2347,7 @@ def build_glossary(entries) -> str:
             f'{inline_code_html(body)}</div>'
         )
     return (
-        '<section class="glossary">'
+        '<section class="glossary" id="mb-glossary">'
         + probe("GLOSSTART")
         + '<h1 class="section-title">Glossary</h1>'
         '<p class="lead">Every term this book defines, with the chapter that '
@@ -2340,7 +2370,7 @@ def build_index(entries) -> str:
             f'<span class="pages">{nums}</span></div>'
         )
     return (
-        '<section class="index">'
+        '<section class="index" id="mb-index">'
         + probe("IDXSTART")
         + '<h1 class="section-title">Index</h1>'
         '<p class="lead">Page numbers run in order, so a term is usually '

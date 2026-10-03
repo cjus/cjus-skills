@@ -211,7 +211,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
 
 What it produces: a cover, a contents page, one chapter per file in filename order, hand-authored SVG figures where a concept needs one, a glossary where the folder carries one, and a back-of-book index whose page numbers are read back out of the rendered PDF rather than guessed. The build reports when page numbers have settled, meaning a re-read of the finished PDF reproduces every printed number.
 
-**The PDF carries an outline**, which a Kindle Scribe shows as an expandable table of contents. Each chapter and appendix is a collapsed entry that opens its chapter and expands to that chapter's sections. The cover, contents, figures, glossary and index are entries of their own. A bind whose outline comes back short fails rather than ship one.
+**The PDF carries an outline**, which a Kindle Scribe shows as an expandable table of contents. Each chapter and appendix is a collapsed entry that opens its chapter and expands to that chapter's sections. The cover, contents, figures, glossary and index are entries of their own. A bind whose outline comes back short fails rather than ship one. Every row on the contents page and the list of figures is a link, so a tap jumps to the page it names.
 
 ### The reading edition
 

@@ -42,3 +42,25 @@ to layout. The build also fails or warns when the outline comes back empty or sh
   second bind now also declares parts and appends a stray, wrapping `h1` to chapter 2.
   Checked against three broken binders (no retitle, no depth pruning, no `tagged`): each
   fails its assertion. bookcraft 1.9.0 to 1.10.0.
+
+### 2026-10-03
+
+- **The ticket gained a linked contents page.** The operator added it to #62 and to this
+  branch's plan, then answered its question: the list of figures links too, and the index
+  waits.
+- **Every page and figure has an `id`, and every listing row links to its own.** The ids are
+  prefixed (`mb-ch-N`, `mb-fig-NNN`, `mb-glossary`) so a chapter's raw HTML can't duplicate
+  one. Contents links Figures, each chapter and appendix, Glossary and Index. The list of
+  figures links each figure. Part headings aren't linked.
+- **The link is an empty anchor laid over the row**, positioned absolutely inside the
+  row's `div`. There were two obvious alternatives, and both move the page. Making the row
+  an `<a>` hands `.toc-group:first-of-type`, which counts element type, to the first part
+  heading after a Figures row. Wrapping the spans in an `<a>` takes their flex sizing. A
+  probe confirmed that Chromium writes an empty anchor as a full-row `/Link` with a named
+  destination.
+- **Checked:** the three full binds still match `main` under `pdftotext -layout` apart from
+  the stamp, and every row's link opens the page it prints. That holds through
+  `attach_scripts` as well, in the save-scripts book. `fixtures/bind/contents-links.py`
+  holds the check for both fixtures. Its first version took a wrapped caption ending in
+  "week 3" for a row's number, so it now counts only a number that follows the leader's run
+  of spaces.

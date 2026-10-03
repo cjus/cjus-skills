@@ -106,9 +106,9 @@ Go through the chapters one at a time. For each, write a single line naming the 
 | Page | Content |
 |---|---|
 | 1 | Cover: title, optional subtitle and byline, the creation stamp, a description, an optional footnote. It has to fit on one page, and the build warns when it does not |
-| 2 | Contents, every chapter with its page, optionally grouped under section headings |
+| 2 | Contents, every chapter with its page, optionally grouped under section headings. Each row links to its page |
 | 3 | About this book, when the folder holds `about-this-book.md`. What the book is for, what it was built from, what it fills in, what it does not cover |
-| 3 | Figures, listing every figure with its page. Appears only when the book has figures |
+| 3 | Figures, listing every figure with its page, each row linking to its figure. Appears only when the book has figures |
 | Then | The chapters, each opening on a fresh page |
 | Then | Glossary, one column, each term with the chapter that defines it. Appears only when the folder holds a `glossary.md` |
 | Last | Index, two columns, terms with the pages they appear on |
@@ -147,6 +147,14 @@ The PDF carries an outline, the bookmarks a viewer lists beside the page. On a K
 Chromium writes the outline from the page's headings, and only when `page.pdf()` is given **both `outline=True` and `tagged=True`**. Leave out `tagged` and no outline is written at all, with no error. That is why every page title and chapter title is an `h1` and a chapter's sections are `h2`: the heading level decides the nesting. The stylesheet sets every property that would differ between the two levels, so the layout doesn't depend on them. Tagging also writes a structure tree, which screen readers use.
 
 The build then reshapes Chromium's outline and checks it. **If any page or chapter is missing from the outline, the bind fails** and names the first entry it couldn't find. A short outline sends the reader to the wrong chapter or nowhere, and nothing else would catch it.
+
+## The linked contents
+
+**Every row on the contents page and the list of figures is a link**, so tapping it on a Kindle Scribe jumps to the page the row names. This doesn't depend on the outline flags. Chromium turns an in-document `<a href="#id">` into a PDF link to the page holding that `id`.
+
+- **What links where.** The contents page links Figures, each chapter and appendix, Glossary and Index. The list of figures links each figure. The index's page numbers don't link.
+- **The ids are prefixed** (`mb-ch-3`, `mb-fig-001`, `mb-glossary` and so on), because a chapter's raw HTML can carry ids of its own, and a duplicate would send a link to the wrong page.
+- **The whole row is the tap target.** The link is an empty anchor laid over the row, covering the title, the leader dots and the number. That's also why the page doesn't move. Making the row itself an `<a>` would shift the first part heading after a Figures row, because `.toc-group:first-of-type` counts element type. Wrapping the title and number in an `<a>` would take away their flex sizing.
 
 ## Page numbers are verified, not assumed
 

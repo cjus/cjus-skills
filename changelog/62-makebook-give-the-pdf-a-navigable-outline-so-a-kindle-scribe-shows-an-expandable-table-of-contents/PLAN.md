@@ -38,6 +38,24 @@ Acceptance:
 The objective is fixed here and is immutable for the life of the branch. Later updates
 refresh status only; newly discovered work goes under `## Deferred`, never as new scope.
 
+### Amended 2026-10-03: a linked contents page
+
+The operator updated ticket #62 to add this scope and asked for it to be added to this
+plan. That is an operator decision, so it is recorded here as an amendment and the
+objective above is left as written.
+
+6. Each chapter, appendix, front-matter page and back-matter page gets an `id`, and each
+   contents row links to it. The link is styled so that nothing on the page changes.
+7. Whether the list of figures and the index's page numbers link too is decided, and
+   implemented if the answer is yes.
+8. `makebook/SKILL.md` documents the linked contents alongside the outline.
+
+Added acceptance:
+
+- Every entry on the contents page links to the page it names.
+- On a Kindle Scribe, tapping a contents-page entry jumps to it.
+- The `pdftotext -layout` check above still holds with the links in place.
+
 ## About Ticket
 
 **#62: makebook: give the PDF a navigable outline, so a Kindle Scribe shows an expandable table of contents**
@@ -82,10 +100,37 @@ project and a specific bound book by path. Those details are given here in gener
 > hidden headings. Promoting the visible titles to `h1` suits this binder better, because it
 > adds no hidden text for `locate()`'s pdftotext pass to read.
 
+**Added to the ticket on 2026-10-03**, also restated rather than quoted, for the same reason:
+
+> **A linked contents page.** The reference generator's cover lists every section with its
+> page number, and each number is a link that jumps to its page on the Scribe. No
+> `page.pdf()` flag is involved: Chromium turns every in-document `<a href="#id">` into a PDF
+> link annotation whose named destination is the page holding that `id`. The generator gives
+> each page an `id` and writes each contents entry as `<a href="#pN">N</a>`; its cover's 49
+> links all resolve to the right page. A bare `page.pdf()` with neither `outline` nor
+> `tagged` produced working links in a test, so this half does not depend on the outline
+> flags.
+>
+> makebook's contents page has the rows but nothing to link to. `build_toc()` writes each
+> entry as a `div.toc-row` of spans with no anchor, and each chapter is
+> `<section class="chapter" data-ch="N">` with no `id`. A bound book has no link
+> annotations on its first six pages and no named destinations.
+>
+> The pypdf attachment step keeps the links: a `PdfWriter(clone_from=...)` copy of a
+> reference PDF still had all 49, each resolving to its page. That copy also printed
+> "Object count 12784 exceeds defined trailer size 12776", though it kept every outline entry
+> and link. A 20-page tagged test did not reproduce the warning, and its cause is unknown.
+>
+> New work: give the pages `id`s and wrap each contents row (title and page number) in
+> `<a href="#…">`, styled to inherit its colour with no underline; decide whether the list of
+> figures and the index's page numbers link too; document the linked contents in
+> `makebook/SKILL.md`; expect the pypdf warning.
+
 ## Plan
 
-Status as of 2026-10-02 19:09 MDT: phases 1 to 8 are done and uncommitted. Phase 9 is done
-except for the device check, which only the operator can run.
+Status as of 2026-10-03: phases 1 to 8 are committed and pushed (`9fb320f`). Phases 10 to 15,
+from the 2026-10-03 amendment, are done and uncommitted. Phase 9 and its re-run are done
+except for the device checks, which only the operator can run.
 
 - [x] Phase 1: Pass `outline=True, tagged=True` to `page.pdf()` in `render()`
       (`build-book.py:2599`), and confirm every edition and type size goes through it.
@@ -126,9 +171,77 @@ except for the device check, which only the operator can run.
       and 17pt, reading edition at 14pt) match the binds from `main` on every line except
       the `Created:` stamp. **The Kindle Scribe check is the operator's to run.***
 
+Added 2026-10-03, from the amendment:
+
+- [x] Phase 10: Give each chapter, appendix, front-matter page and back-matter page an `id`.
+      Prefix the ids (`mb-ch-3`, `mb-contents`, `mb-glossary` and so on), because a chapter's
+      raw HTML can carry ids of its own and a duplicate would send a link to the wrong page.
+      *Done: `mb-contents`, `mb-about`, `mb-figures`, `mb-ch-N` (`chapter_id`),
+      `mb-glossary`, `mb-index`, and `mb-fig-NNN` on each `<figure>` (`figure_id`).*
+- [x] Phase 11: Link every contents row (Figures, each chapter and appendix, Glossary,
+      Index) to its page, styled so the page doesn't change. **Two ways of doing this move
+      the layout:**
+      - *Turning the row into an `<a>`.* `.toc-group:first-of-type` (`:270`) counts element
+        type. In a book with figures, the Figures row is the first `div`, so that rule matches
+        no part heading today. Make the row an `<a>` and the first part heading becomes the
+        first `div`, so its top margin drops from 0.14in to 0.05in. A part heading moving that
+        little might not show up in `pdftotext -layout`, so that check alone could miss it.
+      - *Wrapping the title and number spans in `<a>`.* The anchor becomes the flex item, so
+        `.toc-title` and `.toc-page` lose their flex sizing.
+      Proposed instead: keep the `div`, make it `position: relative`, and lay an empty
+      `<a href="#…">` over it at `inset: 0`. The spans are untouched, and the whole row,
+      title, leader dots and number together, becomes the tap target. That is a superset of
+      the ticket's "title and page number". Confirm that Chromium writes a link annotation
+      for an anchor with no text before relying on it.
+      *Done as proposed (`toc_link`, `.toc-link`). A probe confirmed it first: Chromium
+      writes the empty anchor as a `/Link` over the full row, with a named `/Dest` in the
+      root `/Dests`. Part headings aren't linked, since a part has no page of its own.*
+- [x] Phase 12: Link the list of figures and the index, if the open question below says to.
+      Figures are cheap. Each is a `<figure>` (`:1998`), and adding an `id` to it covers raster
+      figures too: today only SVG figures carry `id="figNNN"`, on the `<svg>` itself
+      (`:1978`). The index is a different job. Its numbers are physical pages read back
+      through `pdftotext`, and nothing in a flowing document marks the top of a page, so there
+      is no element for `href="#…"` to target. A link would have to be made after rendering,
+      for example a pypdf link annotation over each number, placed using
+      `pdftotext -bbox`, that points at its page.
+      *Figures done: each list-of-figures row links to its `<figure>`. The index is deferred,
+      on the operator's answer.*
+- [x] Phase 13: Confirm the links survive both pypdf rewrites, `build_outline` and
+      `attach_scripts`. Also confirm that `attach_scripts` leaves them alone: it rewrites only
+      a `/Link` whose URI starts with `ATTACH_URI` (`:2856`), and an internal link carries a
+      destination, not a URI.
+      *Confirmed. Every row's link still opens its page after `build_outline` alone, and in
+      the save-scripts book after `attach_scripts` too, with its seven attachments in place.*
+- [x] Phase 14: Extend `fixtures/bind/run.sh` to assert that every contents row's link
+      resolves to the page its number prints. Cover a book with figures and parts, because
+      that is where `.toc-group:first-of-type` comes into play. Document the linked contents
+      in `makebook/SKILL.md` and the README.
+      *Done. `fixtures/bind/contents-links.py` compares each listing's printed numbers with
+      the pages its links open. `bind/run.sh` runs it on both guide binds, the second with
+      figures above the parts, and `save-scripts/run.sh` runs it after the attachments. Two
+      broken binders fail it: one with no links, one with each row aimed at the next
+      chapter. Chromium drops a link whose id doesn't exist, so a wrong id shows up as a
+      missing link. `SKILL.md` has a new section, The linked contents.*
+- [x] Phase 15: Watch for pypdf's "Object count … exceeds defined trailer size" warning.
+      None of the binds on this branch printed it: three full-length books, the guide
+      fixture, a copy of it with parts and a stray `h1`, and the save-scripts book. Every
+      bind now goes through a `clone_from` copy in `build_outline`, so the warning would have
+      shown. If it appears, find its cause before shipping; don't silence it.
+      *Not seen in any bind with the links in place either.*
+- [ ] Re-run Phase 9's acceptance with the links in place: identical `pdftotext -layout`, and
+      on the Scribe, a tapped contents entry jumps to its page.
+      *`pdftotext -layout` is done: all three full binds still match `main` on every line
+      except the `Created:` stamp. Every Contents and Figures row in them opens its page.
+      Binds take 1 s longer than without the links (29 s, 20 s, 28 s) and about 17 KB bigger.
+      **The Scribe tap is the operator's to check.***
+
 ## Open Questions
 
-All four were answered by the operator on 2026-10-02.
+- ~~Should the list of figures and the index's page numbers link too?~~ Answered by the
+  operator on 2026-10-03: **figures yes, index skipped for now.** Phase 12 links the list of
+  figures only, and the index link is under Deferred.
+
+The four earlier questions were answered by the operator on 2026-10-02:
 
 - ~~How deep should the outline go?~~ Chapters expand to their sections (`h2`) and stop
   there.
@@ -141,6 +254,10 @@ All four were answered by the operator on 2026-10-02.
   nav.
 
 ## Deferred
+
+- Linking the index's page numbers, which the operator skipped for now on 2026-10-03. No
+  element marks the top of a page, so it would need a step after rendering: a pypdf link
+  annotation over each number, placed using `pdftotext -bbox`, pointing at its page.
 
 - `.chapter .endnotes-title` (0,2,0) has always lost to `.chapter h2:not(.chapter-title)`
   (0,2,1). The reading edition's Notes heading therefore prints at the section-heading size,
