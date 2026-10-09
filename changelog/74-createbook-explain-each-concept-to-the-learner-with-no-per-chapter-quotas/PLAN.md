@@ -249,3 +249,13 @@ None open. The four the ticket and the plan raised were settled by the operator 
 - **Phase 10 runs on this branch.** After Phases 1 to 9 land, the two chapters are redrafted
   in the source repo, the four versions are blinded, and the operator's verdicts are recorded
   before `/pr:close`. The source repo's path is asked for at that point.
+
+## Deferred
+
+From `pr-review-2026-10-09.md`, for triage at `/pr:close`:
+
+- `chapter-prose.md § These rules add words` against the cut order's analogy step (pre-existing).
+- `guide.md`'s teaching shape allows two parts where core § Shape reserves two for one mechanism
+  and one complication (pre-existing).
+- A narration handoff noun may be reported as a ledger miss under the new boundary rule.
+- `<book>/sample/` is never removed after the fan-out.

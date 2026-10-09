@@ -12,7 +12,7 @@ A guide is still prose by default, and it still argues. A chapter that has turne
 
 **The opening paragraph orients the reader.** In plain words, say where this chapter sits in the book or the course, and what it settles. Write it for a reader who opened the book here, and reach the concrete thing by the second sentence. Saying what the chapter settles is a statement about the chapter, not a promise of what the reader will learn, so § Never's ban does not apply; "you will learn" is still banned.
 
-**Never open on something only an earlier chapter explains.** A definite noun pointing at what the last chapter ended on is a referent this reader never had (`chapter-prose.md § Reference`). What a chapter may assume is still set by `chapter-prose.md § What the reader arrives with`: a term an earlier chapter glossed is free, and anything else is glossed here.
+**Never open on something only an earlier chapter explains.** A definite noun pointing at what the last chapter ended on is a referent this reader never had (`chapter-prose.md § Reference`). What a chapter may assume is still set by `chapter-prose.md § What the reader arrives with`: a term an earlier chapter glossed is free, so is anything on the fluent side of the reader's knowledge boundary, and anything else is glossed here.
 
 ```text
 Before:  The scan is what week four ended on, and this week it is the thing

@@ -49,17 +49,18 @@ Before:  An index lets the database find rows without reading the whole
 
 After:   An index lets the database find rows without reading the whole
          table. It keeps one column sorted, with a pointer to each row, so a
-         lookup searches the sorted copy and follows one pointer. Without
-         one, a lookup on that column reads every row, every time, and the
-         cost grows with the table. So a query that was fast on twenty test
-         rows can stall in production.
+         lookup searches the sorted copy and follows one pointer. On a table
+         of 40,000 students, a lookup by student ID touches three pages where
+         a full read touches 600. Without an index, that read happens on
+         every call, and it grows with the table. So a query that was fast on
+         twenty test rows can stall in production.
 ```
 
-The first version puts an example where the reason belongs: the reader learns what happens and has to guess why it pays. The rewrite says how it works, why it matters and what goes wrong without it, and names none of the steps. The order is for the plan, and a step's name repeated in every chapter reads as a template.
+The first version puts an example where the reason belongs: the reader learns what happens and has to guess why it pays. The rewrite keeps the example and adds what it was missing: how it works, why it matters and what goes wrong without it. It names none of the steps. The order is for the plan, and a step's name repeated in every chapter reads as a template.
 
 **A fact is stated, not explained.** A date, a room or a weight the reader only has to know is stated with its source and takes no four steps. The test is whether the reader could get it wrong by understanding it wrongly. A deadline they could only miss is a fact, and a rule they could misapply is a concept.
 
-**Answer the reader's likely questions.** After each concept, ask what this reader would want to know next, given what they are fluent in: why this and not the obvious alternative, what happens at the edge, what a word on the page means. Answer it in the prose, where it arises. Go one level past what the book requires the reader to do, and stop there: the question after that belongs in the concept list (§ Suggested reading).
+**Answer the reader's likely questions.** After each concept, ask what this reader would want to know next, given what they are fluent in: why this and not the obvious alternative, what happens at the edge, what a word on the page means. Answer it in the prose, where it arises. Go one level past what the book requires the reader to do, and stop there. The question after that lies past the book's edge, which the concept list marks, and never add an item to hold it.
 
 ```text
 Before:  To undo a commit someone has already pulled, run git revert with
@@ -72,7 +73,7 @@ After:   To undo a commit someone has already pulled, run git revert with
          can stop with an error, or quietly merge the deleted commit back.
 ```
 
-The first version is accurate, and it leaves this reader asking why the bad commit cannot simply go. The rewrite answers that where it arises. How to rewrite shared history safely is a level further, so it goes in the concept list.
+The first version is accurate, and it leaves this reader asking why the bad commit cannot simply go. The rewrite answers that where it arises. How to rewrite shared history safely is a level further, and the rewrite leaves it out.
 
 **The mechanism walk.** Where a part explains how something works, walk the mechanism in three to five steps, in plain verbs, with no notation. Chain the steps by what causes what, and never number them: a numbered step says where it sits, and a chained step says why it follows, which is the thing being taught. After the walk, say the core idea again in different words, once.
 
@@ -302,7 +303,7 @@ Check each new term against the outline's term ledger: a term an earlier chapter
 **The explanation checks**, read against the plan:
 
 - **Every concept has its why**, in words of its own. List each concept beside the sentence saying why it matters. A concept with only an example there is the defect.
-- **No sentence directs an explainer.** Search for what to say, ask the class, land the point, make sure they, and walk them through. Each hit is an explanation still to be written.
+- **No sentence directs an explainer.** Search for what to say, land the point, ask the class and walk them through. A hit inside a numbered procedure the reader performs is fine. A hit telling the reader what to say about a concept is an explanation still to be written.
 - **Every new-side term is glossed where it first appears**, checked against the reader's knowledge boundary as well as the term ledger.
 - **Each concept answers the question this reader would ask next**, one level past what the book asks of them and no further.
 

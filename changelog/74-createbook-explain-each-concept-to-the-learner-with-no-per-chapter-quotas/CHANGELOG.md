@@ -42,3 +42,20 @@ Phase 10 runs on this branch before close.
 Verified: `scripts/check-citations.py` resolves 203 citations (190 on `main`); every
 paragraph in `chapter-prose.md` and `guide.md` is within 90 words and every sentence within
 45; no em dash in either; the fixture suite passes 18 of 18.
+
+### 2026-10-09 11:51:35 MDT: the pre-test review's findings, fixed
+
+Draft PR #75 opened. `pr-review-2026-10-09.md` approved, with three important findings, all fixed:
+
+- `guide.md § Opening` still said anything an earlier chapter had not glossed is glossed here,
+  which under `guide` would override the core's fluent side. It now exempts the fluent side.
+- The sample stop moved from the end of `SKILL.md § 3` to the end of `§ 4`, because its marks
+  and source names come from `book.json`'s `sources` map, which § 4 writes.
+- The likely-questions rule sent the question past the book's edge into the concept list, which
+  the outline's source ledger fixes. It now stops there and adds nothing to that list.
+
+Suggestions taken: the index pair keeps its example beside the reason; the direction search no
+longer flags a numbered procedure; leftover quota wording in `SKILL.md`; coverage items marked
+inferred where nothing states them; `/updatebook` carries the Teaches row; the README notes
+narration's one required wrong model; `NOTES.md` credits `qe` with three steps, not four, and
+says "at least two" wrong claims. The four deferred items are left for `/pr:close`'s triage.

@@ -771,9 +771,10 @@ to sit beside it.
 - **The chapter is the explanation, said to the reader.** A direction to an explainer gives
   a reader who is learning the subject nothing, and it cannot be wrong, so no review catches
   the error it hides. The history is at § Explaining to the learner, 2026-10-09.
-- **Explain each concept in four steps.** The order is `qe`'s: the core idea, the mechanism,
-  why it exists, and the failure it prevents. The why is the step a draft drops, and an
-  example is what it drops it for, which is why the rule names that swap.
+- **Explain each concept in four steps.** The first three are `qe`'s order: the core idea,
+  the mechanism, then why it exists. The fourth is the failure the thing prevents, which `qe`
+  prefers to an analogy and the companion document gave every concept. The why is the step a
+  draft drops, and an example is what it drops it for, which is why the rule names that swap.
 - **Explaining devices have no quota.** A quota on analogies, numbers, wrong models or hedges
   rations the material an explanation is made of, and a chapter with five concepts needs
   more of it than a chapter with two. A second analogy for one idea still costs, because the
@@ -1086,8 +1087,8 @@ with per-chapter quotas on wrong models, analogies, numbers, hedges and flagged
 simplifications.
 
 **Where the method came from: the `explain` plugin's `qe` skill.** It leads with the core
-idea, then the mechanism, then why the thing exists, and defines each term particular to the
-topic in a clause, for a reader fluent in programming and new to the subject. Preparing the
+idea, then the mechanism, then why the thing exists, prefers the failure a thing prevents to an
+analogy, and defines each term particular to the topic in a clause, for a reader fluent in programming and new to the subject. Preparing the
 first evening of the course the reference teaching guide serves, its reader asked more than a
 dozen questions just to decode the guide's notes, and ran `qe` four times in three days for
 the explanations the notes pointed at.
@@ -1106,7 +1107,7 @@ idea per paragraph, nothing invented. Five things were not, and each is now a ru
 | The reader's knowledge boundary, with every term on the new side defined | A persona sentence and a term ledger | `chapter-prose.md § The reader's knowledge boundary`, recorded in the outline (`SKILL.md § 2`) and passed to every chapter agent |
 | Each concept given its idea, how it works, why it matters and the mistake it prevents | One wrong model and one simplification flag a chapter | `chapter-prose.md § Explain each concept in four steps` |
 | Every graded item mapped to the unit that teaches it | Nothing | The coverage ledger, with an unmapped item a defect at the gate (`SKILL.md § 3`) |
-| A sample approved before the rest were written | Nothing | The sample stop after the gate (`SKILL.md § 3`) |
+| A sample approved before the rest were written | Nothing | The sample stop after `book.json` is written (`SKILL.md § 4`) |
 
 The ticket also listed one running example domain, concrete in every concept, and claims
 run against the real artifact. Neither became a rule here: the first is a habit of one
@@ -1131,8 +1132,8 @@ claims the prose makes, so a direction never reaches it.
 
 **Measured, and how far it reaches.** Everything above is one reader, one book and three days,
 recorded by the ticket and not re-measured here: more than a dozen decoding questions, four
-runs of `qe`, two cuts forced by a cap, one example standing in for a reason, and two wrong
-claims surfaced. That is a case, and no figure in it is a rate.
+runs of `qe`, two cuts forced by a cap, one example standing in for a reason, and at least two
+wrong claims surfaced. That is a case, and no figure in it is a rate.
 
 **Asserted, not measured:**
 

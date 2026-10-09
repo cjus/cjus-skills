@@ -119,6 +119,7 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 Whatever the change touched:
 
 - **The chapter's brief in `OUTLINE.md` § Chapters**, when what the chapter explains moved.
+- **The coverage ledger and the chapter's Teaches row**, when the item a chapter teaches arrived, retired or moved to another chapter. A book outlined before the ledger existed has neither, and gains none from an edit.
 - **The handoff chain, under `narration`**, when the noun a chapter opens or closes on moved. Both neighbours are affected, and the seam is checked by reading at step 5. A `guide` outline has no handoff chain.
 - **The term ledger and the anchor ledger**, when a term or an anchor arrived or retired.
 - **`assertions.json`**, through `assertions.sh` and never by hand, when step 2 said the instruction writes an entry, or when step 3 turned a `legacy` entry `expected`. A re-run measurement supersedes its `measured` entry. An outline written before the file existed may still carry a verified-facts section, and that moves with it until a rewrite retires it.
