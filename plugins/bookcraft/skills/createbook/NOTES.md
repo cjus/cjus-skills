@@ -22,7 +22,7 @@ The spec descends from a 2,500-word text-explainer prompt derived from nine YouT
 
 **Measured against that corpus:** two patterns, and only two, are strong across all five channels. Same-breath gloss, meaning never use a term before explaining it and let the label land after the behaviour. And wrong-model-first, meaning voice the naive fix, concede what works, then fail it on a concrete case. Both are load-bearing in `reference/chapter-prose.md`. Most of the rest was one channel's accent, since a single channel supplied five of the nine files and its habits sat on the median.
 
-**Asserted, not measured: every numeric ceiling in the spec.** No sentence over 45 words, at most 6 new terms, at most 2 checkable names, at most 3 numbers, paragraphs 40 to 90 words, headings of six words at most. These were carried from a 1,000-word draft and scaled by arithmetic when the length target moved. They are reasonable and they validated as followable; they are not findings.
+**Asserted, not measured: every numeric ceiling in the spec.** No sentence over 45 words, at most 6 new terms, at most 2 checkable names, at most 3 numbers, paragraphs 40 to 90 words, headings of six words at most. These were carried from a 1,000-word draft and scaled by arithmetic when the length target moved. They are reasonable and they validated as followable; they are not findings. Since 2026-10-09 two of them no longer bind: the three-number limit is gone, and six new terms is where a chapter reports itself drawn too wide (§ Explaining to the learner, 2026-10-09).
 
 **Also asserted:** the plan step, the standalone rule, the headings section, the paragraph-tag rule, and the phrasing bans in the Never section. None was derived from the corpus.
 
@@ -768,14 +768,24 @@ to sit beside it.
 - **The wrong model.** The passage costs about 130 words and asks the reader to hold a
   picture they then discard. The concession is what stops the reader defending the naive fix
   instead of updating. It is the other evidenced pattern.
+- **The chapter is the explanation, said to the reader.** A direction to an explainer gives
+  a reader who is learning the subject nothing, and it cannot be wrong, so no review catches
+  the error it hides. The history is at § Explaining to the learner, 2026-10-09.
+- **Explain each concept in four steps.** The order is `qe`'s: the core idea, the mechanism,
+  why it exists, and the failure it prevents. The why is the step a draft drops, and an
+  example is what it drops it for, which is why the rule names that swap.
+- **Explaining devices have no quota.** A quota on analogies, numbers, wrong models or hedges
+  rations the material an explanation is made of, and a chapter with five concepts needs
+  more of it than a chapter with two. A second analogy for one idea still costs, because the
+  reader holds two pictures at once, so that limit is per idea.
 - **Spend these deliberately.** An anchor takes two sentences because the name, its role and
   the case it explains never fit in one. A name that only says what the chapter is about
   spends nothing, because finding it wrong tells the reader they hold a different chapter,
   not a broken one. A citation spends nothing because the budget exists to keep unearned
   checkable names off the page, and a citation is the reader's route back to the authority.
-  A second analogy does not rise with length, because it makes the reader hold two pictures
-  at once. A partial quotation of a source's table reads as complete and is not, which is
-  why a published set is reproduced whole.
+  Past six new terms the outline is what is wrong, so the count is reported and no gloss is
+  dropped to meet it. A partial quotation of a source's table reads as complete and is not,
+  which is why a published set is reproduced whole.
 - **Prerequisites.** Naming the idea that needed the aside, in the sentence after it, lets
   the reader feel the debt paid instead of a thread dropped. The aside belongs to the part
   that needed it, so it never stands as a section of its own.
@@ -1065,3 +1075,92 @@ Each of the four cases the ticket names is something a recreate from the outline
 - **Fact labels.** 49 mark components named an `unsourced` label that stands for a fact, across four labels, against 42 when the ticket counted. Their facts became 7 entries. The marks keep their labels until a rewrite cites the entries.
 - **Found only by looking.** The `/createbook` argument, which the book folder never held, survived verbatim in a prompts file beside it. One exclusion the argument states had been lifted in practice two days after the book was written, and nothing recorded that. Checking the exclusion against the prose is what found it.
 - **The sweep's precision and recall.** The four phrases the operator first approved matched 22 lines, and 21 of them were built on the old value. The one borderline hit was a ledger row. Grepping the bare value word turned up the rest, mostly arithmetic that never repeats the canonical phrase: "twenty of those", "at twenty", "above twenty", "twenty times". Ten phrases drawn from that grep raised the count to 35 lines: 33 built on the old value, the borderline row, and one false positive, "all twenty of those evenings". So the first four phrases found 21 of 33 premise lines, and backfill step 3 now proposes phrases from the bare-value sweep for that reason.
+
+## Explaining to the learner, 2026-10-09
+
+Ticket #74, which consolidates #34. Chapters written under the guide profile carried their
+teaching passages as directions to an explainer: what to say, what to land, what to ask.
+Their reader was an instructor who was also learning the subject, and the chapters gave that
+reader no explanation. The core rules also rationed the devices an explanation is made of,
+with per-chapter quotas on wrong models, analogies, numbers, hedges and flagged
+simplifications.
+
+**Where the method came from: the `explain` plugin's `qe` skill.** It leads with the core
+idea, then the mechanism, then why the thing exists, and defines each term particular to the
+topic in a clause, for a reader fluent in programming and new to the subject. Preparing the
+first evening of the course the reference teaching guide serves, its reader asked more than a
+dozen questions just to decode the guide's notes, and ran `qe` four times in three days for
+the explanations the notes pointed at.
+
+Rewriting the notes as read-aloud explanation in a companion document, after `qe`'s method,
+worked. The reader approved one sample before the rest were written, and made the same form a
+requirement for every in-class demo the same day.
+
+**What differed from the rules already here.** Most of `qe` was in `chapter-prose.md`
+already: a term glossed in a clause at first use, a wrong fix failing on a concrete case, one
+idea per paragraph, nothing invented. Five things were not, and each is now a rule:
+
+| In the companion document | Here before | Here now |
+|---|---|---|
+| The text is the explanation, said to the learner | `guide.md`'s teaching shape asked for a lesson script | `chapter-prose.md § The chapter is the explanation, said to the reader`, and the script item is gone from `guide.md § A shape for a teaching chapter` |
+| The reader's knowledge boundary, with every term on the new side defined | A persona sentence and a term ledger | `chapter-prose.md § The reader's knowledge boundary`, recorded in the outline (`SKILL.md § 2`) and passed to every chapter agent |
+| Each concept given its idea, how it works, why it matters and the mistake it prevents | One wrong model and one simplification flag a chapter | `chapter-prose.md § Explain each concept in four steps` |
+| Every graded item mapped to the unit that teaches it | Nothing | The coverage ledger, with an unmapped item a defect at the gate (`SKILL.md § 3`) |
+| A sample approved before the rest were written | Nothing | The sample stop after the gate (`SKILL.md § 3`) |
+
+The ticket also listed one running example domain, concrete in every concept, and claims
+run against the real artifact. Neither became a rule here: the first is a habit of one
+document, and the second changes a checker, which the ticket put out of scope.
+
+**Two findings set the method's limits**, and both are why this ticket removed what it
+removed:
+
+- **A length cap cut what the reader asked for.** The companion scripts carried `qe`'s
+  250-word cap. Twice, adding an explanation the reader asked for meant cutting other lines to
+  fit, and drafts ran to 249 of the 250 words. § The ceiling removed records the same pressure
+  at chapter scale. Nothing here adds a cap.
+- **An example is not a reason.** One rewrite replaced the source's reason with an example,
+  and the reader then needed `qe` to get the reason back. That is why the why is required and
+  an example never stands in for it.
+
+**Concrete wording exposed errors that directions had hidden.** Writing the explanations
+surfaced wrong claims in the guide, among them a grading claim and a simulator described as
+showing three values side by side when it shows one at a time. A direction to demonstrate the
+simulator cannot be wrong, and a sentence saying what it shows can. `/check-claims` reads the
+claims the prose makes, so a direction never reaches it.
+
+**Measured, and how far it reaches.** Everything above is one reader, one book and three days,
+recorded by the ticket and not re-measured here: more than a dozen decoding questions, four
+runs of `qe`, two cuts forced by a cap, one example standing in for a reason, and two wrong
+claims surfaced. That is a case, and no figure in it is a rate.
+
+**Asserted, not measured:**
+
+- **That the four steps help a chapter's reader** as they helped one reader of a companion
+  document. A chapter has no length cap and a reader who returns for one fact, and neither
+  was true of the scripts.
+- **That removing the quotas does no harm.** It is a loosening, which § What the numbers rest
+  on does not gate on a measurement, and the quotas themselves were asserted: they were
+  carried from a 1,000-word draft.
+- **That six new terms is better as a report than as a stop.** Defining every new-side term
+  can take a chapter past six, and dropping a definition to stay under it cuts exactly what
+  the reader needs.
+- **That likely questions belong in the prose**, and that one level past what the book asks
+  of the reader is where to stop.
+- **That narration books gain from the four steps.** All the evidence is from a guide. The
+  order reaches narration through the core, and `narration.md` keeps its single required
+  wrong model.
+- **That a drafting agent follows a before-and-after pair more reliably than a count**, which
+  #28's plan stated when it added the guide's pairs, and which nothing has measured.
+
+**Settled by the operator, 2026-10-09**, with the options weighed in the branch's `PLAN.md`:
+six new terms becomes a report; likely questions are answered in the prose, with no fifth
+callout label; the four steps go in the core for both profiles, with narration keeping its
+own wrong-model rule; and the blind comparison below runs before the branch closes.
+
+**The acceptance test is #34's blind reader comparison.** One teaching chapter and one
+administrative chapter of the reference teaching guide are redrafted under these rules from
+the same outline rows and sources as their current versions, which removes the content
+confound #34 recorded for a comparison of two editions. The operator reads the four versions
+blind, with the key in a file opened only after scoring. The administrative chapter is the
+control: the method should help the teaching chapter and not hurt the administrative one.

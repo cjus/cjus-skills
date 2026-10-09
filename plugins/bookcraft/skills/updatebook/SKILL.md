@@ -100,7 +100,7 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 
 **A callout holds one idea** (`guide.md § Callouts`). A callout takes no tag, which makes it look like a free place to add text, and that is how a `Warning.` comes to hold a definition, a points split, a scheduling gap and a contact. A second idea is a second callout under the label that fits it, or a paragraph.
 
-**Every budget is still per chapter and still does not pool** (`chapter-prose.md § Every budget is per chapter`). An edit that adds a term, an anchor or a number spends this chapter's allowance, and the outline's ledgers are where you check what is already spent. Moving prose into a neighbouring chapter is not a fix: it changes a chapter the instruction never reached.
+**Every budget is still per chapter and still does not pool** (`chapter-prose.md § Every budget is per chapter`). An edit that adds an anchor spends this chapter's allowance, and one that adds a term counts toward the six past which a chapter reports itself drawn too wide. The outline's ledgers are where you check what is already spent. Moving prose into a neighbouring chapter is not a fix: it changes a chapter the instruction never reached.
 
 **Nothing caps a chapter's length** (`chapter-prose.md § Length`), so an edit that adds prose is not on a clock and does not have to buy its words back from somewhere else in the chapter. What an edit still may not do is leave the chapter carrying more than the one claim the outline gave it. Where it does, cut inside that chapter in the order at `chapter-prose.md § Before sending`, and report a chapter that cannot be brought back to one claim rather than writing around it.
 
