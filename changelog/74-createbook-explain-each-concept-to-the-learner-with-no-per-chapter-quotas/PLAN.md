@@ -232,6 +232,8 @@ reproduced here.
 - [ ] Phase 10: Acceptance. Run the blind reader comparison on one teaching chapter and one
       administrative chapter of the reference teaching guide, redrafted from the same outline
       rows and sources. Record the verdicts and feed them into `guide.md` and `NOTES.md`.
+      **Status, 2026-10-09:** both chapters redrafted and blinded in the source repo, on a
+      branch there; waiting on the operator's scores.
 
 ## Open Questions
 

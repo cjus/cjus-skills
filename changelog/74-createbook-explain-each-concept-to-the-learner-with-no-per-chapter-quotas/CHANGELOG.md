@@ -59,3 +59,19 @@ longer flags a numbered procedure; leftover quota wording in `SKILL.md`; coverag
 inferred where nothing states them; `/updatebook` carries the Teaches row; the README notes
 narration's one required wrong model; `NOTES.md` credits `qe` with three steps, not four, and
 says "at least two" wrong claims. The four deferred items are left for `/pr:close`'s triage.
+
+### 2026-10-09 12:06:56 MDT: Phase 10, the blind set ready for scoring
+
+One teaching chapter and one administrative chapter of the reference teaching guide were
+redrafted under this branch's rules (at `2463162`) by chapter agents given the same outline
+rows, sources and entries as the current versions, and never shown those versions. Both
+redrafts pass `check-book.sh` and `check-provenance.sh` with the rest of that book. The four
+versions are stripped alike and labelled A to D at random, with the key and the run's confounds
+in a file the operator opens after scoring. It lives on a branch in the source repo; this repo
+records no path to it.
+
+**What the redraft agents reported, before any scoring:** glossing every new-side term took the
+administrative chapter to ten new terms and the teaching chapter to thirteen, against the
+outline's six each. The six-term report fired on both, as `§ Spend these deliberately` now
+intends. The outline rows also still carried the old rules' number limits, and the agents
+followed them.
