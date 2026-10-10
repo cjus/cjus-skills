@@ -278,3 +278,18 @@ There is no `actionlint` on this machine. The file was checked with Ruby's YAML 
 the interpreter step was run locally. The workflow's first real run will come with the PR,
 since it triggers on `pull_request` and on pushes to `main`. The repo README's CI section gains
 an "iac's suite" subsection.
+
+### 2026-10-10 17:36:23 MDT: Acceptance, an Ollama agent answers through the runner
+
+The operator pulled `qwen3:0.6b` into Ollama. Against the real channel repo, using a scratch
+config so this machine's `~/.config/iac` stays untouched:
+
+- `iac.py agent add qwen --kind ollama --endpoint http://localhost:11434 --model qwen3:0.6b`
+- `iac.py channel add acceptance`, which opened issue #2, so the spike channel's record stays
+  as it was
+- `laptop` sent request `6103371124` from a body file
+- `iac.py run --agent qwen --channel acceptance --once`
+
+The runner posted ack `6103372190`, called Ollama, and posted reply `6103372365`, `done`:
+"The capital of France is Paris." The whole pass took about 5 seconds. All three comments are
+unedited, and `laptop`'s `inbox` reported both the ack and the reply.

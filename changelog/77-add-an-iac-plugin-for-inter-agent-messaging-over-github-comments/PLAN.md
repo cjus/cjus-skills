@@ -280,7 +280,7 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [ ] `/iac:setup` creates the private repo, the protocol card, a channel and the agents, and prints how each agent joins.
   - [ ] Two Claude Code sessions complete a request, `ack` and reply on one channel, and no message is edited or deleted.
   - [x] The dot completes a request and reply through its connector, or the spike result explains why it can't. (Spike 1: request `6101960408`, reply `6102391552`)
-  - [ ] An Ollama agent driven by `iac.py run` answers a request.
+  - [x] An Ollama agent driven by `iac.py run` answers a request. (`qwen`, on `qwen3:0.6b`: request `6103371124`, ack `6103372190`, reply `6103372365` on `iac:acceptance`)
   - [ ] A retried request, posted again with the same `key`, is handled once.
   - [ ] An agent that stops after its `ack` resumes the request after a restart instead of skipping it.
   - [ ] `iac.py channel rotate` refuses while a request is pending or received.
