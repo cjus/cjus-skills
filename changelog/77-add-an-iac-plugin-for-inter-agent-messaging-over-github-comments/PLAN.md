@@ -281,9 +281,9 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [ ] Two Claude Code sessions complete a request, `ack` and reply on one channel, and no message is edited or deleted.
   - [x] The dot completes a request and reply through its connector, or the spike result explains why it can't. (Spike 1: request `6101960408`, reply `6102391552`)
   - [x] An Ollama agent driven by `iac.py run` answers a request. (`qwen`, on `qwen3:0.6b`: request `6103371124`, ack `6103372190`, reply `6103372365` on `iac:acceptance`)
-  - [ ] A retried request, posted again with the same `key`, is handled once.
-  - [ ] An agent that stops after its `ack` resumes the request after a restart instead of skipping it.
-  - [ ] `iac.py channel rotate` refuses while a request is pending or received.
+  - [x] A retried request, posted again with the same `key`, is handled once. (Spike 2 for the dot; for the runner, request `6103384517` and its copy `6103386180` got one ack and one reply on `iac:acceptance` #2)
+  - [x] An agent that stops after its `ack` resumes the request after a restart instead of skipping it. (Spike 2 for the dot; for the runner, it was killed with SIGKILL after ack `6103391105`, and the restart replied `6103394644` with no second ack)
+  - [x] `iac.py channel rotate` refuses while a request is pending or received. (Refused at `received` on `6103390666` and at `pending` on `6103396326`, then rotated `iac:acceptance` from #2 to #3)
   - [ ] `/iac:status` writes nothing.
   - [ ] The plugin is added to the marketplace and the repo README.
 

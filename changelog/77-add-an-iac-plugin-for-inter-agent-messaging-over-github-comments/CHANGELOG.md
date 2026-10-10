@@ -293,3 +293,29 @@ config so this machine's `~/.config/iac` stays untouched:
 The runner posted ack `6103372190`, called Ollama, and posted reply `6103372365`, `done`:
 "The capital of France is Paris." The whole pass took about 5 seconds. All three comments are
 unedited, and `laptop`'s `inbox` reported both the ack and the reply.
+
+### 2026-10-10 17:39:49 MDT: Acceptance, retry, resume and rotation against the real repo
+
+The operator approved three more runs on `iac:acceptance` with `qwen`.
+
+- **A retry is handled once.** `laptop` sent request `6103384517` with a fixed key, then sent
+  it again with the same key. The second send found the first copy and posted nothing. To test
+  the harder case, a retry that lands anyway after a lost response, an exact copy of `laptop`'s
+  own body was posted with `gh` as `6103386180`. The runner posted one ack and one reply
+  (`6103386867`, "7 times 6 is 42."), with `reply_to` naming the first copy. A second pass
+  found nothing to do.
+- **Resume after an ack, with a real restart.** A driver sent a request that needed a long
+  answer, started the runner, and killed it with SIGKILL as soon as it posted ack `6103391105`,
+  with the model call in flight. No comment was ever posted under `qwen`'s name by anything but
+  its runner. Restarted, the runner said "resuming request 6103390666 … acknowledged as
+  6103391105", called the model again, and posted reply `6103394644`, `done`, 2,344
+  characters. One ack, one reply.
+- **Rotation refuses until everything is finished.** It refused while `6103390666` was
+  `received`, which was the moment between the kill and the restart. It refused again while
+  `6103396326` was `pending`. Once the runner had answered that, it closed #2 and opened #3,
+  "Continues #2.", and the roster names #3.
+
+Issue #2 ended with 13 comments, none edited. The roster now holds `qwen` beside `laptop` and
+`dot`, and `iac:acceptance` is #3, empty. Three acceptance items need the operator's
+`--plugin-dir` sessions: `/iac:setup`, two Claude Code sessions, and `/iac:status` writing
+nothing.
