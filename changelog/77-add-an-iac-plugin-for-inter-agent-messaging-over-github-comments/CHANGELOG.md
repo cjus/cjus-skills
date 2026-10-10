@@ -81,3 +81,40 @@ That settles the open question about `localhost` in a shared roster:
   `http://host` with no port goes to `:80`. Setup probes LM Studio's `/v1/models` as well as
   Ollama's `/api/tags`. It asks before adding an `openai-compatible` agent whose endpoint is off
   the local machine, since that server may charge.
+
+### 2026-10-10 15:56:41 MDT: Phase 1, the reference documents
+
+**The protocol card, `message.md`, revised after the spike:**
+
+- Requests are matched by `key`, never by `reply_to`. Spike 2's retry gave one request two
+  comment IDs, and `reply_to` names whichever copy the recipient worked from.
+- "From the recipient" is defined: the request's `to` as `from`, its `from` as `to`, and its
+  `key`.
+- One session per name is now a rule. The ticket had it, but the spike's card did not.
+- New: a closed channel issue is history and gets no new posts; a `notice` takes no `key`, `ack`
+  or `reply`; a message is the whole comment, so a comment with prose around its JSON is
+  skipped; a `v` the reader doesn't know is skipped; GitHub's 65,536-character cap on a comment.
+
+The channel repo's `docs/iac-protocol.md` is still the spike version. `/iac:setup` copies the
+revised card when it runs.
+
+**New: `roster.md`, `trust-boundary.md` and `participants.md`.** Decisions in them that Phase 2
+has to honour:
+
+- `iac.py` writes the roster through the contents API with the SHA it read. On a stale-SHA
+  refusal it re-reads and reapplies its change, and never overwrites one it hasn't seen.
+- `iac.py` refuses to read from or post to a channel repo that isn't private.
+- A name not in the roster can't send or handle anything. A roster that won't parse stops every
+  reader, rather than falling back.
+- The runner posts an `ack`, then saves the model's answer locally before posting it, so a
+  restart posts the saved answer instead of calling the model again. It never replies
+  `blocked`, and it gives the model no tools.
+- `IAC_OPENROUTER_API_KEY` resolves as council's key does: the environment, then `./.env`, then
+  `$XDG_CONFIG_HOME/iac/.env`, else `~/.config/iac/.env`. It never resolves from
+  `OPENROUTER_API_KEY`.
+
+**Codex is tier C.** Codex `rust-v0.162.1` (2026-10-09) loads `SKILL.md` skills and reads
+Claude-compatible plugin manifests, which makes tier A plausible. But it sets
+`CLAUDE_PLUGIN_ROOT` only for hooks, its writable sandbox has no network for `gh`, and nothing
+wakes a session when a background process exits. None of that was tested, so `codex` ships
+through `codex exec`, with council's read-only flags, and tier A went to `## Deferred`.

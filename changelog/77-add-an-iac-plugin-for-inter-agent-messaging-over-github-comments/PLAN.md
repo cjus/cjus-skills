@@ -259,11 +259,11 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [x] Record whether the connector reached the private repo and showed each comment's ID and author (it did both; `created_at` came back null)
   - [x] Test a retried request with the same `key`, duplicate handling, and recovery after a restart between the `ack` and the `reply`
   - [x] Decide: dot supported, or documented as unsupported with the reason (supported; build the whole plugin)
-- [ ] Phase 1: Protocol and reference documents
-  - [ ] `reference/message.md`, the protocol card that setup copies into the channel repo (drafted for the spike; not yet reviewed)
-  - [ ] `reference/roster.md`
-  - [ ] `reference/participants.md`: the three tiers, how each kind joins, how it is called and what it costs
-  - [ ] `reference/trust-boundary.md`
+- [x] Phase 1: Protocol and reference documents
+  - [x] `reference/message.md`, the protocol card that setup copies into the channel repo (revised after the spike; the channel repo's copy is still the spike version)
+  - [x] `reference/roster.md`
+  - [x] `reference/participants.md`: the three tiers, how each kind joins, how it is called and what it costs
+  - [x] `reference/trust-boundary.md`
 - [ ] Phase 2: `scripts/iac.py`, the tier A implementation
   - [ ] Config resolution (`$IAC_CONFIG`, then `$XDG_CONFIG_HOME/iac/config.json`, then `~/.config/iac/config.json`) through one helper
   - [ ] Roster read and write in the channel repo
@@ -288,9 +288,10 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
 
 ## Open Questions
 
-- Can Codex load the same skills through a Codex plugin layout, making it tier A? Otherwise it joins as tier C through `codex exec`.
-- **Resolved 2026-10-10:** ~~The roster is shared across machines, but an Ollama `endpoint` such as `localhost` means the machine running the runner. Is that enough, or does a runner need a per-machine override?~~ The operator expects several local servers on one machine (Ollama, LM Studio and others). The roster's per-agent `endpoint` is enough, with no per-machine override: each local server is its own agent, and `localhost` means the machine running that agent's runner, which rule 8 makes a single machine. The same model on two machines gets two names. Recorded in `CHANGELOG.md`.
+- **Resolved 2026-10-10:** ~~Can Codex load the same skills through a Codex plugin layout, making it tier A? Otherwise it joins as tier C through `codex exec`.~~ Probably, but not as written, and untested. Codex loads `SKILL.md` skills and reads Claude-compatible plugin manifests, but sets `CLAUDE_PLUGIN_ROOT` only for hooks, runs its writable sandbox without network, and has no wake-on-exit for `/iac:watch`. `codex` ships as tier C through `codex exec`; tier A is under `## Deferred`. Recorded in `CHANGELOG.md`.
+- **Resolved 2026-10-10:** ~~The roster is shared across machines, but an Ollama `endpoint` such as `localhost` means the machine running the runner. Is that enough, or does a runner need a per-machine override?~~ The operator expects several local servers on one machine (Ollama, LM Studio and others). The roster's per-agent `endpoint` is enough, with no per-machine override: each local server is its own agent, and `localhost` means the machine running that agent's runner, which the one-session-per-name rule makes a single machine. The same model on two machines gets two names. Recorded in `CHANGELOG.md`.
 
 ## Deferred
 
 - The repo README and the council README both say a bare plugin skill name does not resolve. Current Claude Code documentation says the bare name works unless another command already uses it. Found while reviewing #76.
+- Codex as a tier A agent: test installing the plugin with `codex plugin marketplace add`, make the skills find `iac.py` without `CLAUDE_PLUGIN_ROOT`, turn on sandbox network access for `gh`, and give `/iac:watch` a Codex form, since nothing wakes a Codex session when a background process exits. Found while answering the Codex open question.
