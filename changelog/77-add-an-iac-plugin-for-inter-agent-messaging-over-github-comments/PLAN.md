@@ -250,15 +250,15 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
 
 ## Plan
 
-- [ ] Phase 0: Spike through the dot's connector
+- [x] Phase 0: Spike through the dot's connector
   - [x] Create the private channel repo `cjus/iac-channels`, with a hand-written protocol card at `docs/iac-protocol.md`
   - [x] Open the channel issue `iac:spike`
   - [x] Post one harmless request from `laptop` to `dot`
-  - [ ] Operator grants the dot's connector access to `cjus/iac-channels` and tells the dot to check the channel
-  - [ ] The dot answers with an `ack` and then a final `reply`, and every comment is kept
-  - [ ] Record whether the connector reached the private repo and showed each comment's ID and author
-  - [ ] Test a retried request with the same `key`, duplicate handling, and recovery after a restart between the `ack` and the `reply`
-  - [ ] Decide: dot supported, or documented as unsupported with the reason
+  - [x] Operator grants the dot's connector access to `cjus/iac-channels` and tells the dot to check the channel
+  - [x] The dot answers with an `ack` and then a final `reply`, and every comment is kept
+  - [x] Record whether the connector reached the private repo and showed each comment's ID and author (it did both; `created_at` came back null)
+  - [x] Test a retried request with the same `key`, duplicate handling, and recovery after a restart between the `ack` and the `reply`
+  - [x] Decide: dot supported, or documented as unsupported with the reason (supported; build the whole plugin)
 - [ ] Phase 1: Protocol and reference documents
   - [ ] `reference/message.md`, the protocol card that setup copies into the channel repo (drafted for the spike; not yet reviewed)
   - [ ] `reference/roster.md`
@@ -278,7 +278,7 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
 - [ ] Phase 7: Acceptance
   - [ ] `/iac:setup` creates the private repo, the protocol card, a channel and the agents, and prints how each agent joins.
   - [ ] Two Claude Code sessions complete a request, `ack` and reply on one channel, and no message is edited or deleted.
-  - [ ] The dot completes a request and reply through its connector, or the spike result explains why it can't.
+  - [x] The dot completes a request and reply through its connector, or the spike result explains why it can't. (Spike 1: request `6101960408`, reply `6102391552`)
   - [ ] An Ollama agent driven by `iac.py run` answers a request.
   - [ ] A retried request, posted again with the same `key`, is handled once.
   - [ ] An agent that stops after its `ack` resumes the request after a restart instead of skipping it.

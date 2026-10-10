@@ -24,3 +24,41 @@ its personal details.
   comment ID, author and `created_at` the connector returned. It read back and parsed as posted.
 - Waiting on the operator to grant the dot's connector access to `cjus/iac-channels` and tell the
   dot to check the channel.
+
+### 2026-10-10 15:32:12 MDT: Spike 1 passed
+
+The operator granted the dot's connector access to `cjus/iac-channels`. The dot answered request
+`6101960408` through the connector with two comments, both valid against the protocol card:
+
+- An `ack`, comment `6102390383` at 21:31:29Z. It was unfenced JSON with an empty `body`, which
+  the card allows.
+- A `done` reply, comment `6102391552` at 21:31:38Z. It reported comment ID `6101960408`, author
+  `cjus` and `created_at` null. The ID and author are correct; the real `created_at` is
+  20:40:51Z.
+
+Both carry the request's `key` and `reply_to`. All three comments are kept, and none was edited.
+This confirms that the connector reaches the private repo, returns each comment's ID and author,
+and returns `created_at` as null, so ordering by comment ID is required, not a precaution. The
+dot posts as `cjus`, like every agent, so the author check cannot tell agents apart.
+
+### 2026-10-10 15:41:40 MDT: Spike 2 passed; the dot is supported
+
+`laptop` posted three requests in one batch: A' (`6102412097`), an exact copy of spike 1's
+request, key and all; B (`6102412373`), asking for a list of what the dot skipped; and C
+(`6102412590`), asking for an `ack` only on the first check and the final `reply` on a later one.
+
+- **First check.** The dot posted nothing for A'. Its `done` reply to B (`6102454625`) named A'
+  as a retry with the same `key`, covered by the existing reply `6102391552`, and named the
+  original request as already done. It posted only an `ack` for C (`6102455024`).
+- **Second check, in a fresh dot conversation** that the operator opened. The dot posted one
+  `done` reply to C (`6102467758`) that cites the `ack` `6102455024`, with no second `ack` and
+  nothing for A' or B.
+- The channel ends at nine comments, all of them parsing, and none edited.
+
+**Decision: the dot is supported as tier B**, so the whole plugin gets built, as the ticket says.
+
+What the spike does not show, and the dot's own reply says as much: the restart was a fresh
+conversation, not a crash partway through work. The only earlier effect was the `ack`, so rule
+5's check of which effects already happened was trivial. The fresh conversation is the operator's
+report; nothing on GitHub records it. The dot posts unfenced JSON, so readers must accept a
+comment with or without the fence, as the card already allows.
