@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "context-bridge-receiver",
+  "version": "0.1.0",
+  "description": "Receive explicitly subscribed project handoffs from a separately hosted context bridge",
+  "author": {"name": "cjus"},
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": ["context", "handoffs", "mcp", "events"]
+}

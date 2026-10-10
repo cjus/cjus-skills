@@ -1,0 +1,21 @@
+name: context-bridge
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s plugins/context-bridge/tests -v
+      - run: python3 -m unittest discover -s services/context-bridge/tests -v
+      - run: python3 scripts/check-citations.py

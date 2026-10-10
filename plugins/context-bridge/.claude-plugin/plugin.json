@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "context-bridge",
+  "description": "Send an explicitly reviewed project handoff to your own authenticated MCP Events bridge",
+  "version": "0.1.0",
+  "author": {"name": "cjus"},
+  "homepage": "https://github.com/cjus/cjus-skills",
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": ["context", "handoff", "mcp", "events"]
+}
