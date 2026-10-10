@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "dots",
+  "description": "Send the text after /dots to your configured dot through an authenticated MCP Events bridge",
+  "version": "0.1.1",
+  "author": {
+    "name": "cjus"
+  },
+  "homepage": "https://github.com/cjus/cjus-skills",
+  "repository": "https://github.com/cjus/cjus-skills",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "handoff",
+    "mcp",
+    "events"
+  ],
+  "displayName": "Dots"
+}

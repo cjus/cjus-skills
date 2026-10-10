@@ -31,10 +31,10 @@
       "source": "./plugins/pr"
     },
     {
-      "name": "context-bridge",
-      "description": "Send explicitly reviewed project handoffs to an authenticated MCP Events bridge",
+      "name": "dots",
+      "description": "Send only the text after /dots to your configured dot",
       "category": "productivity",
-      "source": "./plugins/context-bridge"
+      "source": "./plugins/dots"
     }
   ]
 }

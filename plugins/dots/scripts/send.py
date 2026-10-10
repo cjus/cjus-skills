@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit, preview-first handoff sender. No transcript collection or hooks."""
+"""Dots: send explicit messages or reviewed handoffs. No context collection or hooks."""
 import argparse
 import datetime as dt
 import json
@@ -46,6 +46,26 @@ def validate(payload):
     return raw
 
 
+def prepare_message(message, env=os.environ):
+    """Preserve the user's exact text; never infer additional context."""
+    payload = {
+        "schema_version": 1, "id": str(uuid.uuid4()),
+        "project": env.get("CONTEXT_BRIDGE_PROJECT", ""),
+        "recorded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "summary": message, "decisions": [], "pending_items": [], "source_links": [],
+    }
+    validate(payload)
+    return payload
+
+
+def save_prepared(path, payload):
+    """Exclusive private write preserves retry identity and never overwrites a handoff."""
+    raw = validate(payload)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(raw)
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -86,16 +106,33 @@ def send(payload, env=os.environ, opener=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("file", type=Path, help="Explicitly selected handoff JSON file")
+    parser.add_argument("file", type=Path, nargs="?", help="Existing handoff JSON file (including retries)")
+    parser.add_argument("--message-file", type=Path, help="UTF-8 file containing only the literal message")
+    parser.add_argument("--handoff-file", type=Path, help="New private JSON path preserving message retry identity")
     parser.add_argument("--send", action="store_true", help="Send after reviewing the preview; default performs no network call")
     args = parser.parse_args()
     try:
-        with args.file.open("rb") as stream:
-            raw = stream.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
-            raise ValueError("Handoff file exceeds 64 KiB")
-        payload = json.loads(raw)
-        validate(payload)
+        if args.message_file:
+            if args.file or not args.handoff_file:
+                raise ValueError("Use --message-file with --handoff-file, without a positional JSON file")
+            with args.message_file.open("rb") as stream:
+                raw = stream.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise ValueError("Message file exceeds 64 KiB")
+            payload = prepare_message(raw.decode("utf-8"))
+            # Validate configuration before persisting; token is never written.
+            if args.send:
+                endpoint(os.environ.get("CONTEXT_BRIDGE_URL", ""))
+            save_prepared(args.handoff_file, payload)
+        else:
+            if not args.file or args.handoff_file:
+                raise ValueError("Provide a handoff JSON file, or --message-file with --handoff-file")
+            with args.file.open("rb") as stream:
+                raw = stream.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise ValueError("Handoff file exceeds 64 KiB")
+            payload = json.loads(raw)
+            validate(payload)
         if args.send:
             print(json.dumps(send(payload)))
         else:

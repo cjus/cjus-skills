@@ -1,6 +1,6 @@
 # Context Bridge receiver (reference MVP)
 
-Optional, self-hosted counterpart to the [Claude Code sender](../../plugins/context-bridge/README.md).
+Optional, self-hosted counterpart to the [Claude Code sender](../../plugins/dots/README.md).
 Installing that plugin does **not** deploy this service, install a ChatGPT plugin, create a subscription,
 or transfer any context. This directory is a runnable single-owner reference, not a managed service.
 

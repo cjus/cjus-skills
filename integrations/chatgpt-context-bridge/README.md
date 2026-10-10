@@ -1,6 +1,6 @@
 # ChatGPT receiving-plugin template
 
-This is the **receiving side**, separate from the Claude Code marketplace plugin in `plugins/context-bridge`. It follows OpenAI's portable plugin packaging shape, with a root `plugin.json`, `mcp.json` and a skill. It is not registered, hosted, connected or subscribed by this PR.
+This is the **receiving side**, separate from the Claude Code marketplace plugin in `plugins/dots`. It follows OpenAI's portable plugin packaging shape, with a root `plugin.json`, `mcp.json` and a skill. It is not registered, hosted, connected or subscribed by this PR.
 
 The `https://bridge.example.invalid/mcp` URL is deliberately unusable. In a private working copy, replace it with the HTTPS `/mcp` endpoint of your reviewed deployment of [the reference service](../../services/context-bridge/README.md). Supply its separate MCP bearer credential only through a supported secure connection flow. Never put a token in this manifest, Git, a PR or a conversation. Do not distribute one owner's credentials to other users.
 

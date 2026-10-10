@@ -203,7 +203,7 @@ class LifecycleTests(unittest.TestCase):
     def test_sender_to_delivery_to_read_integration(self):
         import importlib.util
         import io
-        sender_path = Path(__file__).resolve().parents[3] / "plugins/context-bridge/scripts/send.py"
+        sender_path = Path(__file__).resolve().parents[3] / "plugins/dots/scripts/send.py"
         spec = importlib.util.spec_from_file_location("context_sender", sender_path)
         sender = importlib.util.module_from_spec(spec); spec.loader.exec_module(sender)
         service = self.bridge

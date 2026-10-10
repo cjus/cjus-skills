@@ -3,6 +3,9 @@ import io
 import json
 from pathlib import Path
 import unittest
+import tempfile
+import os
+from unittest.mock import patch
 import urllib.error
 
 spec = importlib.util.spec_from_file_location("send", Path(__file__).parents[1] / "scripts/send.py")
@@ -26,6 +29,53 @@ class Opener:
 
 
 class SenderTests(unittest.TestCase):
+    def test_message_preserved_without_extra_context(self):
+        message = "  Keep this exactly.\n$(do not execute) 'quoted' ☀\n"
+        payload = send.prepare_message(message, {"CONTEXT_BRIDGE_PROJECT": "demo"})
+        self.assertEqual(payload["summary"], message)
+        self.assertEqual(payload["project"], "demo")
+        self.assertEqual(payload["decisions"], [])
+        self.assertEqual(payload["pending_items"], [])
+        self.assertEqual(payload["source_links"], [])
+        self.assertEqual(set(payload), send.FIELDS)
+        send.validate(payload)
+
+    def test_message_needs_content_and_project(self):
+        for message, env in [("   ", {"CONTEXT_BRIDGE_PROJECT": "demo"}), ("hello", {}), ("x"*16001, {"CONTEXT_BRIDGE_PROJECT": "demo"})]:
+            with self.assertRaises(ValueError):
+                send.prepare_message(message, env)
+
+    def test_prepared_file_private_and_never_overwritten(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "handoff.json"
+            payload = send.prepare_message("literal text", {"CONTEXT_BRIDGE_PROJECT": "demo"})
+            send.save_prepared(path, payload)
+            before = path.read_bytes()
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            with self.assertRaises(FileExistsError):
+                send.save_prepared(path, send.prepare_message("different", {"CONTEXT_BRIDGE_PROJECT": "demo"}))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(json.loads(before)["id"], payload["id"])
+
+    def test_message_cli_preview_never_sends(self):
+        with tempfile.TemporaryDirectory() as folder:
+            message, prepared = Path(folder)/"message.txt", Path(folder)/"handoff.json"
+            message.write_text("literal text")
+            with patch.dict(os.environ, {"CONTEXT_BRIDGE_PROJECT": "demo"}), patch("sys.argv", ["send.py", "--message-file", str(message), "--handoff-file", str(prepared)]), patch.object(send, "send") as network, patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()):
+                self.assertEqual(send.main(), 0)
+                network.assert_not_called()
+            self.assertEqual(json.loads(prepared.read_text())["summary"], "literal text")
+
+    def test_message_cli_saves_identity_before_send_failure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            message, prepared = Path(folder)/"message.txt", Path(folder)/"handoff.json"
+            message.write_text("keep exact text")
+            env = {"CONTEXT_BRIDGE_PROJECT": "demo", "CONTEXT_BRIDGE_URL": "https://example.com"}
+            with patch.dict(os.environ, env), patch("sys.argv", ["send.py", "--message-file", str(message), "--handoff-file", str(prepared), "--send"]), patch.object(send, "send", side_effect=ValueError("receipt uncertain")) as network, patch("sys.stderr", new=io.StringIO()):
+                self.assertEqual(send.main(), 2)
+                network.assert_called_once()
+                self.assertEqual(json.loads(prepared.read_text()), network.call_args.args[0])
+
     def test_valid(self):
         self.assertEqual(json.loads(send.validate(handoff())), handoff())
 
