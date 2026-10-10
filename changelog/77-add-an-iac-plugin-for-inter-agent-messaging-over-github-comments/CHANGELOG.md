@@ -62,3 +62,22 @@ conversation, not a crash partway through work. The only earlier effect was the 
 5's check of which effects already happened was trivial. The fresh conversation is the operator's
 report; nothing on GitHub records it. The dot posts unfenced JSON, so readers must accept a
 comment with or without the fence, as the card already allows.
+
+### 2026-10-10 15:48:46 MDT: Local endpoints are per agent; an `openai-compatible` kind
+
+The operator expects several local model servers on one machine, such as Ollama and LM Studio.
+That settles the open question about `localhost` in a shared roster:
+
+- **No per-machine override.** Every local agent carries its own `endpoint`, so each server is
+  its own agent. `localhost` means the machine running that agent's runner, and rule 8 (one
+  session per name) makes that a single machine. The same model on two machines gets two names.
+- **A new tier C kind, `openai-compatible`,** for LM Studio and any other server that speaks the
+  OpenAI chat-completions API. Its `endpoint` is the base URL the runner appends
+  `/chat/completions` to, such as LM Studio's default `http://localhost:1234/v1`. `ollama` stays
+  on its native `/api/chat`, the way council calls it.
+- **`openrouter` shares that client** at its fixed base URL, but stays a kind of its own, because
+  it spends money and reads its own key name, as council does.
+- Endpoints are written with an explicit port, the lesson council's `detect.sh` records: an
+  `http://host` with no port goes to `:80`. Setup probes LM Studio's `/v1/models` as well as
+  Ollama's `/api/tags`. It asks before adding an `openai-compatible` agent whose endpoint is off
+  the local machine, since that server may charge.

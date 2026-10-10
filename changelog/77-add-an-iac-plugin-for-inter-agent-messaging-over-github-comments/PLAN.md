@@ -272,7 +272,7 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [ ] Request state derived from the messages that follow it; `from`/`key` de-duplication; the local list of handled pairs
   - [ ] `wait`, for `/iac:watch`
 - [ ] Phase 3: Skills: `/iac:setup`, `/iac:send`, `/iac:check`, `/iac:watch`, `/iac:status`
-- [ ] Phase 4: Tier C runner, `iac.py run --agent <name>`, for `ollama`, `openrouter` and `codex exec`
+- [ ] Phase 4: Tier C runner, `iac.py run --agent <name>`, for `ollama`, `openai-compatible` (LM Studio and other local servers), `openrouter` and `codex exec`
 - [ ] Phase 5: Offline tests for `iac.py`, with `gh` faked
 - [ ] Phase 6: Plugin README, `plugin.json`, the marketplace entry and the repo README rows
 - [ ] Phase 7: Acceptance
@@ -289,7 +289,7 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
 ## Open Questions
 
 - Can Codex load the same skills through a Codex plugin layout, making it tier A? Otherwise it joins as tier C through `codex exec`.
-- The roster is shared across machines, but an Ollama `endpoint` such as `localhost` means the machine running the runner. Is that enough, or does a runner need a per-machine override?
+- **Resolved 2026-10-10:** ~~The roster is shared across machines, but an Ollama `endpoint` such as `localhost` means the machine running the runner. Is that enough, or does a runner need a per-machine override?~~ The operator expects several local servers on one machine (Ollama, LM Studio and others). The roster's per-agent `endpoint` is enough, with no per-machine override: each local server is its own agent, and `localhost` means the machine running that agent's runner, which rule 8 makes a single machine. The same model on two machines gets two names. Recorded in `CHANGELOG.md`.
 
 ## Deferred
 
