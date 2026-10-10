@@ -285,7 +285,7 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [x] An agent that stops after its `ack` resumes the request after a restart instead of skipping it. (Spike 2 for the dot; for the runner, it was killed with SIGKILL after ack `6103391105`, and the restart replied `6103394644` with no second ack)
   - [x] `iac.py channel rotate` refuses while a request is pending or received. (Refused at `received` on `6103390666` and at `pending` on `6103396326`, then rotated `iac:acceptance` from #2 to #3)
   - [ ] `/iac:status` writes nothing.
-  - [ ] The plugin is added to the marketplace and the repo README.
+  - [x] The plugin is added to the marketplace and the repo README. (Phase 6: the `iac` entry in `.claude-plugin/marketplace.json`, and its rows in the README's Requirements and Plugins tables)
 
 ## Open Questions
 
@@ -296,3 +296,85 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
 
 - The repo README and the council README both say a bare plugin skill name does not resolve. Current Claude Code documentation says the bare name works unless another command already uses it. Found while reviewing #76.
 - Codex as a tier A agent: test installing the plugin with `codex plugin marketplace add`, make the skills find `iac.py` without `CLAUDE_PLUGIN_ROOT`, turn on sandbox network access for `gh`, and give `/iac:watch` a Codex form, since nothing wakes a Codex session when a background process exits. Found while answering the Codex open question.
+
+## Resume after compaction
+
+### Current state
+
+Phases 0 to 6 are done, and so are six of the nine acceptance items. All of it is committed and
+pushed: 12 commits ahead of `main`, no PR yet. The last commit was this file's precompact
+update, which ticked the marketplace acceptance item and wrote this section. The plugin is
+`plugins/iac/`: four reference docs, `scripts/iac.py` (the only writer), five skills, and
+`tests/`. The three acceptance items left need the operator's own Claude Code sessions, with the
+plugin loaded from this branch.
+
+### Where things live, beyond the repo
+
+- **The channel repo is `cjus/iac-channels`, private.**
+  - `roster.json` has agents `laptop` (`claude-code`), `dot` (`dot`) and `qwen` (`ollama`,
+    `http://localhost:11434`, `qwen3:0.6b`).
+  - Channels: `spike` is #1, with three finished requests from the dot spike. `acceptance` is
+    #3, empty. #2 is the closed, rotated one, holding 13 comments of acceptance runs.
+  - `docs/iac-protocol.md` there is still the spike-era card. `iac.py init`, which
+    `/iac:setup` runs, replaces it with `plugins/iac/reference/message.md`.
+- **This machine:**
+  - `~/.config/iac/config.json` doesn't exist yet. Every live run so far used a scratch config
+    instead: `IAC_CONFIG=<scratch>/config.json` holding `{"repo": "cjus/iac-channels"}`, plus
+    `XDG_STATE_HOME=<scratch>/state`. The scratchpad doesn't survive the session, so make a new
+    one the same way if a live command is needed before the operator runs `/iac:setup`.
+  - Ollama is up with `qwen3:0.6b`. LM Studio is up with only an embedding model, which isn't
+    loaded. `codex` is installed. No `IAC_OPENROUTER_API_KEY` is set.
+- **The operator's rule for the channel repo:** confirm before posting to it, item by item.
+  They approved each live run so far.
+
+### Next steps
+
+1. **The operator runs `/iac:setup`** in a session started with
+   `claude --plugin-dir <this worktree>/plugins/iac`, pointed at `cjus/iac-channels`. It writes
+   the real `~/.config/iac/config.json`, replaces the card, and should add a second
+   `claude-code` agent such as `desk`. This is the first time any skill runs inside Claude Code.
+   Watch for a problem with `${CLAUDE_PLUGIN_ROOT}` in the `!` detection line, or with
+   `$ARGUMENTS` in `/iac:watch` and `/iac:status`.
+2. **The two-session acceptance item.** Start
+   `IAC_AGENT=laptop IAC_CHANNEL=acceptance claude --plugin-dir …` and the same with
+   `IAC_AGENT=desk`. Run `/iac:watch` in `desk`, then `/iac:send desk <something harmless>` in
+   `laptop`. Confirm with `iac.py status`: one request, one ack, one reply, nothing edited.
+3. **`/iac:status` writes nothing.** Run it in one of those sessions. Before and after,
+   compare the channel repo's head commit (`gh api repos/cjus/iac-channels/commits --jq '.[0].sha'`),
+   each issue's comment count, and the files under the local state directory. The offline test
+   `Reading.test_status_writes_nothing` already covers the script.
+4. **Record the results** in `## Plan` § Phase 7 and in `CHANGELOG.md`, then `/pr:cp`. The
+   operator has granted `/pr:cp` and `/pr:close` on feature branches.
+5. **`/pr:pre-test`** opens the draft PR. That gives `.github/workflows/iac.yml` its first run,
+   then runs the code review.
+6. Fix what the review and CI find, then `/pr:summary`, then `/pr:close`. `/pr:close` triages
+   `## Deferred`.
+
+### Watch-outs
+
+- **CI hasn't run on GitHub yet.** The `system` leg asserts that the macOS runner's
+  `/usr/bin/python3` is 3.9. If the image moved, that leg fails on purpose; decide then whether
+  to move the floor. It also relies on `setup-python` offering `'3.14'`.
+- **The banned-term audit pattern** is in the main checkout's `CLAUDE.md`, which worktrees
+  don't load. Run it with `git grep -niE` over `plugins/iac`, the branch folder, `README.md`,
+  `.claude-plugin` and `.github` before each commit. Never paste the pattern into a repo file
+  or an agent prompt.
+- **Citations.** `scripts/check-citations.py` runs as the pre-commit hook. Skills must cite as
+  `` `reference/<file>.md § <heading>` ``, inside one pair of backticks. With
+  `${CLAUDE_PLUGIN_ROOT}` inside the backticks, a citation goes unchecked. Citations in
+  `iac.py` docstrings are never checked, since the checker scans only `.md`, so keep them
+  right by hand.
+- **Message bodies go through a file** (`--body-file`), never an argument.
+- **The suite takes about 140 seconds on each Python.** Run 3.9 with `/usr/bin/python3`.
+- **The guard hook reads Bash command text.** Run scripts by path, and keep commit and push
+  as plain commands.
+
+### Verification
+
+```sh
+python3 plugins/iac/tests/test_iac.py            # 58 tests, OK
+/usr/bin/python3 plugins/iac/tests/test_iac.py   # the same on 3.9.6
+python3 scripts/check-citations.py               # 212 resolve
+claude plugin validate --strict . && claude plugin validate --strict plugins/iac
+IAC_CONFIG=<scratch config> python3 plugins/iac/scripts/iac.py status   # read-only, live
+```

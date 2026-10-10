@@ -319,3 +319,9 @@ Issue #2 ended with 13 comments, none edited. The roster now holds `qwen` beside
 `dot`, and `iac:acceptance` is #3, empty. Three acceptance items need the operator's
 `--plugin-dir` sessions: `/iac:setup`, two Claude Code sessions, and `/iac:status` writing
 nothing.
+
+## 2026-10-10 17:45:11
+
+**Context rehydrated after compacting**
+
+---
