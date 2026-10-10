@@ -272,9 +272,9 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [x] Request state derived from the messages that follow it; `from`/`key` de-duplication; the local list of handled pairs
   - [x] `wait`, for `/iac:watch`
 - [x] Phase 3: Skills: `/iac:setup`, `/iac:send`, `/iac:check`, `/iac:watch`, `/iac:status` (written; first run once the plugin installs, in Phase 7)
-- [ ] Phase 4: Tier C runner, `iac.py run --agent <name>`, for `ollama`, `openai-compatible` (LM Studio and other local servers), `openrouter` and `codex exec`
-  - [ ] Re-check the tier C parts of `plugins/iac/README.md` and `reference/participants.md` against the runner as built, since Phase 6 wrote them first
-- [ ] Phase 5: Offline tests for `iac.py`, with `gh` faked (started: `tests/fake_gh.py` and 44 tests covering Phases 2 and 3; the runner's tests and CI remain)
+- [x] Phase 4: Tier C runner, `iac.py run --agent <name>`, for `ollama`, `openai-compatible` (LM Studio and other local servers), `openrouter` and `codex exec`
+  - [x] Re-check the tier C parts of `plugins/iac/README.md` and `reference/participants.md` against the runner as built, since Phase 6 wrote them first
+- [ ] Phase 5: Offline tests for `iac.py`, with `gh` faked (started: `tests/fake_gh.py` and 58 tests covering Phases 2 to 4; CI remains)
 - [x] Phase 6: Plugin README, `plugin.json`, the marketplace entry and the repo README rows (done before Phase 4, at the operator's request, so the skills can be tried with `claude --plugin-dir`)
 - [ ] Phase 7: Acceptance
   - [ ] `/iac:setup` creates the private repo, the protocol card, a channel and the agents, and prints how each agent joins.

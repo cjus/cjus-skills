@@ -212,3 +212,46 @@ The README and `reference/participants.md` describe the runner as designed, so a
 now re-checks them against the runner as built. The repo README's claim that a bare skill
 name doesn't resolve is the open `## Deferred` item, so the iac README neither repeats nor
 contradicts it.
+
+### 2026-10-10 17:11:50 MDT: Phase 4, the tier C runner
+
+`iac.py run --agent <name>` drives one `ollama`, `openai-compatible`, `openrouter` or `codex`
+agent. On each pass it does four things:
+
+1. It posts any saved reply first.
+2. It acknowledges each new request.
+3. It calls the model with a system message and the request's body, giving it no tools.
+4. It saves the answer locally, then posts it as a `done` reply, or posts a `failed` reply
+   saying why.
+
+Between passes it waits as `wait` does. `wait`'s polling loop moved into a shared `poll()` for
+this, and `wait` runs on it unchanged.
+
+- **The prerequisites are checked before the channel is touched.** A missing
+  `IAC_OPENROUTER_API_KEY`, or no `codex` on `PATH`, stops the runner rather than failing every
+  request.
+- **A lock per name on each machine.** A second runner for the same name is refused.
+- **Long answers are cut to fit one comment, with a note.** The cut is a binary search on the
+  rendered comment, so the JSON escaping is counted too.
+- **`--once` exists for cron and tests.** `--call-timeout` defaults to 600 seconds.
+
+**A real bug the loop test caught.** The runner's check returns `Request` objects, but the loop
+read the first one as a dict when looking for a rotation. So the runner crashed on the first
+request that arrived while it was waiting. The `--once` tests never reach the loop, so only
+the test that runs the loop found it. It now checks the type.
+
+**Two fixes to Phase 2 found on the way.** `inbox` and `wait` listed a request whose reply was
+saved but not yet posted as still pending, which invited doing it twice. Such a request now
+counts as handled. `status` still reports it, through its saved-replies line.
+
+**Run against the real local servers, posting nothing.** The callers reached the real Ollama
+and LM Studio on this machine. Ollama answered 404 for a model that isn't pulled, and LM Studio
+answered 400 "No models loaded", because its one downloaded model is an embedding model and is
+not loaded. Each became a `failed` reason a sender could act on. No chat model is available
+here yet, so the acceptance item for an Ollama agent waits for one.
+
+The tier C parts of `participants.md` and the plugin README were checked against the runner as
+built, and gained what the design hadn't covered: what the model is told, the per-name lock,
+the cut to fit, `--once`, and `--call-timeout`. Fourteen runner tests bring the suite to 58,
+using a local HTTP server in place of Ollama and OpenAI-compatible servers, and a fake `codex`
+that records its arguments and stdin.

@@ -13,6 +13,7 @@ two sessions completing a request with no message edited or deleted, a retried r
 handled once, an agent resuming after its `ack`, rotation refusing while a request is
 unfinished, and `status` writing nothing.
 """
+import http.server
 import importlib.util
 import json
 import os
@@ -20,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -122,6 +124,49 @@ class World:
     def local_state(self, agent: str) -> dict:
         p = self.root / "state" / "iac" / REPO.replace("/", "__") / f"{agent}.json"
         return json.loads(p.read_text()) if p.exists() else {}
+
+
+class FakeModel:
+    """An HTTP server standing in for Ollama and for OpenAI-compatible servers.
+
+    It records every call, and answers with whatever `answer(path, body)` returns, which by
+    default echoes the request body the way each server's response shape carries it.
+    """
+
+    def __init__(self):
+        self.calls = []
+        self.answer = self.echo
+        outer = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                outer.calls.append({"path": self.path, "body": body, "headers": dict(self.headers)})
+                status, data = outer.answer(self.path, body)
+                raw = json.dumps(data).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    @staticmethod
+    def echo(path, body):
+        asked = body["messages"][-1]["content"]
+        if path == "/api/chat":
+            return 200, {"model": body["model"], "message": {"role": "assistant", "content": f"ollama: {asked}"}, "done": True}
+        return 200, {"choices": [{"message": {"role": "assistant", "content": f"openai: {asked}"}}]}
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
 
 
 def request_id(world, issue, sender, to):
@@ -593,6 +638,198 @@ class Joining(Base):
         self.assertIn("not in the roster", p.stderr)
 
 
+FAKE_CODEX = '''\
+import json, sys
+args = sys.argv[1:]
+out = args[args.index("-o") + 1]
+prompt = sys.stdin.read()
+with open(sys.argv[0] + ".log", "w") as f:
+    json.dump({"args": args, "stdin": prompt}, f)
+with open(out, "w") as f:
+    f.write("codex: " + prompt.rsplit("\\n\\n", 1)[-1])
+'''
+
+
+class Runner(Base):
+    def setUp(self):
+        super().setUp()
+        self.issue = self.setup_channel()
+        self.model = FakeModel()
+        self.addCleanup(self.model.close)
+
+    def add(self, name, kind, *extra):
+        self.w.ok("agent", "add", name, "--kind", kind, *extra)
+
+    def ask(self, to, body="What is 2 + 2?"):
+        self.w.ok("send", to, "--body", body, agent="laptop")
+        return request_id(self.w, self.issue, "laptop", to)
+
+    def run_once(self, name, env=None):
+        return self.w.run("run", "--agent", name, "--once", "--call-timeout", "20", env=env)
+
+    def types(self):
+        return [(m["type"], m["from"]) for m in self.w.messages(self.issue)]
+
+    def reply(self):
+        return next(m for m in self.w.messages(self.issue) if m["type"] == "reply")
+
+    def test_an_ollama_agent_driven_by_the_runner_answers_a_request(self):
+        """Acceptance, offline: an Ollama agent driven by iac.py run answers a request."""
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        rid = self.ask("gemma")
+        p = self.run_once("gemma")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.types(), [("request", "laptop"), ("ack", "gemma"), ("reply", "gemma")])
+        reply = self.reply()
+        self.assertEqual((reply["status"], reply["reply_to"], reply["to"]), ("done", rid, "laptop"))
+        self.assertEqual(reply["body"], "ollama: What is 2 + 2?")
+
+        call = self.model.calls[0]
+        self.assertEqual(call["path"], "/api/chat")
+        self.assertEqual((call["body"]["model"], call["body"]["stream"]), ("gemma4", False))
+        system, user = call["body"]["messages"]
+        self.assertEqual(system["role"], "system")
+        self.assertIn("`gemma`", system["content"])
+        self.assertIn("`laptop`", system["content"])
+        self.assertEqual(user, {"role": "user", "content": "What is 2 + 2?"})
+        self.assertIn(f"from gemma to request {rid}: done", self.w.ok("inbox", agent="laptop"))
+
+    def test_an_openai_compatible_agent_answers_through_chat_completions(self):
+        self.add("qwen", "openai-compatible", "--endpoint", self.model.url + "/v1", "--model", "qwen3")
+        self.ask("qwen")
+        self.assertEqual(self.run_once("qwen").returncode, 0)
+        self.assertEqual(self.model.calls[0]["path"], "/v1/chat/completions")
+        self.assertEqual(self.reply()["body"], "openai: What is 2 + 2?")
+
+    def test_a_failed_call_replies_failed_with_the_reason(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        self.model.answer = lambda path, body: (404, {"error": "model 'gemma4' not found"})
+        self.ask("gemma")
+        self.assertEqual(self.run_once("gemma").returncode, 0)
+        reply = self.reply()
+        self.assertEqual(reply["status"], "failed")
+        self.assertIn("HTTP 404", reply["body"])
+        self.assertIn("not found", reply["body"])
+
+    def test_an_unreachable_server_replies_failed(self):
+        self.add("gemma", "ollama", "--endpoint", "http://127.0.0.1:9", "--model", "gemma4")
+        self.ask("gemma")
+        self.assertEqual(self.run_once("gemma").returncode, 0)
+        self.assertEqual(self.reply()["status"], "failed")
+        self.assertIn("no answer from", self.reply()["body"])
+
+    def test_a_runner_that_stopped_after_its_ack_answers_without_acking_again(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        rid = self.ask("gemma")
+        key = self.w.messages(self.issue)[0]["key"]
+        self.w.inject(self.issue, json.dumps(
+            {"v": 1, "key": key, "from": "gemma", "to": "laptop", "type": "ack", "reply_to": rid, "body": ""}))
+        p = self.run_once("gemma")
+        self.assertIn("resuming", p.stdout)
+        self.assertEqual(self.types(), [("request", "laptop"), ("ack", "gemma"), ("reply", "gemma")])
+
+    def test_a_saved_answer_posts_without_asking_the_model_again(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        rid = self.ask("gemma")
+        key = self.w.messages(self.issue)[0]["key"]
+        self.w.inject(self.issue, json.dumps(
+            {"v": 1, "key": key, "from": "gemma", "to": "laptop", "type": "ack", "reply_to": rid, "body": ""}))
+        self.w.fault("POST", r"/comments$", "down", times=3)
+        p = self.run_once("gemma")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("saved", p.stdout)
+        self.assertEqual(len(self.w.local_state("gemma")["outbox"]), 1)
+        self.assertEqual(len(self.model.calls), 1)
+
+        p = self.run_once("gemma")
+        self.assertIn("posted the saved reply", p.stdout)
+        self.assertEqual(len(self.model.calls), 1)
+        self.assertEqual(self.reply()["body"], "ollama: What is 2 + 2?")
+        self.assertEqual(self.w.local_state("gemma")["outbox"], [])
+
+    def test_answered_requests_are_left_alone(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        self.ask("gemma")
+        self.run_once("gemma")
+        before = len(self.w.comments(self.issue))
+        self.run_once("gemma")
+        self.assertEqual(len(self.w.comments(self.issue)), before)
+        self.assertEqual(len(self.model.calls), 1)
+
+    def test_a_long_answer_is_cut_to_fit_one_comment(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        self.model.answer = lambda path, body: (200, {"message": {"content": "x" * 70000}})
+        self.ask("gemma")
+        self.assertEqual(self.run_once("gemma").returncode, 0)
+        comment = self.w.comments(self.issue)[-1]["body"]
+        self.assertLessEqual(len(comment), 65536)
+        self.assertIn("the full answer was 70,000 characters", self.reply()["body"])
+
+    def test_codex_is_called_read_only_with_the_prompt_on_stdin(self):
+        codex = self.w.bin / "codex"
+        script = self.w.bin / "fake_codex.py"
+        script.write_text(FAKE_CODEX)
+        codex.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n')
+        codex.chmod(0o755)
+        self.add("codex", "codex", "--model", "gpt-5.5")
+        self.ask("codex", "Summarize the plan.")
+        p = self.run_once("codex")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.reply()["body"], "codex: Summarize the plan.")
+        log = json.loads((self.w.bin / "fake_codex.py.log").read_text())
+        args = log["args"]
+        self.assertEqual(args[0], "exec")
+        self.assertEqual(args[args.index("--sandbox") + 1], "read-only")
+        self.assertIn("approval_policy=never", args)
+        self.assertEqual(args[args.index("-m") + 1], "gpt-5.5")
+        self.assertIn("`codex`", log["stdin"])
+        self.assertTrue(log["stdin"].endswith("Summarize the plan."))
+
+    def test_the_runner_refuses_what_it_cannot_drive(self):
+        p = self.run_once("laptop")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("tier A", p.stderr)
+        p = self.run_once("ghost")
+        self.assertEqual(p.returncode, 1)
+        self.add("or", "openrouter", "--model", "openai/gpt-5.5")
+        p = self.run_once("or", env={"OPENROUTER_API_KEY": "sk-or-app"})
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("IAC_OPENROUTER_API_KEY is not set", p.stderr)
+        self.add("codex", "codex")
+        p = self.run_once("codex", env={"PATH": f"{self.w.bin}{os.pathsep}/usr/bin{os.pathsep}/bin"})
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("codex CLI is not on PATH", p.stderr)
+        self.assertEqual(self.model.calls, [])
+
+    def test_a_second_runner_for_the_same_name_is_refused(self):
+        import fcntl
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        lock = self.tmp / "state" / "iac" / REPO.replace("/", "__") / "gemma.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock, "w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            p = self.run_once("gemma")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("already running", p.stderr)
+
+    def test_the_runner_loop_answers_a_request_that_arrives_later(self):
+        self.add("gemma", "ollama", "--endpoint", self.model.url, "--model", "gemma4")
+        proc = subprocess.Popen(
+            [sys.executable, str(IAC), "run", "--agent", "gemma", "--interval", "10"],
+            env=self.w.env, cwd=self.tmp, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        self.addCleanup(proc.kill)
+        time.sleep(2)
+        self.ask("gemma", "Late question.")
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline and not any(t == ("reply", "gemma") for t in self.types()):
+            time.sleep(1)
+        proc.terminate()
+        out = proc.communicate(timeout=10)[0]
+        self.assertIn(("reply", "gemma"), self.types(), out)
+        self.assertEqual(self.reply()["body"], "ollama: Late question.")
+
+
 class Gh(unittest.TestCase):
     """The `gh` wrapper itself, imported, against the fake."""
 
@@ -621,6 +858,36 @@ class Gh(unittest.TestCase):
                 os.environ.pop("OLLAMA_HOST", None)
             else:
                 os.environ["OLLAMA_HOST"] = old
+
+    def test_openrouter_sends_the_key_as_a_header_and_always_names_the_model(self):
+        model = FakeModel()
+        old_url, old_key = self.iac.OPENROUTER_URL, os.environ.get("IAC_OPENROUTER_API_KEY")
+        try:
+            self.iac.OPENROUTER_URL = model.url + "/api/v1/chat/completions"
+            os.environ["IAC_OPENROUTER_API_KEY"] = "sk-or-test"
+            call = self.iac.make_caller({"name": "or", "kind": "openrouter", "model": "openai/gpt-5.5"}, 5)
+            text = call([{"role": "user", "content": "hi"}])
+        finally:
+            self.iac.OPENROUTER_URL = old_url
+            if old_key is None:
+                os.environ.pop("IAC_OPENROUTER_API_KEY", None)
+            else:
+                os.environ["IAC_OPENROUTER_API_KEY"] = old_key
+            model.close()
+        self.assertEqual(text, "openai: hi")
+        sent = model.calls[0]
+        self.assertEqual(sent["body"]["model"], "openai/gpt-5.5")
+        self.assertEqual(sent["headers"]["Authorization"], "Bearer sk-or-test")
+
+    def test_fit_cuts_a_reply_to_the_comment_cap(self):
+        msg = {"v": 1, "key": "k", "from": "a", "to": "b", "type": "reply", "reply_to": 1, "status": "done",
+               "body": 'quote" and \\ and \n' * 6000}
+        cut = self.iac.fit(msg)
+        self.assertLessEqual(len(self.iac.render(cut)), self.iac.COMMENT_LIMIT)
+        self.assertGreater(len(self.iac.render(cut)), self.iac.COMMENT_LIMIT - 200)
+        self.assertIn("Cut by the runner", cut["body"])
+        small = dict(msg, body="ok")
+        self.assertIs(self.iac.fit(small), small)
 
     def test_split_response_handles_ghs_mixed_line_endings(self):
         status, hdrs, body = self.iac.split_response('HTTP/2.0 200 OK\nEtag: W/"x"\r\nA: b\r\n\r\n[1]')

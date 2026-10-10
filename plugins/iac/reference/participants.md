@@ -91,6 +91,20 @@ calls again. A runner that restarts after saving an answer posts the saved answe
 calling the model a second time. A driven model has no operator to ask, so the runner never
 replies `blocked`.
 
+- **What the model is told.** A system message names it and the sender, says that it has no
+  tools and can take no actions, and that its answer is posted verbatim, so it should write only
+  the answer. The request's body is the user message, unchanged.
+- **One runner per name on a machine.** The runner holds a lock for its agent's name while it
+  runs, and a second runner for that name on the same machine is refused. Across machines the
+  one-session-per-name rule is still the operator's to keep.
+- **An answer too long for one comment is cut to fit,** with a note giving its full length.
+- **Between passes it waits the way `iac.py wait` does,** with `since` and an ETag, and calls no
+  model until a request arrives. A saved reply that couldn't post is tried again after five
+  minutes even if nothing new arrives.
+- **`--once`** answers what is waiting and exits, which suits a cron job. **`--call-timeout`**
+  sets how long one model answer may take; the default is 600 seconds, because a cold model
+  load on a LAN machine can take minutes.
+
 Each call follows council's provider patterns, copied rather than imported, since each plugin is
 self-contained. The call is built in Python and its body with `json.dumps`, so no prompt is ever
 interpolated into a command line. Every endpoint is written with its scheme and port, as

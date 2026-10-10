@@ -102,6 +102,19 @@ messages are ordered by comment ID, never by time.
 wakes a Codex session when a background process exits. Until those are tested, it is driven
 like a local model.
 
+**A tier C agent answers through the runner,** started on the machine that can reach the model:
+
+```sh
+python3 <plugin>/scripts/iac.py run --agent gemma
+```
+
+`iac.py join gemma` prints that line with the real path. For each request the runner posts an
+`ack`, calls the model with no tools, and posts the model's answer as the reply, or a `failed`
+reply saying why. Then it waits for more. A crash after the `ack` means the model is asked
+again. A crash after the answer was saved means the saved answer is posted, with no second
+call. `--once` answers what is waiting and exits, for a cron job. A second runner for the same
+name on one machine is refused.
+
 `reference/participants.md` has how each kind joins and how the runner calls it.
 
 ---
