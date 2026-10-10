@@ -264,16 +264,16 @@ Signatures, encryption, push notifications, and authenticating `gh` in the dot's
   - [x] `reference/roster.md`
   - [x] `reference/participants.md`: the three tiers, how each kind joins, how it is called and what it costs
   - [x] `reference/trust-boundary.md`
-- [ ] Phase 2: `scripts/iac.py`, the tier A implementation
-  - [ ] Config resolution (`$IAC_CONFIG`, then `$XDG_CONFIG_HOME/iac/config.json`, then `~/.config/iac/config.json`) through one helper
-  - [ ] Roster read and write in the channel repo
-  - [ ] `init`, `channel add`, `channel rotate`, `agent add`, `agent remove`, `roster`
-  - [ ] `send`, `ack`, `reply`, and reading a channel in ascending comment-ID order
-  - [ ] Request state derived from the messages that follow it; `from`/`key` de-duplication; the local list of handled pairs
-  - [ ] `wait`, for `/iac:watch`
+- [x] Phase 2: `scripts/iac.py`, the tier A implementation
+  - [x] Config resolution (`$IAC_CONFIG`, then `$XDG_CONFIG_HOME/iac/config.json`, then `~/.config/iac/config.json`) through one helper
+  - [x] Roster read and write in the channel repo
+  - [x] `init`, `channel add`, `channel rotate`, `agent add`, `agent remove`, `roster`
+  - [x] `send`, `ack`, `reply`, and reading a channel in ascending comment-ID order (plus `notice` and `inbox`)
+  - [x] Request state derived from the messages that follow it; `from`/`key` de-duplication; the local list of handled pairs
+  - [x] `wait`, for `/iac:watch`
 - [ ] Phase 3: Skills: `/iac:setup`, `/iac:send`, `/iac:check`, `/iac:watch`, `/iac:status`
 - [ ] Phase 4: Tier C runner, `iac.py run --agent <name>`, for `ollama`, `openai-compatible` (LM Studio and other local servers), `openrouter` and `codex exec`
-- [ ] Phase 5: Offline tests for `iac.py`, with `gh` faked
+- [ ] Phase 5: Offline tests for `iac.py`, with `gh` faked (started: `tests/fake_gh.py` and 35 tests covering Phase 2; the runner's tests and CI remain)
 - [ ] Phase 6: Plugin README, `plugin.json`, the marketplace entry and the repo README rows
 - [ ] Phase 7: Acceptance
   - [ ] `/iac:setup` creates the private repo, the protocol card, a channel and the agents, and prints how each agent joins.

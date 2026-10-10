@@ -118,3 +118,42 @@ Claude-compatible plugin manifests, which makes tier A plausible. But it sets
 `CLAUDE_PLUGIN_ROOT` only for hooks, its writable sandbox has no network for `gh`, and nothing
 wakes a session when a background process exits. None of that was tested, so `codex` ships
 through `codex exec`, with council's read-only flags, and tier A went to `## Deferred`.
+
+### 2026-10-10 16:18:05 MDT: Phase 2, `scripts/iac.py`
+
+`iac.py` implements the tier A side: `init`, `channel add` and `rotate`, `agent add` and
+`remove`, `roster`, `send`, `ack`, `reply`, `wait` and `status`. It also adds `notice`, since
+the card defines one and nothing else could post it. It adds `inbox` as well, which is what
+`/iac:check` will read. `inbox` also tells a sender about replies to its own requests.
+
+Probed against GitHub before writing it, and built in:
+
+- `gh api` exits 1 on a `304` exactly as on a failure, so every call passes `-i` and reads the
+  status line. Its `-i` output ends the status line with `\n` and the headers with `\r\n`.
+- A contents write with a stale SHA answers `409 Conflict`, which is what the roster's
+  retry-on-conflict loop keys on. The probe sent a deliberately wrong SHA, and the roster was
+  left unchanged.
+- `since` on a comments list returns comments updated at or after the given time.
+
+Choices worth knowing:
+
+- `wait` doesn't wake for a request this agent has already acknowledged, since that is its own
+  work in progress and would wake it on every poll. `inbox` still reports one, with the rule 5
+  instruction to check effects before finishing.
+- A reply is written to the outbox before it is posted. `inbox` posts anything left there, and
+  a saved reply GitHub keeps refusing stays saved without blocking the rest of `inbox`.
+- After a post fails with no answer or a 5xx, `post` reads the channel to see whether the
+  message landed, and posts again only if it didn't. A 4xx is GitHub refusing, so nothing
+  landed.
+
+**Tests.** `tests/fake_gh.py` fakes `gh api -i` and the REST calls iac makes against a JSON
+file, with injectable refusals, outages and lost responses. `tests/test_iac.py` runs `iac.py`
+as a subprocess against it. Its 35 tests pass on Python 3.14 and on macOS's system Python 3.9.
+They include, by name, the acceptance items `iac.py` alone can show: two sessions completing a
+request with nothing edited or deleted, a retry handled once, resuming after an `ack`, rotation
+refusing, and `status` writing nothing.
+
+**Run read-only against the real channel repo.** `roster` and `status` read the spike channel
+correctly: three requests, with the A' retry folded into the first by its `key`, all `done`.
+The repo's head commit and comment count were unchanged afterwards. The one file that appeared
+locally was `gh`'s own `device-id`, which `gh` writes under `XDG_STATE_HOME`.
