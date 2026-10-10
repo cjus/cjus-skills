@@ -152,6 +152,21 @@ person does, adds poppler, and asserts that Chromium can print a PDF and
 `pdftotext` the bind prints `skip`, and in CI the skip is a failure. A Chromium
 that will not launch fails the bind rather than skipping it.
 
+### iac's suite
+
+iac's tests run `scripts/iac.py` against a fake `gh` and a fake model server, so
+they need no GitHub token, no network and no model:
+
+```bash
+python3 plugins/iac/tests/test_iac.py
+```
+
+`.github/workflows/iac.yml` runs them on every push to `main` and every pull
+request, as a workflow of its own, since they need none of the binder's
+toolchain. One macOS leg uses the runner's own `/usr/bin/python3` and asserts it
+is 3.9, the floor iac documents. The other legs use a current Python, macOS
+blocking and Linux advisory, in the sense the section above gives that word.
+
 ## Releasing
 
 Each plugin releases on its own, and the procedure is the same for all five. `plugins/<plugin>/.claude-plugin/plugin.json` carries that plugin's version and is the source of truth for it. To cut a release, raise `version` there, commit, then:

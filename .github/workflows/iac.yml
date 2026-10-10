@@ -1,0 +1,66 @@
+# iac's offline suite. It runs scripts/iac.py against a fake gh (tests/fake_gh.py) and a
+# fake model server, so it needs no GitHub token, no network beyond the runner itself, and
+# no model.
+#
+# It is its own workflow rather than a job in fixtures.yml because it needs none of the
+# binder's toolchain, and a bookcraft failure there should not hide an iac result.
+#
+# Two interpreters, for the two ends of what the plugin claims. Python 3.9 is the documented
+# floor because it is macOS's own python3, so that leg runs the runner image's
+# /usr/bin/python3 rather than a setup-python build, and asserts the version, so an image
+# change cannot quietly test something else. The other legs run a current release.
+#
+# macOS is blocking and Linux advisory, for the reason fixtures.yml gives: macOS is the
+# only platform these plugins are developed and tested on.
+name: iac
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only, stated rather than inherited, as in fixtures.yml.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: iac (${{ matrix.os }}, python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.blocking == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            python: system
+            blocking: true
+          - os: macos-latest
+            python: '3.14'
+            blocking: true
+          - os: ubuntu-latest
+            python: '3.14'
+            blocking: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        if: matrix.python != 'system'
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Choose the interpreter
+        run: |
+          if [ "${{ matrix.python }}" = system ]; then
+            py=/usr/bin/python3
+            "$py" -c 'import sys; v = sys.version_info[:2]; print(sys.version); sys.exit(v != (3, 9))' || {
+              echo "/usr/bin/python3 on this runner is not 3.9, so this leg no longer tests the floor"; exit 1; }
+          else
+            py=$(command -v python)
+            "$py" --version
+          fi
+          echo "PY=$py" >> "$GITHUB_ENV"
+
+      - name: Run the iac suite
+        run: '"$PY" plugins/iac/tests/test_iac.py -v'

@@ -255,3 +255,26 @@ built, and gained what the design hadn't covered: what the model is told, the pe
 the cut to fit, `--once`, and `--call-timeout`. Fourteen runner tests bring the suite to 58,
 using a local HTTP server in place of Ollama and OpenAI-compatible servers, and a fake `codex`
 that records its arguments and stdin.
+
+### 2026-10-10 17:27:33 MDT: Phase 5, the suite in CI
+
+The 58 tests already existed, written alongside Phases 2 to 4. `.github/workflows/iac.yml`
+now runs them on every push to `main` and every pull request.
+
+- **Its own workflow,** not a job in `fixtures.yml`. The suite needs none of the binder's
+  toolchain, and a bookcraft failure shouldn't hide an iac result.
+- **Three legs:**
+  - macOS with the runner's own `/usr/bin/python3`, blocking
+  - macOS with Python 3.14, blocking
+  - Linux with Python 3.14, advisory, by the repo's existing rule that macOS is the only
+    platform tested
+- **The 3.9 leg asserts its version.** Python 3.9 is the documented floor because it is
+  macOS's own `python3`, so that leg uses the system interpreter rather than a setup-python
+  build. The step fails if that interpreter isn't 3.9, so a runner-image change can't
+  silently move the floor. Run locally, the check passes on `/usr/bin/python3` 3.9.6 and
+  fails on 3.14, as it should.
+
+There is no `actionlint` on this machine. The file was checked with Ruby's YAML parser, and
+the interpreter step was run locally. The workflow's first real run will come with the PR,
+since it triggers on `pull_request` and on pushes to `main`. The repo README's CI section gains
+an "iac's suite" subsection.
