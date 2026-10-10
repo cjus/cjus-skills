@@ -193,3 +193,22 @@ under `${CLAUDE_PLUGIN_ROOT}`, which lets the citation checker resolve them. Wri
 
 The skills haven't run yet. They load only once the plugin is installed, which needs
 Phase 6's manifest, and they get their first run in Phase 7. The tests went from 35 to 44.
+
+### 2026-10-10 17:01:35 MDT: Phase 6, ahead of Phase 4
+
+The operator asked for Phase 6 before the runner, so the skills can be tried from this branch
+with `claude --plugin-dir plugins/iac`.
+
+- `plugins/iac/.claude-plugin/plugin.json` at `0.1.0`, and an `iac` entry in
+  `.claude-plugin/marketplace.json` between `explain` and `pr`. Both pass
+  `claude plugin validate --strict`.
+- `plugins/iac/README.md`, laid out like council's. It covers what each kind costs, install,
+  the three tiers with the dot spike's results, one section per skill, setup and the roster,
+  the message format, limitations, and what ships here.
+- The repo README gains an `iac` row in Requirements and in Plugins. Its plugin counts go from
+  four to five.
+
+The README and `reference/participants.md` describe the runner as designed, so a Phase 4 item
+now re-checks them against the runner as built. The repo README's claim that a bare skill
+name doesn't resolve is the open `## Deferred` item, so the iac README neither repeats nor
+contradicts it.

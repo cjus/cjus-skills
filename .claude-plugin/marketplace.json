@@ -25,6 +25,12 @@
       "source": "./plugins/explain"
     },
     {
+      "name": "iac",
+      "description": "Let Claude Code sessions, a ChatGPT dot, Codex, and local or OpenRouter models hand each other work as JSON messages on issues in a private GitHub repo",
+      "category": "productivity",
+      "source": "./plugins/iac"
+    },
+    {
       "name": "pr",
       "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
       "category": "productivity",
