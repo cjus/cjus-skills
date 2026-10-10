@@ -906,7 +906,8 @@ why `guide.md § Close` requires the close to be true of the whole chapter, and 
 reads each close against its chapter.
 
 **Asserted, not measured**: that an orienting opening reads better for this reader than a
-handoff. Phase 7's blind comparison is the first test.
+handoff. Phase 7's blind comparison was to be the first test; it was prepared under ticket #74
+and not run (§ Explaining to the learner, 2026-10-09).
 
 ## In short under guide, 2026-09-24
 
@@ -1157,11 +1158,33 @@ wrong claims surfaced. That is a case, and no figure in it is a rate.
 **Settled by the operator, 2026-10-09**, with the options weighed in the branch's `PLAN.md`:
 six new terms becomes a report; likely questions are answered in the prose, with no fifth
 callout label; the four steps go in the core for both profiles, with narration keeping its
-own wrong-model rule; and the blind comparison below runs before the branch closes.
+own wrong-model rule; and the blind comparison below runs before the branch closes. The
+comparison was prepared, and the operator then ruled on a spot check instead (below).
 
-**The acceptance test is #34's blind reader comparison.** One teaching chapter and one
-administrative chapter of the reference teaching guide are redrafted under these rules from
-the same outline rows and sources as their current versions, which removes the content
-confound #34 recorded for a comparison of two editions. The operator reads the four versions
-blind, with the key in a file opened only after scoring. The administrative chapter is the
-control: the method should help the teaching chapter and not hurt the administrative one.
+**The acceptance test was #34's blind reader comparison, prepared and not run.** One
+teaching chapter and one administrative chapter of the reference teaching guide were redrafted
+under these rules, the administrative one as the control. The chapter agents had the same outline rows,
+sources and entries as the current versions, and never saw those versions, which removes the
+content confound #34 recorded for a comparison of two editions. The four versions were stripped
+alike and labelled A to D at random, with the key in a file to open after scoring.
+
+**The operator spot-checked the four versions, did not score them blind, and ruled on
+2026-10-09 that the revised rules become the default.** That is the verdict, and its evidence
+is the operator's judgment from a spot check. No blind comparison of the two rule sets exists.
+The blind set is kept on a branch in the source repo, so the comparison can still be run there.
+
+**Measured on the redrafts, before anyone read them:**
+
+- **New terms.** Once every new-side term was glossed, the administrative chapter glossed ten
+  and the teaching chapter thirteen, against the outline's six each. Both agents reported the
+  count as a finding, which is the six-term report working as § Spend these deliberately now
+  intends. Neither dropped a gloss to fit.
+- **Length.** The stripped reading copies, counting every word on the page with tables
+  included, ran 3,318 words against 2,548 for the administrative chapter, 30% longer, and
+  4,050 against 3,037 for the teaching chapter, 33% longer.
+- **The outline still capped numbers.** Both rows were written under the old rules and carried
+  their limits, such as "at most two further weighed quantities", and the agents followed
+  them. An outline written before these rules caps what they free, until a recreate writes a
+  new one.
+- **Both redrafts pass `check-book.sh` and `check-provenance.sh`** with the rest of the book.
+  Neither has been through `/check-claims`, which the current versions had, three rounds deep.

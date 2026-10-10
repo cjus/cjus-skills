@@ -229,11 +229,14 @@ reproduced here.
       direction about an explanation as the explanation.
 - [x] Phase 9: Record in `NOTES.md` where the method came from, and which parts were measured
       and which asserted.
-- [ ] Phase 10: Acceptance. Run the blind reader comparison on one teaching chapter and one
+- [x] Phase 10: Acceptance. Run the blind reader comparison on one teaching chapter and one
       administrative chapter of the reference teaching guide, redrafted from the same outline
       rows and sources. Record the verdicts and feed them into `guide.md` and `NOTES.md`.
       **Status, 2026-10-09:** both chapters redrafted and blinded in the source repo, on a
-      branch there; waiting on the operator's scores.
+      branch there. The operator spot-checked the four versions, did not score them blind,
+      and ruled that the revised rules become the default. Recorded in `NOTES.md` as a
+      judgment from a spot check, with no blind verdict. `guide.md` needed no change, since
+      the ruling adopts its rules as written.
 
 ## Open Questions
 
@@ -261,3 +264,6 @@ From `pr-review-2026-10-09.md`, for triage at `/pr:close`:
   and one complication (pre-existing).
 - A narration handoff noun may be reported as a ledger miss under the new boundary rule.
 - `<book>/sample/` is never removed after the fan-out.
+- An outline written before these rules still caps numbers in its chapter rows, and a chapter
+  agent follows the row (found by the Phase 10 redrafts). `/updatebook` edits against such an
+  outline inherit the cap until a recreate.

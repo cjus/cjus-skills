@@ -12,8 +12,9 @@ This branch makes every chapter explain each of its concepts directly to the rea
 method of the `explain` plugin's `qe` skill, with no length cap and no per-chapter quotas on
 explaining devices. It adds the outline machinery that method needs: the reader's knowledge
 boundary, a coverage ledger, and a sample part the operator approves before any chapter is
-drafted. Ticket #74, which consolidates #34; #34's blind reader comparison is the acceptance
-test.
+drafted. Ticket #74, which consolidates #34. #34's blind reader comparison was prepared as the
+acceptance test and not scored: the operator spot-checked the redrafts and ruled the revised
+rules the default (§ Plan alignment).
 
 ## Key changes
 
@@ -114,7 +115,8 @@ Items 1 to 9 of the objective are delivered as planned.
 - Likely questions are answered in the prose, with no fifth callout label.
 - The four steps go in the core for both profiles, and `narration.md` keeps its one required
   wrong model.
-- Phase 10 runs on this branch before close.
+- Phase 10 runs on this branch before close. It did, and ended in the operator's ruling below
+  instead of a blind score.
 
 **Deviations, stated plainly:**
 
@@ -126,21 +128,28 @@ Items 1 to 9 of the objective are delivered as planned.
   become rules.** The first is one document's habit. The second changes a checker, which the
   ticket put out of scope. `NOTES.md` says so.
 
-**Phase 10, the acceptance test, is in progress.** One teaching chapter and one administrative
-chapter of the reference teaching guide were redrafted under these rules. The chapter agents
-had the same outline rows, sources and entries as the current versions and never saw them.
-Both redrafts pass `check-book.sh` and `check-provenance.sh` with the rest of that book. The
-four versions are blinded A to D in the source repo, with the key in a file opened only after
-scoring.
+**Phase 10, the acceptance test, was prepared and settled by the operator's ruling instead
+of a blind score.** One teaching chapter and one administrative chapter of the reference
+teaching guide were redrafted under these rules. The chapter agents had the same outline rows,
+sources and entries as the current versions and never saw them. Both redrafts pass
+`check-book.sh` and `check-provenance.sh` with the rest of that book. The four versions were
+blinded A to D in the source repo, with the key in a file to open after scoring.
 
-Before any scoring, the redraft agents reported that glossing every new-side term took the
-chapters to ten and thirteen new terms against six each, which the new report exists to catch.
-The operator's verdicts are recorded here and in `guide.md` and `NOTES.md` before close.
+The operator spot-checked them, did not score them blind, and ruled that the revised rules
+become the default. `NOTES.md` records that as the verdict, says plainly that no blind
+comparison was run, and records what was measured on the redrafts:
+
+- ten and thirteen new terms against the outline's six each, which the new report caught
+- reading copies 30% and 33% longer
+- outline rows still capping numbers under the old rules
+
+`guide.md` needed no change for the verdict, since the ruling adopts its rules as written. The
+blind set stays on its source-repo branch, so the comparison can still be run there.
 
 ## Testing
 
-**By hand:** read the rule files as a chapter agent would, then run the blind comparison. Score
-`A.md` to `D.md` in the source repo's `blind/` folder before opening `KEY.md`.
+**By hand:** read the rule files as a chapter agent would. The operator spot-checked the
+Phase 10 redrafts against the current chapters. The blind set remains available to score.
 
 **Automated:**
 
@@ -162,8 +171,8 @@ The operator's verdicts are recorded here and in `guide.md` and `NOTES.md` befor
 
 ## Impact assessment
 
-10 files changed, 868 insertions, 45 deletions, of which 625 lines are this branch's
-`changelog/` folder. No dependency changes. No script changes.
+Before the close's own artifacts: 11 files changed, 1,101 insertions and 45 deletions. Of the
+insertions, 836 are this branch's `changelog/` folder and 265 are the plugin. No dependency changes. No script changes.
 
 **Behaviour change for new books:** a `/createbook` run now stops twice, at the outline and at
 the sample, and its chapters run longer, because every new term is glossed and every concept
@@ -176,7 +185,7 @@ core rules.
 
 ## Deferred work
 
-From the pre-test review, for triage at `/pr:close`:
+From the pre-test review and the Phase 10 redrafts, for triage at `/pr:close`:
 
 - **The analogy in two places.** `chapter-prose.md § These rules add words` and the cut
   order's analogy step pull against each other. Pre-existing.
@@ -184,3 +193,5 @@ From the pre-test review, for triage at `/pr:close`:
   for one mechanism and one complication. Pre-existing.
 - **Narration handoff nouns.** The new boundary rule may report one as a ledger miss.
 - **The sample folder.** `<book>/sample/` is never removed after the fan-out.
+- **Old outlines cap numbers.** An outline written before these rules still caps numbers in its
+  chapter rows, and a chapter agent follows the row. Found by the Phase 10 redrafts.
