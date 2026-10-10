@@ -157,3 +157,39 @@ refusing, and `status` writing nothing.
 correctly: three requests, with the A' retry folded into the first by its `key`, all `done`.
 The repo's head commit and comment count were unchanged afterwards. The one file that appeared
 locally was `gh`'s own `device-id`, which `gh` writes under `XDG_STATE_HOME`.
+
+### 2026-10-10 16:47:12 MDT: Phase 3, the skills
+
+`/iac:setup`, `/iac:send`, `/iac:check`, `/iac:watch` and `/iac:status` are in
+`plugins/iac/skills/`. Each one runs `iac.py`, and every command begins with `python3`, so
+`Bash(python3:*)` in `allowed-tools` matches it. Message bodies go through a file written with
+the Write tool, never through an argument.
+
+Two read-only subcommands were added to `iac.py`, so `/iac:setup` reads facts instead of
+working them out:
+
+- **`detect`** reports the `gh` login, the config and repo, whether Ollama and LM Studio
+  answer and with which models, whether `codex` is installed, and where
+  `IAC_OPENROUTER_API_KEY` resolves from. It never prints the key. `/iac:setup` injects it
+  when it loads. On this machine it found Ollama up with no models pulled, and LM Studio up
+  with only an embedding model, which is why setup offers only models detection found and
+  leaves embedding models out.
+- **`join <agent>`** prints how one agent joins: the launch line for tier A, the brief to
+  paste for tier B, and the runner command for tier C. Run against the real roster, it
+  produced the dot's brief.
+
+The key lookup that the Phase 4 runner will use, `openrouter_key()`, landed with `detect`.
+`send` now puts the generated key in its error when a post fails outright, so a retry can
+reuse it.
+
+How `/iac:check` handles approval: it acknowledges first, then asks the operator in-session.
+Approval means carry on. A refusal means a `failed` reply. "Not now" means a `blocked` reply,
+which is final, so the sender or operator posts a new request to continue. Approval never
+comes from a message on the channel.
+
+Skills cite references as `reference/<file>.md § <section>` and say once that `reference/` is
+under `${CLAUDE_PLUGIN_ROOT}`, which lets the citation checker resolve them. Written with the
+`${CLAUDE_PLUGIN_ROOT}` prefix inside the backticks, a citation goes unchecked.
+
+The skills haven't run yet. They load only once the plugin is installed, which needs
+Phase 6's manifest, and they get their first run in Phase 7. The tests went from 35 to 44.

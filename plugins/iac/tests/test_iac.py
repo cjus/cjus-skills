@@ -51,14 +51,15 @@ class World:
             "FAKE_GH_STATE": str(self.state_path),
         }
 
-    def run(self, *args, agent=None, channel=None, stdin=None):
-        env = dict(self.env)
+    def run(self, *args, agent=None, channel=None, stdin=None, env=None):
+        full = dict(self.env)
         if agent:
-            env["IAC_AGENT"] = agent
+            full["IAC_AGENT"] = agent
         if channel:
-            env["IAC_CHANNEL"] = channel
+            full["IAC_CHANNEL"] = channel
+        full.update(env or {})
         return subprocess.run(
-            [sys.executable, str(IAC), *args], env=env, input=stdin,
+            [sys.executable, str(IAC), *args], env=full, input=stdin, cwd=self.root,
             capture_output=True, text=True, timeout=60,
         )
 
@@ -532,6 +533,66 @@ class Waiting(Base):
         self.assertEqual([i["comment_id"] for i in json.loads(out)["items"]], [cid])
 
 
+class Detection(Base):
+    # Port 9 is discard: nothing answers there, so no test depends on what this machine runs.
+    NOTHING = {"OLLAMA_HOST": "http://127.0.0.1:9"}
+
+    def test_detect_reports_a_key_without_printing_it(self):
+        out = self.w.ok("detect", env={**self.NOTHING, "IAC_OPENROUTER_API_KEY": "sk-or-secret-123"})
+        self.assertIn("logged in as operator", out)
+        self.assertIn("(absent)", out)
+        self.assertIn("http://127.0.0.1:9 (from $OLLAMA_HOST): not answering", out)
+        self.assertIn("IAC_OPENROUTER_API_KEY present, from the environment", out)
+        self.assertNotIn("sk-or-secret-123", out)
+
+    def test_detect_finds_the_key_in_the_per_user_file(self):
+        conf = self.tmp / "xdg"
+        (conf / "iac").mkdir(parents=True)
+        (conf / "iac" / ".env").write_text('# iac\nexport IAC_OPENROUTER_API_KEY="sk-or-file"\n')
+        found = json.loads(self.w.ok("detect", "--json", env={**self.NOTHING, "XDG_CONFIG_HOME": str(conf)}))
+        self.assertIn(str(conf / "iac" / ".env"), found["openrouter"])
+        self.assertNotIn("sk-or-file", json.dumps(found))
+
+    def test_detect_never_takes_openrouter_api_key(self):
+        found = json.loads(self.w.ok("detect", "--json", env={**self.NOTHING, "OPENROUTER_API_KEY": "sk-or-app"}))
+        self.assertIn("IAC_OPENROUTER_API_KEY absent", found["openrouter"])
+        self.assertIn("iac never reads it", found["openrouter"])
+
+    def test_detect_reports_the_repo_once_set_up(self):
+        self.setup_channel()
+        found = json.loads(self.w.ok("detect", "--json", env=self.NOTHING))
+        self.assertEqual(found["repo"], f"{REPO} (private): 1 channel(s), 3 agent(s)")
+
+
+class Joining(Base):
+    def setUp(self):
+        super().setUp()
+        self.issue = self.setup_channel()
+
+    def test_a_claude_code_agent_gets_its_launch_line(self):
+        out = self.w.ok("join", "laptop")
+        self.assertIn("IAC_AGENT=laptop IAC_CHANNEL=main claude", out)
+        self.assertIn('"IAC_AGENT": "laptop"', out)
+
+    def test_a_dot_gets_the_brief(self):
+        out = self.w.ok("join", "dot")
+        self.assertIn(f"grant its GitHub connector access to {REPO}", out)
+        self.assertIn(f"`main`: issue #{self.issue}", out)
+        self.assertIn("docs/iac-protocol.md", out)
+        self.assertIn("personal details", out)
+
+    def test_a_driven_model_gets_its_runner_command(self):
+        self.w.ok("agent", "add", "gemma", "--kind", "ollama", "--endpoint", "http://localhost:11434", "--model", "gemma4")
+        out = self.w.ok("join", "gemma")
+        self.assertIn("run --agent gemma --channel main", out)
+        self.assertIn("costs nothing; local or LAN", out)
+
+    def test_an_unknown_agent_is_refused(self):
+        p = self.w.run("join", "ghost")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("not in the roster", p.stderr)
+
+
 class Gh(unittest.TestCase):
     """The `gh` wrapper itself, imported, against the fake."""
 
@@ -541,6 +602,25 @@ class Gh(unittest.TestCase):
         cls.iac = importlib.util.module_from_spec(spec)
         sys.modules["iac"] = cls.iac   # dataclasses look their module up here
         spec.loader.exec_module(cls.iac)
+
+    def test_ollama_host_gets_a_port_only_when_it_has_no_scheme(self):
+        old = os.environ.get("OLLAMA_HOST")
+        try:
+            cases = {
+                "gpu-box": "http://gpu-box:11434",
+                "gpu-box:11500": "http://gpu-box:11500",
+                "http://gpu-box": "http://gpu-box",
+                "0.0.0.0": "http://localhost:11434",
+                "https://ollama.example:8443": "https://ollama.example:8443",
+            }
+            for raw, want in cases.items():
+                os.environ["OLLAMA_HOST"] = raw
+                self.assertEqual(self.iac.ollama_default()[0], want, raw)
+        finally:
+            if old is None:
+                os.environ.pop("OLLAMA_HOST", None)
+            else:
+                os.environ["OLLAMA_HOST"] = old
 
     def test_split_response_handles_ghs_mixed_line_endings(self):
         status, hdrs, body = self.iac.split_response('HTTP/2.0 200 OK\nEtag: W/"x"\r\nA: b\r\n\r\n[1]')

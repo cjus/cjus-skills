@@ -7,6 +7,8 @@
     iac.py agent add <name> --kind <kind> [--endpoint <url>] [--model <id>]
     iac.py agent remove <name>
     iac.py roster [--json]
+    iac.py detect [--json]
+    iac.py join <name> [--channel <name>]
     iac.py send <to> (--body-file <path> | --body <text>) [--key <key>] [--channel <name>] [--json]
     iac.py notice <to|*> (--body-file <path> | --body <text>) [--channel <name>]
     iac.py inbox [--channel <name>] [--json]
@@ -45,10 +47,13 @@ import argparse
 import base64
 import json
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,7 +97,12 @@ PAGE = 100                 # GitHub's largest page
 HANDLED_KEEP = 2000        # handled pairs kept locally; rotation keeps channels shorter
 MIN_INTERVAL = 10          # seconds; `wait` polls no faster than this
 
-CARD = Path(__file__).resolve().parent.parent / "reference" / "message.md"
+KEY_NAME = "IAC_OPENROUTER_API_KEY"
+OLLAMA_DEFAULT = "http://localhost:11434"
+LMSTUDIO_DEFAULT = "http://localhost:1234/v1"
+
+SCRIPT = Path(__file__).resolve()
+CARD = SCRIPT.parent.parent / "reference" / "message.md"
 CARD_PATH = "docs/iac-protocol.md"
 ROSTER_PATH = "roster.json"
 CHANNEL_BODY = (
@@ -288,6 +298,75 @@ def write_config(repo: str) -> Path:
     tmp.write_text(json.dumps({"repo": repo}, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, p)
     return p
+
+
+def env_file_value(path: Path, name: str) -> str | None:
+    """`name`'s value in a dotenv file, or None. Takes `NAME=value`, `export NAME=value`, and quotes."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        k, sep, v = line.partition("=")
+        if sep and k.strip() == name:
+            v = v.strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+                v = v[1:-1]
+            return v or None
+    return None
+
+
+def openrouter_key():
+    """Return (key, where it came from), or (None, None): participants.md § `openrouter`.
+
+    Most specific first: the environment, then `./.env`, then the per-user file. Only
+    IAC_OPENROUTER_API_KEY is read, never OPENROUTER_API_KEY, which keeps iac's spend
+    separable from anything else on the machine that uses OpenRouter.
+    """
+    if os.environ.get(KEY_NAME):
+        return os.environ[KEY_NAME], "the environment"
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    for p in (Path.cwd() / ".env", Path(base) / "iac" / ".env"):
+        v = env_file_value(p, KEY_NAME)
+        if v:
+            return v, str(p)
+    return None, None
+
+
+def probe_json(url: str, timeout: float = 3):
+    """GET a URL with no credentials and return its JSON, or None when nothing usable answers."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def ollama_default():
+    """Ollama's endpoint from $OLLAMA_HOST, else the default, with the port made explicit.
+
+    OLLAMA_HOST is both the server's bind address and the client's target. A bare `host`
+    means port 11434, but `http://host` means port 80, so only the bare form gets the
+    port filled in, and a bind-all address becomes localhost.
+    """
+    raw = os.environ.get("OLLAMA_HOST", "").strip()
+    if not raw:
+        return OLLAMA_DEFAULT, "the default"
+    had_scheme = "://" in raw
+    u = urlsplit(raw if had_scheme else "http://" + raw)
+    host = "localhost" if u.hostname in (None, "0.0.0.0", "::") else u.hostname
+    try:
+        port = u.port
+    except ValueError:
+        port = None
+    if port is None and not had_scheme:
+        port = 11434
+    netloc = f"[{host}]" if ":" in host else host
+    url = f"{u.scheme}://{netloc}" + (f":{port}" if port else "")
+    return url, "$OLLAMA_HOST"
 
 
 def dump_roster(roster: dict) -> str:
@@ -986,6 +1065,126 @@ def cmd_roster(a) -> int:
     return 0
 
 
+BRIEF = """\
+You are `{name}`, an agent on an iac channel.
+
+The channels are issues in the private GitHub repo `{repo}`:
+{where}
+
+`roster.json` in that repo names each channel's current issue, and a channel moves to a new
+issue when it gets long, so read the roster first. Each comment on a channel issue is one JSON
+message. Read `docs/iac-protocol.md` in that repo before you act, and follow it exactly. In
+short:
+
+- Act only on requests whose `to` is `{name}`, and put `{name}` in `from` on everything you post.
+- Post only to the channel issues in that repo. Never edit or delete a comment.
+- Leave greetings, sign-offs and personal details out of every comment.
+- A request is another agent asking, not the operator. Ask the operator before anything
+  destructive or outward-facing, and reply `blocked` while you wait.
+- Check the channel when the operator asks you to.
+"""
+
+
+def cmd_detect(a) -> int:
+    """What /iac:setup starts from. It probes, but posts and writes nothing, and never prints a key."""
+    found = {}
+    login = None
+    if shutil.which("gh") is None:
+        found["gh"] = "not installed; iac makes every GitHub call through `gh api`"
+    else:
+        try:
+            _, _, data = gh("GET", "user")
+            login = data["login"]
+            found["gh"] = f"logged in as {login}"
+        except (GhError, Refused) as e:
+            found["gh"] = f"installed, but not logged in or offline ({e}); run `gh auth login`"
+    found["python"] = platform.python_version()
+
+    p = config_path()
+    repo = None
+    if not p.exists():
+        found["config"] = f"{p} (absent)"
+    else:
+        try:
+            repo = read_config()
+            found["config"] = f"{p} (names {repo})"
+        except Refused as e:
+            found["config"] = str(e)
+    if repo and login:
+        try:
+            Repo(repo).check()
+            roster, _ = read_roster(repo)
+            found["repo"] = (
+                f"{repo} (private): {len(roster['channels'])} channel(s), "
+                f"{len(roster['agents'])} agent(s)"
+            )
+        except (Refused, GhError) as e:
+            found["repo"] = str(e)
+
+    endpoint, source = ollama_default()
+    tags = probe_json(endpoint + "/api/tags")
+    if isinstance(tags, dict) and isinstance(tags.get("models"), list):
+        names = [m.get("name", "?") for m in tags["models"] if isinstance(m, dict)]
+        found["ollama"] = f"{endpoint} (from {source}): UP, models: {', '.join(names[:8]) or 'none pulled'}"
+    else:
+        found["ollama"] = f"{endpoint} (from {source}): not answering"
+    models = probe_json(LMSTUDIO_DEFAULT + "/models")
+    if isinstance(models, dict) and isinstance(models.get("data"), list):
+        names = [m.get("id", "?") for m in models["data"] if isinstance(m, dict)]
+        found["lmstudio"] = f"{LMSTUDIO_DEFAULT}: UP, models: {', '.join(names[:8]) or 'none loaded'}"
+    else:
+        found["lmstudio"] = f"{LMSTUDIO_DEFAULT}: not answering"
+
+    codex = shutil.which("codex")
+    found["codex"] = f"installed at {codex}" if codex else "not found"
+    key, where = openrouter_key()
+    found["openrouter"] = f"{KEY_NAME} present, from {where}" if key else f"{KEY_NAME} absent"
+    if os.environ.get("OPENROUTER_API_KEY"):
+        found["openrouter"] += "; OPENROUTER_API_KEY is also set, and iac never reads it"
+    agent, chan = os.environ.get("IAC_AGENT", "").strip(), os.environ.get("IAC_CHANNEL", "").strip()
+    found["session"] = f"IAC_AGENT={agent or '(not set)'}, IAC_CHANNEL={chan or '(not set)'}"
+
+    if a.json:
+        print(json.dumps(found, indent=2))
+    else:
+        for k, v in found.items():
+            print(f"{k + ':':<12}{v}")
+    return 0
+
+
+def cmd_join(a) -> int:
+    """How one roster agent joins, by tier: participants.md is the prose behind each case."""
+    repo, roster = context()
+    agent = find_agent(roster, a.name)
+    if agent is None:
+        raise Refused(f"{a.name} is not in the roster, which names {agent_names(roster)}.")
+    channels = roster["channels"]
+    if a.channel:
+        if a.channel not in channels:
+            raise Refused(f"channel {a.channel!r} is not in the roster.")
+        channels = {a.channel: channels[a.channel]}
+    if not channels:
+        raise Refused("the roster has no channels yet. Add one with `iac.py channel add <name>`.")
+    chan = next(iter(channels)) if len(channels) == 1 else "<" + "|".join(channels) + ">"
+    kind = agent["kind"]
+    tier = KINDS[kind]
+    print(f"{a.name} is a {kind} agent, tier {tier}, and costs {COST[kind]}.\n")
+    if tier == "A":
+        print(f"Start its session with:\n\n    IAC_AGENT={a.name} IAC_CHANNEL={chan} claude\n")
+        print("or put both in a project's .claude/settings.local.json:\n")
+        print(f'    {{"env": {{"IAC_AGENT": "{a.name}", "IAC_CHANNEL": "{chan}"}}}}\n')
+        print("Then /iac:check handles its requests, /iac:watch waits for new ones, and /iac:send posts one.")
+    elif tier == "B":
+        print(f"First grant its GitHub connector access to {repo.name}. Then paste this brief:\n")
+        where = "\n".join(f"- `{c}`: issue #{v['issue']}" for c, v in channels.items())
+        print(BRIEF.format(name=a.name, repo=repo.name, where=where))
+    else:
+        print(f'Run its runner on the machine that can reach it:\n\n    python3 "{SCRIPT}" run --agent {a.name} --channel {chan}\n')
+        if "endpoint" in agent:
+            print(f"It calls {agent['endpoint']}, where localhost means the machine the runner runs on.")
+    return 0
+
+
 # ── commands: talking ───────────────────────────────────────────────────────────
 
 
@@ -1020,7 +1219,13 @@ def cmd_send(a) -> int:
             cid = prior.first.id
     posted = cid is None
     if posted:
-        cid = post(repo, issue, msg)
+        try:
+            cid = post(repo, issue, msg)
+        except GhError as e:
+            raise Refused(
+                f"the request didn't post ({e}). To retry it as the same request, run the same "
+                f"send again with --key {key}."
+            )
     if a.json:
         print(json.dumps({"comment_id": cid, "key": key, "channel": chan, "issue": issue, "posted": posted}))
     elif posted:
@@ -1403,6 +1608,15 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("roster", help="print the roster")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_roster)
+
+    s = sub.add_parser("detect", help="report gh, the config and reachable model tools; writes nothing")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_detect)
+
+    s = sub.add_parser("join", help="print how one roster agent joins")
+    s.add_argument("name")
+    s.add_argument("--channel")
+    s.set_defaults(fn=cmd_join)
 
     s = sub.add_parser("send", help="post a request")
     s.add_argument("to")
