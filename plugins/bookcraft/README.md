@@ -68,7 +68,7 @@ Write a book, check it, bind it:
 /bookcraft:createbook "A practical guide to Docker for first-year CS students" --source Dockerfile --source docs/
 ```
 
-That plans an outline, asks you to approve it, then narrates each chapter into its own file under `books/<book-slug>/`.
+That plans an outline, asks you to approve it, drafts one sample part for you to approve, then narrates each chapter into its own file under `books/<book-slug>/`.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-book.sh books/docker-guide
@@ -165,7 +165,11 @@ Writes a whole book from a one-line description.
 
 **URLs are never stored.** Web material is read at drafting time and then referenced by the terms a reader would search for. A link rots between the writing and the reading, so anything web-derived is marked `fill` by construction. What can be re-checked later is a repo file or a PDF, and the ledger records which sources are re-openable.
 
-It plans the outline first and stops for your approval before narrating anything. That gate shows you the reader it settled on, and says where it came from — your argument, your answer to the question it asked, or its own inference — because an inferred persona reaches every chapter looking exactly like one you supplied.
+It plans the outline first and stops for your approval before narrating anything. That gate shows you the reader it settled on, and says where it came from — your argument, your answer to the question it asked, or its own inference — because an inferred persona reaches every chapter looking exactly like one you supplied. Under the reader it shows the **knowledge boundary**, what the reader is fluent in and what is new to them, since every term on the new side gets defined where it first appears.
+
+The gate also shows a **coverage ledger**: everything the reader must be able to do or answer, such as a course's graded work, each mapped to the chapter that teaches it. An item no chapter teaches is shown as a defect to fix before anything is drafted. Once you approve the outline, it drafts **one sample part** and stops again, so a fault in how the chapters explain things is caught in one part rather than in twenty chapters.
+
+**Every chapter explains each concept to its reader**: the idea, how it works, why it matters, and the mistake it prevents, with the reader's likely next question answered where it arises. It never writes directions to someone who will explain the subject later. Nothing rations the analogies, numbers, wrong models or hedges an explanation needs, though a `narration` book keeps its one required wrong model.
 
 **What the book stands behind without a source is recorded as it goes**, in `assertions.json` beside `book.json`. That covers your argument word for word, anything it measured, anything the book is to keep out, which source wins where two disagree, and every answer you give at the gate. The gate shows those entries next to the source ledger. Chapters cite them in their marks, so when one changes, `check-provenance.sh` finds the prose still built on the old value.
 

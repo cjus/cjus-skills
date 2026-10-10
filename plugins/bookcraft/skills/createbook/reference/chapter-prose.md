@@ -10,13 +10,17 @@ These rules apply to every chapter, whatever the book's profile. Read this file 
 
 Both readings have to work: the first needs an argument they can follow, and the second needs an address they can find. Every sentence either lowers what the reader has to hold or makes the next sentence land. A sentence that does neither goes.
 
+**The chapter is the explanation, said to the reader.** Never write a direction to someone who will explain the subject later: what to say, what to land, what to ask, what to watch for. A reader who is learning the subject gets nothing from a direction and goes elsewhere for the explanation it points at. Write that explanation. Concrete wording also exposes errors a direction hides: a direction to demonstrate a tool cannot be wrong, and a sentence saying what the tool shows can.
+
 **The sources come first.** A chapter is written against the resources the book was given, and the model's own knowledge fills only what those leave out.
 
 The reader has to be able to tell which is which, because the two age differently: a sourced claim is fixed by its source, and a filled-in one is where a version, a default or a name goes stale. Attribute and mark as § Provenance says, and never blur the two to make a paragraph read better. A chapter may be mostly filled in where the sources are thin. Say so plainly.
 
-**What the reader arrives with.** Chapter 1 is the one chapter a reader can arrive at cold, and it stands alone: nothing else open, no earlier chapter, nothing naming the subject before the prose does. A later chapter may assume only what the outline grants it: the terms an earlier chapter glossed, and anything the profile file adds.
+**What the reader arrives with.** Chapter 1 is the one chapter a reader can arrive at cold, and it stands alone: nothing else open, no earlier chapter, nothing naming the subject before the prose does. A later chapter may assume only what the outline grants it: the fluent side of the reader's knowledge boundary, the terms an earlier chapter glossed, and anything the profile file adds.
 
 Nothing else carries over. An example from three chapters back is either re-earned in a clause or dropped. A subject that cannot be made self-contained in one chapter needs narrowing, and at book scale that is the outline's job.
+
+**The reader's knowledge boundary.** The outline records what the reader is fluent in and what is new to them. Use anything on the fluent side plainly, with no gloss. Every term on the new side is glossed in the sentence that first uses it (§ Glosses), in the chapter the term ledger assigns it to. A new-side term the ledger gives to no chapter is still glossed where it first appears, and reported to the outline, because the ledger missed it.
 
 **Length.** A chapter is as long as its job needs and no longer. There is no ceiling, no target, no floor, and no estimate made before drafting. § The reader decides where each sentence earns its place. A chapter much longer than its neighbours usually means the outline drew it too wide: report that, and do not write around it. Tables, lists and fenced blocks count apart from the prose, and tags and marks count as neither. `check-book.sh` reports both figures and fails on neither.
 
@@ -34,28 +38,68 @@ Break where the direction turns. A break that reverses, qualifies or prices some
 
 **Glosses.** Gloss every term the outline assigns this chapter inside the sentence that first uses it, as a clause. Never use a long parenthesis, and never hold a gloss over to a later sentence. Where a term is intimidating, describe the behaviour first and attach the label after. A term an earlier chapter glossed is used plainly and never glossed again.
 
+**Explain each concept in four steps**, in this order: the idea, how it works, why it matters, and the mistake it prevents. The idea is one plain sentence saying what the thing is. How it works follows § The mechanism walk where there is a mechanism, and otherwise says what the thing does in practice. Why it matters says what the reader can do, or avoid, because it works that way. The mistake it prevents is the concrete thing that goes wrong without it.
+
+**The why is required, and an example never stands in for it.** An example shows the idea at work, and a reader shown one still has to guess the reason. Give the example and then the reason, or the reason alone. The steps are an order, not a template: two short steps may share a paragraph, and a long one may take two. The mistake it prevents takes a sentence or two, and a full wrong model (§ The wrong model) is a separate move a concept may also get.
+
+```text
+Before:  An index lets the database find rows without reading the whole
+         table. On a table of 40,000 students, a lookup by student ID
+         touches three pages where a full read touches 600.
+
+After:   An index lets the database find rows without reading the whole
+         table. It keeps one column sorted, with a pointer to each row, so a
+         lookup searches the sorted copy and follows one pointer. On a table
+         of 40,000 students, a lookup by student ID touches three pages where
+         a full read touches 600. Without an index, that read happens on
+         every call, and it grows with the table. So a query that was fast on
+         twenty test rows can stall in production.
+```
+
+The first version puts an example where the reason belongs: the reader learns what happens and has to guess why it pays. The rewrite keeps the example and adds what it was missing: how it works, why it matters and what goes wrong without it. It names none of the steps. The order is for the plan, and a step's name repeated in every chapter reads as a template.
+
+**A fact is stated, not explained.** A date, a room or a weight the reader only has to know is stated with its source and takes no four steps. The test is whether the reader could get it wrong by understanding it wrongly. A deadline they could only miss is a fact, and a rule they could misapply is a concept.
+
+**Answer the reader's likely questions.** After each concept, ask what this reader would want to know next, given what they are fluent in: why this and not the obvious alternative, what happens at the edge, what a word on the page means. Answer it in the prose, where it arises. Go one level past what the book requires the reader to do, and stop there. The question after that lies past the book's edge, which the concept list marks, and never add an item to hold it.
+
+```text
+Before:  To undo a commit someone has already pulled, run git revert with
+         its hash. That adds a new commit applying the opposite change.
+
+After:   To undo a commit someone has already pulled, run git revert with
+         its hash. That adds a new commit applying the opposite change, and
+         leaves the bad one in the history. Deleting it instead would
+         rewrite history your teammates already hold, so their next pull
+         can stop with an error, or quietly merge the deleted commit back.
+```
+
+The first version is accurate, and it leaves this reader asking why the bad commit cannot simply go. The rewrite answers that where it arises. How to rewrite shared history safely is a level further, and the rewrite leaves it out.
+
 **The mechanism walk.** Where a part explains how something works, walk the mechanism in three to five steps, in plain verbs, with no notation. Chain the steps by what causes what, and never number them: a numbered step says where it sits, and a chained step says why it follows, which is the thing being taught. After the walk, say the core idea again in different words, once.
 
 **The wrong model.** A wrong model is the fix a reader would reach for, shown failing. It makes four moves: pose the question the reader would ask, state the fix they would reach for in their own words, concede the part of it that works, then let it fail on one concrete case.
 
-The concession is required, because a fix knocked down without one reads as a strawman and the reader defends it. The passage runs about 130 words, so split it across two paragraphs: the question, fix and concession, then the failure. It goes in the first part, where the reader still holds the wrong picture. A chapter has at most one, and later parts get the cheap form: two wrong pictures, then the real one. The profile file says whether a chapter needs one at all.
+The concession is required, because a fix knocked down without one reads as a strawman and the reader defends it. The passage runs about 130 words, so split it across two paragraphs: the question, fix and concession, then the failure. It goes in the part where the reader still holds the wrong picture. A chapter has as many as its concepts need, and a small misconception takes the cheap form: two wrong pictures, then the real one. The profile file says whether a chapter needs one at all.
+
+**Explaining devices have no quota.** An analogy, a number, a wrong model and a hedge are how a concept lands, so a chapter uses as many as its concepts need. Each still has a form.
+
+- **An analogy** is a physical scene with a person in it, mapped back in running sentences inside the same paragraph. Use none where the mechanism is already concrete, and never two for one idea, since the reader then holds two pictures at once.
+- **A number is never bare.** Walk each through successive values with the operation in words, or convert it to a human unit, and cut any the reader cannot feel. That covers every number the reader has to weigh: a measurement, a proportion, a rate, a version, or a count offered as a finding. Plain enumeration of what the subject is made of, such as five weeks or four labs, is not weighed.
+- **A hedge** says where the prose gave up precision, in a clause at the point it does: roughly, in most setups, as a first approximation. Hedge each simplification where it is made, and never hedge a claim a source settles.
+- **A wrong model** makes the four moves in § The wrong model.
 
 **Spend these deliberately.** Allocate each of these in the plan, before drafting.
 
 - **Anchors: two at most.** An anchor is a checkable name the argument rests on: a person, an institution, a product, a file, a command and what it printed, or a number. The test is whether a claim in the chapter would have to change if the name were wrong. A name that only says what the chapter is about spends nothing, such as the company whose system you explain. Count every checkable name on the page, then charge the ones the argument rests on.
 - **The first anchor is required and early**: a named person with their role, or an institution with the year it acted, where one exists; otherwise the specific case, file, failure or number. The second is optional and late, where the consequence would otherwise be bare assertion. Tie each anchor to the mechanism across two sentences. The outline's anchor ledger says which anchors this chapter owns, and one another chapter spent is not available.
-- **Analogy: one at most**, and none when the mechanism is already concrete. It is a physical scene with a person in it, mapped back in running sentences inside the same paragraph.
-- **Numbers: three at most, and none bare.** Walk each through successive values with the operation in words, or convert it to a human unit, and cut any the reader cannot feel. A number spends the budget when the reader has to weigh it: a measurement, a proportion, a rate, a version, or a count offered as a finding. An anchor that is a number counts against the three. Plain enumeration of what the subject is made of, such as five weeks or four labs, spends nothing.
-- **New terms: six at most.** Count every noun phrase the reader cannot yet define, including a name you coined for a role or a step.
+- **New terms: every one glossed, and more than six reported.** Count every noun phrase the reader cannot yet define, including a name you coined for a role or a step. Gloss each one (§ Glosses), and never drop a gloss to stay under six. More than six in one chapter means the outline drew it too wide: report that to the outline, and write the chapter with every gloss in place.
 - **Deflations: two at most**, meaning a claim understated within two sentences of making it.
-- **Honesty hedges: two at most**, and one of them is the simplification flag § Never requires.
-- **The wrong model: one at most** (§ The wrong model).
 
 **A source the book was given spends nothing.** Naming the file, page or section a claim came from is attribution, not an anchor, so a citation never costs the budget, however often § Provenance calls for one.
 
-**A set of figures from a source spends nothing either, and goes in a table.** Where a source publishes a set the reader will need whole, such as four assignment weights or a session grid, reproduce the whole set in a table. Never narrate two of its figures and drop the rest: a partial set reads as complete. The three-number budget is for quantities the prose asks the reader to weigh.
+**A set of figures from a source goes in a table.** Where a source publishes a set the reader will need whole, such as four assignment weights or a session grid, reproduce the whole set in a table. Never narrate two of its figures and drop the rest: a partial set reads as complete. A table is consulted, not weighed, so its figures need no walking through one by one.
 
-**Every budget is per chapter, and none of them pools.** Six terms, two anchors, three numbers, one analogy and one wrong model are what each chapter gets, whether the book has eight chapters or twenty. The outline's ledgers catch a chapter spending a neighbour's allowance.
+**Every budget is per chapter, and none of them pools.** Two anchors and two deflations are what each chapter gets, whether the book has eight chapters or twenty, and six new terms is where a chapter reports itself drawn too wide. The outline's ledgers catch a chapter spending a neighbour's anchors or glossing a neighbour's terms.
 
 **Prerequisites** go in the clause that needs them, with one exception. If a part cannot start until the reader holds something they lack, write one aside of 130 words at most, immediately before that part. Teach the prerequisite and nothing else, with no proper name and no date of its own. It sits inside the part that needs it, never as a section of its own.
 
@@ -177,11 +221,13 @@ Write the plan before any prose. It is working notes: never shown, never quoted.
 
 **The concepts, in dependency order.** What the reader has to hold before the next thing can work. Order by that dependency, never by how the subject is usually taught. Start from what the outline says earlier chapters taught; for chapter 1, that is nothing.
 
+**For each concept, its four steps and its likely question.** Write the why in a line of its own, since it is the step a draft drops or swaps for an example (§ Explain each concept in four steps). Beside it, write the question this reader would ask next and the sentence that answers it (§ Answer the reader's likely questions). Mark which items are facts to state, and which are concepts to explain.
+
 **The cuts.** Anything you cannot place in the order comes out. That is a normal result: a concept with no job in this argument belongs to another chapter.
 
 **One job per part.** The job is the sentence the reader takes away from that part. Write the part's heading here too. A job that needs two nouns to name it is two parts.
 
-**The allocation.** Which paragraph holds each anchor, each number, each new term's first use, and the wrong model if the chapter has one. Decide it here, once.
+**The allocation.** Which paragraph holds each anchor, each new term's first use, each wrong model and each answer to a likely question. Decide it here, once.
 
 Then read the concept order against the claim. If the order does not arrive at the claim, the shape is wrong, and fixing it now costs one line.
 
@@ -209,7 +255,7 @@ A word that points must have something to point at by the time the reader reache
 
 **An example introduces its pieces before it uses them.** Name each piece the first time it appears, in the order a person would meet them. "Room 12 says nothing by itself, because the building next door has a room 12" asks the reader to build a street and a numbering scheme from one definite article. Set the scene in a clause, then run it.
 
-**These rules add words.** Where a chapter has to come down, the words come out of the walk or the second anchor, never out of a gloss or a hedge. § Before sending has the cut order.
+**These rules add words.** Where a chapter has to come down, the words come out of the walk or the second anchor, never out of a gloss, a hedge or a concept's why. § Before sending has the cut order.
 
 ### Never
 
@@ -233,7 +279,7 @@ Never claim that what follows matters instead of saying it: no "worth noting", n
 
 **No generated-prose tells.** No participle hung on the end of a sentence to add a claim and no information: "ensuring reliability", "highlighting its importance". No "from X to Y" unless X and Y sit on one real scale. No "serves as", "stands as", "boasts" or "features" where "is" or "has" works, and no "not only X but Y" or "it's not just X, it's Y". Never use delve, crucial, pivotal, vibrant, intricate, tapestry, showcase, underscore, testament, seamless, robust, foster, leverage, or landscape used abstractly.
 
-**Nothing invented.** Never invent a person, date, quote, statistic or incident. Name and date at 95% confidence or drop it; with a solid name and a shaky year, hedge the year to its decade, never the reverse. Flag one simplification plainly in each chapter.
+**Nothing invented.** Never invent a person, date, quote, statistic or incident. Name and date at 95% confidence or drop it; with a solid name and a shaky year, hedge the year to its decade, never the reverse. Where a sentence simplifies, say so in a clause at that point (§ Explaining devices have no quota).
 
 **A number keeps the scope it was measured over.** A count taken across five files is a fact about those five, never about all nine. Before a number reaches the page, name the population it covers and make the sentence say that population. If you cannot state the population from the record in front of you, cut the number.
 
@@ -244,15 +290,22 @@ Never claim that what follows matters instead of saying it: no "worth noting", n
 **Count; never estimate.** Sentences first, since that ceiling is the one that gets missed.
 
 - No sentence over 45 words, and no paragraph over 90.
-- Six new terms at most, each glossed at first use. Two anchors at most. Three numbers at most.
+- Every new term glossed at first use, and a count over six reported to the outline. Two anchors at most. No bare number.
 - One H1, on line 1, and no other. One H2 per part, and none over the opening, the sober pair or the close. No heading naming a term the prose has not glossed yet.
 - Every list, table, fenced block and bold phrase justified by what a reader would lose as prose, and any without an answer turned back into prose.
 - None of the building words in any inflection, and none of the generated-prose words in § Never.
 - In a tagged book, every prose paragraph tagged, the chapter half this chapter, and the count running from 1 with no gap and no repeat.
 
-**List the budgeted things; never recall them.** Write out every checkable name, every number and every new term with the paragraph it sits in. Mark the names and numbers the argument rests on, then read the ceilings off that list.
+**List the budgeted things; never recall them.** Write out every checkable name, every number and every new term with the paragraph it sits in. Mark the names the argument rests on, then read the anchor ceiling and the term count off that list.
 
-Check each new term against the outline's term ledger: a term an earlier chapter owns is free, and a term no chapter owns is one you invented. Copy out the longest sentence of each part, and the anchor sentence, and count each one word by word, because rhythm hides length. Beside every number, write the artifact it came from and the population it covers, and confirm the sentence says that population.
+Check each new term against the outline's term ledger: a term an earlier chapter owns is free. A term no chapter owns is either a name you coined, which you can usually drop, or a new-side term the ledger missed, which you gloss and report. Copy out the longest sentence of each part, and the anchor sentence, and count each one word by word, because rhythm hides length. Beside every number, write the artifact it came from and the population it covers, and confirm the sentence says that population.
+
+**The explanation checks**, read against the plan:
+
+- **Every concept has its why**, in words of its own. List each concept beside the sentence saying why it matters. A concept with only an example there is the defect.
+- **No sentence directs an explainer.** Search for what to say, land the point, ask the class and walk them through. A hit inside a numbered procedure the reader performs is fine. A hit telling the reader what to say about a concept is an explanation still to be written.
+- **Every new-side term is glossed where it first appears**, checked against the reader's knowledge boundary as well as the term ledger.
+- **Each concept answers the question this reader would ask next**, one level past what the book asks of them and no further.
 
 **The resource-first checks**, which none of the counts above catches:
 
@@ -268,13 +321,13 @@ Check each new term against the outline's term ledger: a term an earlier chapter
 
 - **Every "the" that names something for the first time**, with its licence beside it: earlier in this chapter, glossed here, or supplied by the situation. One with none is the defect. Start with the opening paragraph.
 - **Every sentence opening on this, that or it**, with the noun it points at and how far back that noun sits. Further than the previous sentence is the defect, except for the three cases in § Reference.
-- **The analogy, if the chapter spent one**: a person in it, its pieces named before they are used, and the mapping back inside the same paragraph.
+- **Every analogy**: a person in it, its pieces named before they are used, and the mapping back inside the same paragraph.
 - **Every paragraph's first sentence against the paragraph before it**, with the seam device written beside each (§ Seams). A seam with none is the defect, and a column that reads the same all the way down is the other one. A first sentence that only makes sense once its paragraph is finished is an epigram: move its claim onto nouns already on the table, and keep the sentence.
 
 **Two more tests.** Read every paragraph's first sentence in order: together they should compress the chapter, with no two neighbours built the same way. Then list every recurring thing the chapter names, with each word used for it: one thing with two names is the cheapest defect to introduce and the hardest to catch by reading.
 
 Then run the checks in the profile file.
 
-**When a chapter has to come down, cut whole paragraphs in this order:** the second anchor, the analogy, the last part's walk down to a single step, then the sober pair folded into one, keeping the half that settles it. A chapter found carrying more than its one claim needs is what triggers a cut; no word count does. Never cut the aside, the header, the concept list or a provenance mark.
+**When a chapter has to come down, cut whole paragraphs in this order:** the second anchor, any analogy the chapter could do without, the last part's walk down to a single step, then the sober pair folded into one, keeping the half that settles it. A chapter found carrying more than its one claim needs is what triggers a cut; no word count does. Never cut a concept's why, the aside, the header, the concept list or a provenance mark.
 
 **Turning a passage into a table does not shorten a chapter.** A paragraph reformatted as rows is the same words with the argument taken out. Reproduce a set the source publishes; never shred your own prose into one. A chapter that has outgrown its one claim means the outline is wrong: report it so the chapter can be split.

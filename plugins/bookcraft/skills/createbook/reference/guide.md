@@ -12,7 +12,7 @@ A guide is still prose by default, and it still argues. A chapter that has turne
 
 **The opening paragraph orients the reader.** In plain words, say where this chapter sits in the book or the course, and what it settles. Write it for a reader who opened the book here, and reach the concrete thing by the second sentence. Saying what the chapter settles is a statement about the chapter, not a promise of what the reader will learn, so § Never's ban does not apply; "you will learn" is still banned.
 
-**Never open on something only an earlier chapter explains.** A definite noun pointing at what the last chapter ended on is a referent this reader never had (`chapter-prose.md § Reference`). What a chapter may assume is still set by `chapter-prose.md § What the reader arrives with`: a term an earlier chapter glossed is free, and anything else is glossed here.
+**Never open on something only an earlier chapter explains.** A definite noun pointing at what the last chapter ended on is a referent this reader never had (`chapter-prose.md § Reference`). What a chapter may assume is still set by `chapter-prose.md § What the reader arrives with`: a term an earlier chapter glossed is free, so is anything on the fluent side of the reader's knowledge boundary, and anything else is glossed here.
 
 ```text
 Before:  The scan is what week four ended on, and this week it is the thing
@@ -54,7 +54,7 @@ The teasers come from a real guide. The labels show the test at work; they are n
 
 Parts do not hand off to each other. A later part opens on its own subject, not on the noun the previous part ended on. Its heading marks the turn, so its first paragraph is exempt from the seam test in `chapter-prose.md § Seams`; every other paragraph seam still has to connect.
 
-A part that delivers a procedure, a script or a grading rule has no mechanism to walk. `chapter-prose.md § The mechanism walk` applies where a part explains how something works.
+A part that delivers a procedure or a grading rule has no mechanism to walk. `chapter-prose.md § The mechanism walk` applies where a part explains how something works.
 
 ### Section ends
 
@@ -79,6 +79,7 @@ A part that delivers a procedure, a script or a grading rule has no mechanism to
 - **Any other block quote fails**, and so does an unlabelled one. A fifth label is a change to this file.
 - **One idea per callout, in one to four sentences.** A callout that needs a second idea is two callouts, or a paragraph. `check-book.sh` reports a callout over four sentences.
 - **Use the label that fits the idea.** A warning says what goes wrong. A rule for marking is `Grade this`, and a choice is `Decide`. Never reach for `Warning` because a point feels important.
+- **`In the room` says what the reader will see, never what to say.** A callout telling them what to ask the class is a direction to an explainer (`chapter-prose.md § The chapter is the explanation, said to the reader`).
 - **At most four in a chapter**, and never a budget to spend. A chapter with a callout on every page has turned the signal off.
 - **A callout takes no paragraph tag, and it takes a provenance mark** like any other unit.
 - **`/makebook` renders each one as a boxed aside**, with the label as its title.
@@ -107,7 +108,7 @@ The first version packs a grading rule, a weight, a scheduling gap, a contact an
 
 ### The wrong model
 
-**Optional, at most one per chapter, and only where a source or the classroom names the misconception.** A chapter that exists to deliver a procedure has no wrong model to correct.
+**Optional, and only where a source or the classroom names the misconception.** A chapter has one for each misconception that is named, and none where nothing is. A chapter that exists to deliver a procedure has no wrong model to correct.
 
 **Where one is written, it makes the four moves** in `chapter-prose.md § The wrong model`, concession included, in the part where the misconception arises.
 
@@ -189,18 +190,34 @@ The first version is built to deliver a noun to the next chapter. The rewrite te
 
 Offered, never enforced, for a chapter that prepares someone to teach a session. Nothing checks it.
 
-1. **At a glance**: the header table and `## In short`, which every chapter has anyway.
-2. **The concepts, in teaching order**, each with its definition, the failure to watch for, and the assessment item it feeds.
-3. **The lesson script**: what to say, what to ask, what to watch for, and roughly how long each takes.
-4. **Grading**: the rubric, the line to hold, and what to do about the cases that sit on it. Where the session has a key, put it in an appendix and point to it from here.
+**The reader of a teaching chapter is often learning the subject too.** So the chapter explains each concept to that reader, in the four steps at `chapter-prose.md § Explain each concept in four steps`, and never scripts a lesson for them. A book that also needs words for a room, such as what to say over a slide, gets them from its own brief or a companion document. The chapter is what makes those words possible to write.
 
-Items 2 to 4 are the chapter's three parts. **This is a shape, not a template.** A chapter that fills every heading with one sentence has produced furniture. Where a session has no grading, that part goes.
+1. **At a glance**: the header table and `## In short`, which every chapter has anyway.
+2. **The concepts, in teaching order**, each explained to the reader: the idea, how it works, why it matters and the mistake it prevents, with the assessment item it feeds. Where the concepts need room, they take two parts, split where one group depends on the other.
+3. **Grading**: the rubric, the line to hold, and what to do about the cases that sit on it. Where the session has a key, put it in an appendix and point to it from here.
+
+Items 2 and 3 are the chapter's parts, two or three of them. **This is a shape, not a template.** A chapter that fills every heading with one sentence has produced furniture. Where a session has no grading, the concepts take all the parts.
+
+```text
+Before:  What to say: a full scan is not always a bug. Land that before
+         slide 14. Ask the class when they would want one, and watch for
+         anyone who thinks every scan means a missing index.
+
+After:   A full table scan reads every row of a table, start to finish. On
+         a small table it is usually the cheapest plan, because an index
+         lookup reads the index first and then the row. So a scan in a
+         query plan is not a bug in itself. It points to a missing index
+         when the table is large and the query wants only a few of its rows.
+```
+
+The first version tells an explainer what to land and leaves the explanation unwritten, so a reader learning the subject has to find it elsewhere. The rewrite is the explanation, said to the reader. It is also the version that could be wrong, which is how a reviewer catches an error.
 
 ### Before sending
 
 After the checks in `chapter-prose.md § Before sending`:
 
 - **The opening orients a reader who arrived at this chapter first**, and points at nothing only an earlier chapter explains.
+- **Every teaching passage is the explanation itself**, said to the reader, and no line or callout tells an explainer what to say.
 - **Every heading passes the test** in § Headings.
 - **Every callout holds one idea**, in one to four sentences, under the label that fits it.
 - **`## In short` says what the chapter covers in its first sentence**, stays near 120 words, and shares no sentence with the chapter.
