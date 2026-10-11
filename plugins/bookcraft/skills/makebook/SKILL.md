@@ -69,7 +69,7 @@ Running the script is the last step, not the first. A makebook run is:
 4. **Author the figures** you decided on, against `references/diagram-style.md`, and place each one in its chapter.
 5. **Build**, read the report, and **look at the pages that carry figures** in the finished PDF. A figure that renders wrong fails silently.
 6. **Run `epubcheck` on the EPUB** if it is installed. A package a device would reject is not visible from the report.
-7. Report: page count, figure count and where they went, the scripts attached and any save the build could not cover, the index source, anything the legibility check flagged, and the EPUB's validation result.
+7. Report: page count, figure count and where they went (for a book replacing an earlier edition, also how many of its figures were placed again and how many passed over), the scripts attached and any save the build could not cover, the index source, anything the legibility check flagged, and the EPUB's validation result.
 
 ## Deciding where a figure helps
 
@@ -97,7 +97,9 @@ Go through the chapters one at a time. For each, write a single line naming the 
 
 **Every fact drawn in a figure is checked the way a fact in prose is.** A figure that shows a command's output shows real output. A figure that plots a cost plots measured numbers, and the caption says where they came from. A diagram is the part of the page a reader trusts most and reads fastest, which makes a wrong one the most expensive error in the book.
 
-**Record the decisions** in `<folder>/diagrams/README.md`: each figure with its chapter and the one sentence saying why, and the chapters considered and passed over with the one sentence saying why not. That file is how the next person knows the selection was deliberate.
+**Record the decisions** in `<folder>/diagrams/README.md`: each figure with its chapter and the one sentence saying why, and the chapters considered and passed over with the one sentence saying why not. That file is how the next person knows the selection was deliberate. **A book that rightly has no figures writes it too**, listing the chapters passed over. The build warns when a folder set up as a book, one carrying a `book.json` or an `assertions.json`, has no `diagrams/README.md`, because a book bound without the figure pass looks complete either way (`build-book.py:figure_record_missing`). A plain folder of notes is never asked for one.
+
+**A book that replaces an earlier edition starts from that edition's figures, as candidates and never as files.** Where the operator names the old book's `diagrams/README.md`, read it after step 1. Each figure it records was drawn against prose the new book no longer has, so decide each one against the new chapters as above. Record every one in the new README, as placed again or as passed over with the reason, so a reader comparing the two editions can see why a figure left. Draw a figure that is placed again from the new prose. The old SVG shows the shape at most, because its labels, numbers and worked examples are the old book's. The report gives how many of the candidates were placed again and how many were passed over, and the two add up to the candidate count. A candidate the pass forgot then shows as a sum that does not add up, which no script here checks.
 
 **Placing a figure:** save it as `<folder>/diagrams/<slug>.svg` and put `![](diagrams/<slug>.svg)` on its own line after the anchoring paragraph. Leave the alt text empty so the caption comes from the SVG's `<title>`, which keeps one source of truth. Inline SVG in the markdown is also supported, but a referenced file keeps the prose readable and lets one figure serve more than one document.
 

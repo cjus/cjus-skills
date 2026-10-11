@@ -1911,6 +1911,25 @@ def slide_dir_of(cfg: dict) -> str:
     return f"{raw}/" if raw else ""
 
 
+# The figure pass's record (makebook/SKILL.md § Deciding where a figure helps):
+# each figure placed and each chapter passed over, with the sentence saying why.
+FIGURE_RECORD = "diagrams/README.md"
+
+
+def figure_record_missing(src: Path) -> bool:
+    """True when a folder set up as a book has no record of its figure pass.
+
+    A folder is set up as a book when it carries a `book.json` or an
+    `assertions.json`, which every book /createbook writes does. Anything else
+    is a folder of markdown, which this script binds as readily and which owes
+    no record, so warning there would fire on every set of notes and teach the
+    reader to skip the line.
+    """
+    if (src / FIGURE_RECORD).is_file():
+        return False
+    return (src / "book.json").is_file() or (src / "assertions.json").is_file()
+
+
 def figurize(body_html: str, chapter_num: int, counter: list[int],
              figures: list[dict], src: Path,
              slide_dir: str = "", slides: list[dict] | None = None,
@@ -4428,6 +4447,20 @@ def main(argv: list[str]) -> int:
             print(f"  {len(blind)} raster slide(s) were NOT checked against "
                   f"the {MIN_LEGIBLE_PT:.0f}pt floor; a raster declares no "
                   f"font sizes. Check those by eye or redraw as SVG.")
+    # The figure pass is the one step of a makebook run this script cannot see
+    # happen, and a book bound without it looks complete: a recreate that left
+    # every old figure behind bound clean, and a reader comparing the two
+    # editions found the loss. The record is the only trace the pass leaves,
+    # so its absence is what gets reported, whatever the figure count.
+    if figure_record_missing(src):
+        print(f"  warning: no {FIGURE_RECORD} in the book folder, so this "
+              f"book's figure decisions were never recorded "
+              f"({len(figures)} figure(s) placed).")
+        print(f"    The figure pass writes it (makebook/SKILL.md § Deciding "
+              f"where a figure helps): each figure placed and each chapter "
+              f"passed over, with why. A book that rightly has no figures "
+              f"writes it too. After a recreate, the old book's "
+              f"{FIGURE_RECORD} lists the candidates.")
     if glossary:
         linked = sum(1 for _, c, _ in glossary if c)
         print(f"glossary: {len(glossary)} terms, {linked} carrying a chapter "
