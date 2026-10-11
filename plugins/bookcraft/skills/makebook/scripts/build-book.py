@@ -2259,10 +2259,10 @@ def script_notes(body_html: str, ch: dict) -> str:
                 f'<code{SCRIPT_ATTR_RE.sub("", m.group("code"))}>'
                 f'{m.group("body")}</code></pre>'
                 f'<p class="script-note"><a href="{ATTACH_URI}{ch["num"]}/{n}">'
-                f"{name}</a> is attached to this PDF. Copying the code off the "
-                "page loses its indentation, so save the attachment instead: "
-                "double-click its name here, or open your viewer's list of "
-                "attachments.</p>")
+                f"{name}</a> is attached to this PDF, because code copied off "
+                "the page loses its indentation. To save it, open this PDF in "
+                "Firefox and double-click the name here. Preview, Safari, "
+                "Chrome and Edge do not show attachments.</p>")
     return SCRIPT_PRE_RE.sub(one, body_html)
 
 
@@ -2959,8 +2959,8 @@ def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
     as a file attachment annotation over the note's filename, which a viewer
     that supports them opens on a double-click, and in the document's list of
     embedded files, which is what a viewer's attachments panel reads. Two
-    routes, because viewers support one, the other, both or neither, and which
-    of the common ones does what is not measured here (see SKILL.md).
+    routes, because viewers support one, the other, both or neither. Which of
+    the common ones does what is not measured here; SKILL.md records it.
 
     Rewrites `pdf` in place and returns {(chapter, script): page}. Raises
     RuntimeError when a script's link is missing or one is left over, because

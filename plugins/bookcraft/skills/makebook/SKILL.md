@@ -452,7 +452,20 @@ A chapter written under `/createbook`'s **guide** profile may carry four labelle
 
 The fence's name wins when both are given. The extracted file is the block's own text, so a block inside a list item comes out without the list's indent.
 
-**What the reader gets.** Under each attached block the PDF prints a note: *`time_species.py` is attached to this PDF. Copying the code off the page loses its indentation, so save the attachment instead: double-click its name here, or open your viewer's list of attachments.* The file is in the PDF twice: as a file-attachment annotation over the note's filename, and in the document's list of embedded files, which is what an attachments panel reads. Each script therefore appears twice in a panel that lists both. Checked on 2026-09-30: poppler's `pdfdetach` lists and extracts every script from both places, and PDFKit reads the annotations. **Not checked:** whether Adobe Acrobat Reader, Firefox, Chrome's built-in viewer or Preview offer the file to a reader. Open a bound book in the viewer your readers will use before you hand it out. The EPUB carries no attachments and prints no note.
+**What the reader gets.** Under each attached block the PDF prints a note: *`time_species.py` is attached to this PDF, because code copied off the page loses its indentation. To save it, open this PDF in Firefox and double-click the name here. Preview, Safari, Chrome and Edge do not show attachments.* The file is in the PDF twice: as a file-attachment annotation over the note's filename, and in the document's list of embedded files, which is what an attachments panel reads. Each script therefore appears twice in a panel that lists both. poppler's `pdfdetach` lists and extracts every script from both places, and PDFKit reads the annotations (checked 2026-09-30). The EPUB carries no attachments and prints no note.
+
+**Of the six common viewers, only Firefox was seen to hand the reader the file.** Checked by hand on 2026-10-11, on macOS 27.0, with a PDF bound from `fixtures/save-scripts/book`:
+
+| Viewer | Attachments panel | Double-click on the note's filename |
+|---|---|---|
+| Firefox 157.0.1 | offers the scripts | offers the script |
+| Adobe Acrobat Reader 26.001 | not determined | refused: Acrobat does not allow a `.py` file out |
+| Chrome 154 | none | nothing |
+| Microsoft Edge 155 | none | nothing |
+| Preview 11.0 | none | nothing |
+| Safari 27.0 | none | nothing |
+
+A reader in Preview, Safari, Chrome or Edge has no way to get a script out of the PDF, and Acrobat Reader refuses the double-click; its attachments panel was not checked. The note names Firefox for that reason. When readers may not use it, hand the scripts out beside the book as well: `mkdir <folder> && pdfdetach -saveall -o <folder> <book>.pdf` writes each one once. Two chapters that save a file of the same name come out as one file, the later chapter's: `pdfdetach -list <book>.pdf` numbers the scripts in book order before it repeats them, and `pdfdetach -save <n> -o <file> <book>.pdf` writes one at a time.
 
 **The build lists what it attached**, with each script's page:
 
