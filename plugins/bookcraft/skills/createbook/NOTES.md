@@ -1271,3 +1271,35 @@ widening the candidate set is not that evidence.
 
 **Asserted, not measured:** no book has yet been recreated with a README that missed a figure.
 The case is reasoned from how each record falls behind, not observed.
+
+## Slides across a recreate, 2026-10-11
+
+Ticket #87, left by #80. The recreate copies the folder `book.json`'s `slide_figures` names,
+but drafting never places a slide, so a recreated book carrying slides bound without them. The
+reference book's slides survived the recreate #80 measured only because the project that uses the book
+checks for them.
+
+**Settled by the operator, 2026-10-11: the operator places them, through `/updatebook`, where
+the new lesson needs each one.** Three options were weighed:
+
+- **The chapter agents, while drafting.** They would write each slide's notes as they drafted,
+  which is what this option buys. Handing them the slides rather than the old chapters' slide
+  references keeps step 2's rule. It is the largest change, to step 5.
+- **`/makebook`'s figure pass.** It would put teaching aids into a pass built for numbered
+  figures of the argument (`makebook/SKILL.md § Lesson-script slides`).
+- **The operator, after the recreate.** Chosen. The occasion is rare, where a slide goes is the
+  operator's judgment either way, and the drafting rules stay as they are.
+
+**Where the new lesson needs it, not where the old chapter had it.** A recreate is due when the
+chapters' boundaries change, so the old placement can name a chapter the new book does not have.
+
+**The accepted cost: the paragraph beside a slide was not drafted as its notes.** The compact
+row prints the following paragraph beside the art, so a reader takes it as the slide's notes.
+`/updatebook` rewrites that paragraph in place where it does not speak to the slide, and it
+keeps its tag. In the reference book, slide notes were 8,733 words, 14.1% of the page (§ The
+guide profile, 2026-09-20).
+
+**No bind warning for an unplaced slide. Settled by the operator, 2026-10-11.** The recreate's
+report is the one place that lists the copied slides as not yet placed. The bind's `slides:`
+line counts only the slides a chapter places, and prints nothing when none does, so the operator
+compares it against the report's count.

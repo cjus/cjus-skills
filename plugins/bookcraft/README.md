@@ -160,7 +160,7 @@ Writes a whole book from a one-line description.
 | `--source <path>` (repeatable) | A resource the book is written against: a repo file, a folder, a PDF |
 | `--minutes <N>` | How long the reader has. Sizes the book |
 | `--no-tags` | Write without paragraph tags |
-| `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder. Slides are copied. Figures are not: `/makebook` redraws them against the new chapters, with the old book's figures as candidates |
+| `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder. Slides are copied, and placed afterwards through `/updatebook`. Figures are not: `/makebook` redraws them against the new chapters, with the old book's figures as candidates |
 
 **The sources are the point.** A book here is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
 

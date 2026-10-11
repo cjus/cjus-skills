@@ -31,3 +31,19 @@ The operator ruled on all four questions.
 - **`createbook/NOTES.md`.** Gains § Figure candidates across a recreate, 2026-10-11.
 
 The suite passes 18 of 18, and 221 citations resolve.
+
+### 2026-10-11 11:07:49 MDT: the operator places a recreate's slides through /updatebook
+
+- **`createbook/SKILL.md § Recreating a book`.** Step 9's report lists every copied slide as not
+  yet placed, and names `/updatebook` to place them. The gate's slide count says the new chapters
+  will place none. A new paragraph explains why drafting places no slide, and why placing one
+  later moves no tag. § Notes covers it too.
+- **`updatebook/SKILL.md`.** Gains a "Places a slide" row in step 2's table, and § Placing
+  slides: where the lesson needs it, the slide folder's path prefix, the paragraph beside it as
+  its notes, a slide left unplaced with a reason, and what to report.
+- **`README.md`.** The `--recreate` row says how slides get placed.
+- **`createbook/NOTES.md`.** Gains § Slides across a recreate, 2026-10-11, with the three
+  options weighed.
+- **`plugin.json`.** 1.12.1 to 1.13.0.
+
+The suite passes 18 of 18, and 225 citations resolve.

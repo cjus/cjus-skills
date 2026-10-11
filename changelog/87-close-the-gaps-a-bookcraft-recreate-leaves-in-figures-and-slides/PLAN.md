@@ -72,15 +72,17 @@ source material.
 
 ### Slides
 
-- [ ] Decide who places the copied slides in the new chapters (see `## Open Questions`), and
+- [x] Decide who places the copied slides in the new chapters (see `## Open Questions`), and
   write the decision into `createbook/SKILL.md § Recreating a book`, plus the skill that does
-  the placing.
-- [ ] Make the gate or the report surface the slides the new chapters do not place, so a
-  recreated book binding without them is visible rather than silent.
+  the placing. `updatebook/SKILL.md` gained § Placing slides and a row in step 2's table.
+- [x] Make the gate or the report surface the slides the new chapters do not place, so a
+  recreated book binding without them is visible rather than silent. Step 9's report lists
+  them, and the bind is unchanged.
 
 ### Release
 
-- [ ] Bump bookcraft's version in `plugin.json`, and run the fixture checks CI runs.
+- [x] Bump bookcraft's version in `plugin.json`, and run the fixture checks CI runs. 1.12.1 to
+  1.13.0. The suite passes 18 of 18, and 225 citations resolve.
 
 ## Open Questions
 
