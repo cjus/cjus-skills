@@ -4,6 +4,9 @@ Start date: 2026-10-10 19:40:16 MDT
 
 Ticket: #80 (status:todo -> status:in-progress)
 
+Status, 2026-10-11 08:55 MDT: every plan item is done. PR #81 is open, CI passes all five jobs,
+and both the pre-test and close-gate reviews approved. Every open question is resolved.
+
 ## Overview
 
 `/createbook --recreate` writes every chapter fresh into a new folder, and its procedure never
@@ -120,3 +123,20 @@ The review comment verified every line reference above against `main`, and propo
   `createbook/fixtures/guide`, which `bind/run.sh` binds twice, has a `book.json` and a figure.
   It now carries `diagrams/README.md`. An earlier reading of this answer named only the first
   three books and was wrong about the guide.
+
+## Deferred
+
+From the pre-test review (`pr-review-2026-10-11.md`), for triage at `/pr:close`:
+
+- (DROP) A `slide_figures` value of plain `diagrams` would make recreate step 4's copy carry the
+  old figures and README. The value is undocumented, so the risk is speculative.
+- (DROP) The fixtures paragraph in `plugins/bookcraft/README.md` does not list the three new
+  `bind/run.sh` assertions. It already lagged behind the fixtures before this branch.
+
+**Triaged at `/pr:close`, 2026-10-11.** Eight items: six dropped, and two ticketed together as
+#87 with the operator's approval.
+
+- **Dropped:** the two items above, three of the pre-test review's optional suggestions, and the
+  evidence-gated candidate check NOTES records.
+- **Ticketed as #87:** the review's candidate-count suggestion (the figure pass reads only the
+  old README), and who places the copied slides in a recreated book's new chapters.
