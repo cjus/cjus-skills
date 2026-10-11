@@ -1245,3 +1245,29 @@ If a recreate ever shows a candidate dropped without a reason, the check would f
 `assertions.json` precedent. The recreate would write the old figure names into the new
 folder, and `check-provenance.sh`, which already reads `diagrams/README.md`, would check them
 once a new README exists.
+
+## Figure candidates across a recreate, 2026-10-11
+
+Ticket #87, left by #80. The recreate's gate counted every figure the old chapters placed, but
+`/makebook`'s figure pass took only the old `diagrams/README.md` as its candidates. A figure the
+old chapters placed and the README never recorded could still leave the book by drift, which is
+the failure #80 closed for every other figure.
+
+**The candidates are both records, with a figure in both counted once.** The old chapters
+record what the reader saw, and the old README records why. Either can fall behind the other.
+A figure placed without the figure pass is in the chapters only. One an edit removed while its
+README line stayed is in the README only. The gate counts the same set the pass reads, so the
+placed-again and passed-over sum in `/makebook`'s report answers to the number the operator saw
+at the gate. The gate also names each figure only one record holds, because that list is where
+the old README fell behind its book.
+
+**The old chapters are read for their figures and never for their prose.** Step 2 refuses them
+as an input to drafting, and listing the images they reference reads no sentence of theirs.
+
+**No recorded candidate list in the new folder. Settled by the operator, 2026-10-11.** The pass
+reads the old folder when it runs, and the operator already keeps that folder until the pass is
+done. #80 made a recorded list wait on a recreate that drops a candidate without a reason, and
+widening the candidate set is not that evidence.
+
+**Asserted, not measured:** no book has yet been recreated with a README that missed a figure.
+The case is reasoned from how each record falls behind, not observed.
