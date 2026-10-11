@@ -454,7 +454,7 @@ The fence's name wins when both are given. The extracted file is the block's own
 
 **What the reader gets.** Under each attached block the PDF prints a note: *`time_species.py` is attached to this PDF, because code copied off the page loses its indentation. To save it, open this PDF in Firefox and double-click the name here. Preview, Safari, Chrome and Edge do not show attachments.* The file is in the PDF twice: as a file-attachment annotation over the note's filename, and in the document's list of embedded files, which is what an attachments panel reads. Each script therefore appears twice in a panel that lists both. poppler's `pdfdetach` lists and extracts every script from both places, and PDFKit reads the annotations (checked 2026-09-30). The EPUB carries no attachments and prints no note.
 
-**Of the six common viewers, only Firefox hands the reader the file.** Checked by hand on 2026-10-11, on macOS 27.0, with a PDF bound from `fixtures/save-scripts/book`:
+**Of the six common viewers, only Firefox was seen to hand the reader the file.** Checked by hand on 2026-10-11, on macOS 27.0, with a PDF bound from `fixtures/save-scripts/book`:
 
 | Viewer | Attachments panel | Double-click on the note's filename |
 |---|---|---|
@@ -465,7 +465,7 @@ The fence's name wins when both are given. The extracted file is the block's own
 | Preview 11.0 | none | nothing |
 | Safari 27.0 | none | nothing |
 
-A reader in any other viewer has no way to get a script out of the PDF. The note names Firefox for that reason. When readers may not use it, hand the scripts out beside the book as well.
+A reader in Preview, Safari, Chrome or Edge has no way to get a script out of the PDF, and Acrobat Reader refuses the double-click; its attachments panel was not checked. The note names Firefox for that reason. When readers may not use it, hand the scripts out beside the book as well: `pdfdetach -saveall -o <folder> <book>.pdf` writes each one once.
 
 **The build lists what it attached**, with each script's page:
 

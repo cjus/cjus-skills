@@ -2960,8 +2960,7 @@ def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
     that supports them opens on a double-click, and in the document's list of
     embedded files, which is what a viewer's attachments panel reads. Two
     routes, because viewers support one, the other, both or neither. Which of
-    the common ones does what is not measured here; SKILL.md records it, and of
-    six checked only Firefox offers the file.
+    the common ones does what is not measured here; SKILL.md records it.
 
     Rewrites `pdf` in place and returns {(chapter, script): page}. Raises
     RuntimeError when a script's link is missing or one is left over, because

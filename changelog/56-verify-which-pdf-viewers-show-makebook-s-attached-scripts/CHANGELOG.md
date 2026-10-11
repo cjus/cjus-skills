@@ -32,3 +32,17 @@ one clause. The operator accepted the attachments as a partial route rather than
 - **bookcraft 1.12.1.**
 
 Getting scripts to readers in the other viewers is under Deferred, for a follow-up ticket.
+
+### 2026-10-11 10:09:21 MDT: pre-test review, APPROVE; the summary no longer outruns the table
+
+Draft PR #89 opened; CI passes on all five jobs. The review (`pr-review-2026-10-11.md`)
+approved with one Important finding and one suggestion, both applied:
+
+- **The prose under the table claimed a negative the table left open.** "A reader in any other
+  viewer has no way to get a script out" covered Acrobat's undetermined panel and every viewer
+  nobody tried. It now names the four that show nothing, says Acrobat refuses the double-click,
+  and says its panel was not checked. The heading reads "was seen to". The result is dropped
+  from `attach_scripts`'s docstring, which now only points at SKILL.md, so a re-measure
+  updates one place.
+- **"Hand the scripts out beside the book" now says how:** `pdfdetach -saveall -o <folder>
+  <book>.pdf` writes each script once. Checked on this branch's bind: seven files.
