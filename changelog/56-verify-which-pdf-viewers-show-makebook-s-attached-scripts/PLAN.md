@@ -33,6 +33,9 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 
 ## Plan
 
+Status 2026-10-11: all four phases done. PR #89; pre-test and close reviews both APPROVE,
+their findings applied; CI green; in `/pr:close`.
+
 - [x] Phase 1: Bind `fixtures/save-scripts/book` with `build-book.py` and confirm, with
       `pdfdetach`, that both attachment surfaces are present in the PDF under test.
       Done 2026-10-11 against `main` @ `142c189`: 7 scripts in the EmbeddedFiles name
@@ -62,7 +65,8 @@ refresh status only; newly discovered work goes under `## Deferred`, never as ne
 - [x] Phase 3: State the result in `makebook/SKILL.md` § Code the reader is asked to save,
       replacing the "Not checked" sentence. Done: a six-row table of both surfaces, with
       versions, and a line telling the book's maker to hand the scripts out beside the
-      book when readers may not use Firefox.
+      book when readers may not use Firefox, with the `pdfdetach` commands that do it,
+      including one at a time when two chapters save a file of the same name.
 - [x] Phase 4: Reword the note under each attached block if it promises something a common
       viewer does not do. Done in `build-book.py:script_notes`: the note now names Firefox
       and the four viewers that show nothing, and promises neither route generally.
@@ -120,4 +124,15 @@ still records Acrobat Reader, Firefox, Chrome's built-in viewer and Preview as n
   viewers no way to get the scripts. Getting the code to them some other way is new work:
   a link to a hosted copy of each script works in every viewer, and files shipped beside
   the PDF work wherever the book is handed out as a folder or archive. The operator
-  accepted the attachments as a partial route on 2026-10-11.
+  accepted the attachments as a partial route on 2026-10-11. Whatever route is built must
+  handle two chapters saving a file of the same name, which the binder allows and which
+  `pdfdetach -saveall` collapses to the later chapter's file (close review, 2026-10-11).
+
+Close triage, 2026-10-11: the item above was ticketed as #92, with the repeated-name case as
+its second checklist item. Dropped: the pre-test review's three minor items, the close
+review's Phase 3 status-line item (already updated), Acrobat Reader's undetermined panel (the
+operator's choice), and setting `/PageMode` to open the attachments panel on load (it can only
+open a panel a viewer already has, and Firefox, the one seen to have one, already offers the
+file). Whether the first guide that asks
+students to save scripts has gone out is for the operator to check outside this repo, not a
+ticket.

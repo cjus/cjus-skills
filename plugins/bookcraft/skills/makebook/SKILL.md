@@ -465,7 +465,7 @@ The fence's name wins when both are given. The extracted file is the block's own
 | Preview 11.0 | none | nothing |
 | Safari 27.0 | none | nothing |
 
-A reader in Preview, Safari, Chrome or Edge has no way to get a script out of the PDF, and Acrobat Reader refuses the double-click; its attachments panel was not checked. The note names Firefox for that reason. When readers may not use it, hand the scripts out beside the book as well: `pdfdetach -saveall -o <folder> <book>.pdf` writes each one once.
+A reader in Preview, Safari, Chrome or Edge has no way to get a script out of the PDF, and Acrobat Reader refuses the double-click; its attachments panel was not checked. The note names Firefox for that reason. When readers may not use it, hand the scripts out beside the book as well: `mkdir <folder> && pdfdetach -saveall -o <folder> <book>.pdf` writes each one once. Two chapters that save a file of the same name come out as one file, the later chapter's: `pdfdetach -list <book>.pdf` numbers the scripts in book order before it repeats them, and `pdfdetach -save <n> -o <file> <book>.pdf` writes one at a time.
 
 **The build lists what it attached**, with each script's page:
 
