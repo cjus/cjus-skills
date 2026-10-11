@@ -21,19 +21,25 @@
 #                                   the Contents, Figures and Index pages
 #                                   opens the page it prints, on both binds;
 #                                   and build_outline refuses an outline that
-#                                   is missing or a chapter short
+#                                   is missing or a chapter short; and the
+#                                   bind does not warn that the figure
+#                                   decisions were never recorded, because the
+#                                   book carries diagrams/README.md
 #   with a declared cover_image,    PDF page 1 and EPUB/cover.xhtml carry the
-#   parts, and two stray H1s        same Created: stamp, in bind_stamp's form;
-#                                   the outline nests each chapter under its
+#   parts, two stray H1s, and no    same Created: stamp, in bind_stamp's form;
+#   diagrams/README.md              the outline nests each chapter under its
 #                                   part, and files an H1 in a chapter's body
 #                                   under that chapter: one retitled with the
 #                                   spaces Chromium drops where it wraps, and
 #                                   one sharing the next chapter's title, which
-#                                   only its page tells apart from that title
+#                                   only its page tells apart from that title;
+#                                   and the bind warns that the book's figure
+#                                   decisions were never recorded, counting
+#                                   the one figure it placed
 #
-# The second bind takes its parts and its stray H1s on board only because a
-# third bind would cost the suite another full render. None of them reaches
-# the stamp it checks.
+# The second bind takes its parts, its stray H1s and the missing record on
+# board only because a third bind would cost the suite another full render.
+# None of them reaches the stamp it checks.
 #
 # The EPUB keeps a text cover page, and so a stamp a script can read, only
 # behind declared art. Rasterised art stands in for that page and carries the
@@ -47,7 +53,9 @@
 #   appendix-slug/     sql-02-appendix-1-of-the-standard.md is a chapter whose
 #                      name only looks like an appendix's. Contents must list
 #                      1, 2 and A1, with one A1; an unanchored appendix pattern
-#                      printed the middle file as a second Appendix 1.
+#                      printed the middle file as a second Appendix 1. It is
+#                      also a folder of markdown with no book.json, so the bind
+#                      must not ask it for a figure record.
 #   appendix-table/    an appendix, placed after two chapters, holding a table
 #                      whose long-prose column squeezes a long word. Every long
 #                      word must print whole on the appendix's page, and the
@@ -115,6 +123,10 @@ bind() {
   report 0 "$1: the book binds"
 }
 
+# The line build-book.py prints when a folder set up as a book has no
+# diagrams/README.md (figure_record_missing).
+no_record='figure decisions were never recorded'
+
 # --- as declared -----------------------------------------------------------
 pdf="$tmp/declared/guide.pdf"
 epub="$tmp/declared/guide.epub"
@@ -123,6 +135,13 @@ bind "as declared" "Guide Fixture" "$tmp/book" "$pdf"
 [ -s "$pdf" ];  report $? "as declared: the PDF is written"
 [ -s "$epub" ]; report $? "as declared: the EPUB is written"
 [ "$fails" -eq 0 ] || exit 1
+
+if printf '%s\n' "$bind_out" | grep -qF "$no_record"; then
+  report 1 "as declared: the bind warns of a missing figure record, though the book carries diagrams/README.md"
+  printf '%s\n' "$bind_out" | grep -A1 -F "$no_record" | sed 's/^/      | /'
+else
+  report 0 "as declared: the bind does not warn of a missing figure record"
+fi
 
 p2=$(pdftotext -f 2 -l 2 "$pdf" - 2>&1 | sed -n '/[^[:space:]]/{p;q;}')
 if [ "$p2" = "Contents" ]; then
@@ -375,7 +394,7 @@ outline_is "as declared" "$pdf" "$(cat <<'TREE'
 TREE
 )"
 
-# --- with a declared cover_image, parts, and a stray H1 ----------------------
+# --- with a declared cover_image, parts, a stray H1, and no figure record ----
 # Checked, because a failed edit would bind with no cover_image and report a
 # missing stamp, blaming the binder for a fault in the fixture.
 #
@@ -383,10 +402,14 @@ TREE
 # drops the space at the wrap from the outline entry it writes. Chapter 1's
 # shares chapter 2's title: matched on text alone, it took chapter 2's entry
 # and sent the reader into chapter 1.
+#
+# The record comes out the way a recreate leaves it out: the book still has its
+# book.json and its figure, and nothing says why the figure is there.
 if ! edit_out=$("$py" - "$tmp/book" 2>&1 <<'EOF'
 import json, sys
 from pathlib import Path
 book = Path(sys.argv[1])
+(book / "diagrams" / "README.md").unlink()
 cfg = json.loads((book / "book.json").read_text(encoding="utf-8"))
 cfg["cover_image"] = "diagrams/the-two-profiles.svg"
 cfg["sections"] = [{"title": "Part One: Profiles", "chapters": [1]},
@@ -403,13 +426,20 @@ ch2.write_text(ch2.read_text(encoding="utf-8") + (
     "## A heading under it\n\nAnother paragraph.\n"), encoding="utf-8")
 EOF
 ); then
-  report 1 "cover_image: could not add cover_image, sections and the stray H1s to the copy"
+  report 1 "cover_image: could not add cover_image, sections and the stray H1s to the copy, or remove its figure record"
   printf '%s\n' "$edit_out" | sed 's/^/      | /'
   exit 1
 fi
 pdf="$tmp/cover-image/guide.pdf"
 epub="$tmp/cover-image/guide.epub"
 bind "cover_image" "Guide Fixture" "$tmp/book" "$pdf"
+
+if printf '%s\n' "$bind_out" | grep -F "$no_record" | grep -qF '(1 figure(s) placed)'; then
+  report 0 "no figure record: the bind warns that the figure decisions were never recorded, counting 1 figure"
+else
+  report 1 "no figure record: the bind should warn that the figure decisions were never recorded, counting 1 figure"
+  printf '%s\n' "$bind_out" | grep -i -F 'figure' | sed 's/^/      | /'
+fi
 
 # One stamp per bind, in bind_stamp's form. Matching the form, and not just the
 # word, is what catches a stamp that was printed but broken.
@@ -479,6 +509,11 @@ if has '^ *1 +Intro +[0-9]+$' \
 else
   report 1 "appendix-slug: Contents should list 1 Intro, 2 Appendix One of the Standard and one A1 Answer Key"
   printf '%s\n' "$contents" | grep -E '^ *(A?[0-9]+) ' | sed 's/^/      | /'
+fi
+if printf '%s\n' "$bind_out" | grep -qF "$no_record"; then
+  report 1 "appendix-slug: the bind asks a folder with no book.json for a figure record"
+else
+  report 0 "appendix-slug: a folder with no book.json is not asked for a figure record"
 fi
 
 # --- appendix-table ----------------------------------------------------------

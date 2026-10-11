@@ -1188,3 +1188,60 @@ The blind set is kept on a branch in the source repo, so the comparison can stil
   new one.
 - **Both redrafts pass `check-book.sh` and `check-provenance.sh`** with the rest of the book.
   Neither has been through `/check-claims`, which the current versions had, three rounds deep.
+
+## Figures across a recreate, 2026-10-10
+
+Ticket #80. `SKILL.md § Recreating a book` never mentioned `diagrams/`, so a recreate left every
+figure the old book placed, and the `diagrams/README.md` recording why, behind in the old
+folder. `/makebook` then bound the new book without a warning, because `build-book.py` never
+read that README.
+
+**Measured, by the ticket, on 1.11.0, and not re-measured here:** a guide book whose old edition
+placed eight figures across eight chapters, each recorded in its README, was recreated and
+bound with none of them. The bind ran clean, and a reader comparing the two editions found the
+loss. The same book's slides survived only because the consuming project checks for them.
+
+**Settled by the operator, 2026-10-10: figures are redrawn, never carried.** The review on #80
+weighed copying the old figures into the new folder under a "re-check these" heading against
+listing them, and the operator went further than either: every figure is redrawn against the
+new prose. Three reasons, each one already a rule somewhere else:
+
+- **A recreate refuses the old chapters as input** (`SKILL.md § Recreating a book`, step 2), so
+  a chapter drafted from the old prose cannot rebuild the shape the recreate exists to leave.
+  An old figure is old prose drawn as a picture.
+- **A figure is checked the way prose is** (`makebook/SKILL.md § Deciding where a figure
+  helps`). An old figure shows the old worked examples, and its README record cites tags the
+  recreate renumbered, so a copied one is wrong where a reader trusts the page most.
+- **A copied README would silence the bind's new warning** before anyone had decided anything,
+  which makes the warning useless at the one moment it exists for.
+
+**The old README is still an input, as candidates.** The ticket's failure was eight figures
+becoming none with nobody deciding it. A fresh figure pass may honestly place fewer, so the
+pass takes the old README as its candidates and records each one as placed again or passed
+over, with the reason. A figure can still leave the book, but only by a decision.
+
+**Slides are copied**, because they are source material rather than figures drawn from the
+prose, and no figure pass could regenerate them. `book.json`'s `slide_figures` already carried
+over at step 4, naming a folder that was not there.
+
+**Asserted, not measured:** that a figure pass given candidates places the figures a book
+needs and no more. It may lean toward the old selection, since a list of eight is a pull
+toward eight. It records a reason for every one it passes over, so the pull can be seen.
+
+**No checker line names a candidate the figure pass forgot.** #80 proposed a `check-book.sh` line
+after a recreate, naming any figure the old README placed that the new book neither placed
+again nor passed over. The operator ruled against it, 2026-10-10, for three reasons:
+
+- `check-book.sh` runs at step 7, before `/makebook`'s figure pass, so every old figure would
+  be named on every recreate.
+- Its input would have to name the old folder, which `check-book.sh` never reads outside of
+  (`SKILL.md § 7`). The operator deletes that folder once satisfied, so a pointer in `book.json` would
+  outlive its target, and a flag is a step someone has to remember.
+- The measured failure, eight figures becoming none, was a figure pass that never ran, and the
+  bind warning catches that. A pass that forgets one candidate is unmeasured, and `/makebook`'s
+  report shows it as placed-again and passed-over counts that do not add up.
+
+If a recreate ever shows a candidate dropped without a reason, the check would follow the
+`assertions.json` precedent. The recreate would write the old figure names into the new
+folder, and `check-provenance.sh`, which already reads `diagrams/README.md`, would check them
+once a new README exists.

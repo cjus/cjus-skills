@@ -112,6 +112,7 @@ books/<book-slug>/
   about-this-book.md              where the book's material came from
   glossary.md                     derived from the outline's term ledger
   diagrams/                       hand-authored SVG figures, written by /makebook
+  diagrams/README.md              why each figure is there, and each chapter passed over
 ```
 
 Two rules the format depends on, both measured against the builder rather than assumed:
@@ -159,7 +160,7 @@ Writes a whole book from a one-line description.
 | `--source <path>` (repeatable) | A resource the book is written against: a repo file, a folder, a PDF |
 | `--minutes <N>` | How long the reader has. Sizes the book |
 | `--no-tags` | Write without paragraph tags |
-| `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder |
+| `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder. Slides are copied. Figures are not: `/makebook` redraws them against the new chapters, with the old book's figures as candidates |
 
 **The sources are the point.** A book here is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
 
@@ -256,6 +257,8 @@ rendered_pt = svg_font_px × (measure_pt ÷ viewBox_width)
 **8pt is the floor for a figure label**, and the builder fails you on it rather than leaving it to inspection. Design at a viewBox width of 640 to 900; slide-sized art at 1280 and up with 14px labels renders around 4.5pt in a book column, which is unreadable. `references/diagram-style.md` has the multiplier table, the palette, and the accessibility scaffolding every figure carries.
 
 Raster figures (`.png`, `.jpg`, `.gif`, `.webp`) bind and package, but the builder cannot read the type inside one, so it lists them as *not checked* against the legibility floor rather than passing them silently. A passing DPI number is not a legibility pass.
+
+**The figure decisions are recorded in `diagrams/README.md`**: each figure placed, and each chapter passed over, with the reason. A book that rightly has no figures writes it too. The builder warns when a folder set up as a book, one with a `book.json` or an `assertions.json`, has no such file, because a book bound without the figure pass looks complete either way. That is how a recreate lost every figure of an eight-figure book without a warning. A plain folder of notes is never asked for one.
 
 ---
 
@@ -400,6 +403,7 @@ Chapter 1 of the provenance fixture holds only passing marks, so a run reporting
 | Page numbers wrong in the index | `pdftotext` is not on PATH | `brew install poppler` |
 | makebook stopped working after a plugin update | Should not happen, since the venv is outside the plugin. If it does, the cache path was cleared | Re-run `install.sh` |
 | Figures warn about type below 8pt | The SVG was designed at slide width | Redesign against a viewBox of 640 to 900. Widening the figure buys only 17% |
+| `warning: no diagrams/README.md in the book folder` | The figure pass never ran, or never wrote its record. After a recreate this is expected until it does | Run `/makebook`'s figure pass, which writes the file. A book with no figures still lists the chapters it passed over |
 | A chapter titles itself from its filename | The H1 is not line 1 | Move it to the first line; no blank line, no frontmatter above it |
 | Page counts disagree with the type-size table, or differ between machines | The body font stack fell back to something other than Palatino | Install a Palatino-class serif, or bind the book on one machine consistently. See [Fonts](#fonts) |
 | `warning: N image(s) were not found and are not in the package` | A figure reference resolves to nothing | Fix the path. The EPUB prints `[missing image: <path>]` in the text rather than shipping a dangling `src`, which would fail the whole book on `epubcheck`'s `RSC-007` |
