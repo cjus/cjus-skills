@@ -1319,3 +1319,42 @@ due a rewrite. That rewrite drafts from `/createbook`'s step 5 prompt, which pla
 it would drop every slide the run had just placed, and nothing would report it. The other answer
 was to rewrite such a chapter with its slides handed to the chapter agent, which is the drafting
 option the operator had already turned down.
+
+**Retired 2026-10-12** (§ Figures and slides through a chapter rewrite, 2026-10-12): a rewrite
+now hands the chapter agent the slides, so it no longer drops them.
+
+## Figures and slides through a chapter rewrite, 2026-10-12
+
+Ticket #94, left by #87. `/updatebook`'s chapter rewrite drafts from step 5's prompt and
+replaces the file whole. The prompt carried no figure and no slide, so a rewritten chapter
+bound without the ones the old chapter placed, and nothing reported it. That was true before
+#87, whose slide exemption only kept one rewrite trigger from firing on slide paragraphs.
+
+**Settled by the operator, 2026-10-12: the chapter agent re-places them.** `/updatebook` lists
+what the old chapter places before drafting and hands the list over as step 5's item 15, which
+only a rewrite fills. The other option was for `/updatebook` to place them itself after the
+draft landed, by its § Placing slides rules, which would have left this prompt alone. What the
+agent buys is a slide's explanation written as the chapter is drafted, rather than patched in
+afterwards with a lettered tag in a chapter the rewrite has just cleared of them.
+
+**This is the option § Slides across a recreate, 2026-10-11 turned down, for a different
+occasion.** A recreate changes the chapters' boundaries, so the old placement can name a chapter
+that no longer exists. A rewrite keeps the chapter's number and its place in the book, so the
+old chapter's figures and slides belong to the new one unless the rewrite moved past them.
+
+**Settled by the operator, 2026-10-12: a kept figure is re-checked against the paragraph it now
+follows.** The other option kept its file and its `diagrams/README.md` row unchanged. The
+figure was drawn against the old prose, which is the reason `/makebook` redraws a recreate's
+candidates rather than copying them, and a label or worked example that stopped matching would
+bind with nothing saying so.
+
+**The exemption is retired.** Its reason was the drop, and the drop is gone. It had also never
+reached the trigger for a chapter that already carries several lettered tags, so a later run
+could rewrite a slide-bearing chapter anyway. Paragraphs added for slides now count like any
+others, and a chapter that needs several explanations at once is rewritten with its slides.
+
+**A loss shows before the run reports.** The rewrite compares what the chapter places at `HEAD`
+with what it places after, each image by its path and each inline SVG by its `<title>`, and
+every one that went needs a reason from the agent's findings or the re-check.
+
+**Asserted, not measured:** no chapter has yet been rewritten under this procedure.

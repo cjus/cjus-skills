@@ -167,6 +167,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 - The `check-book.sh` summary lines from both runs, before and after. A run prints two: the counts line and the `chapter prose:` line.
 - The `check-provenance.sh` census from both runs, and any line that moved. A rise in `unverifiable` or `unparsed` is worth a sentence even though neither fails a run, and a risen `unverifiable` is worth naming the quotation behind it: the count cannot tell a source going dark from a quotation breaking against a readable one that shares its mark with an unreadable source.
 - Every tag that moved, and every citation repointed to follow it.
+- **After a chapter rewrite, every figure and slide the old chapter placed**, each kept, corrected or dropped. A kept one names the paragraph beside it before and after, by tag. A corrected figure says what changed in it, and a dropped one gives its reason (§ Rewriting one chapter).
 - Every entry the run added, superseded, retired or turned `expected`, by ID.
 - **That the bound PDF and EPUB in the folder are now stale**, with the command to rebind:
 
@@ -194,7 +195,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \
 
 **A lettered paragraph never goes after the close, or before the first paragraph.** The last paragraph is the close (`narration.md § Close`, `guide.md § Close`), and a paragraph after it is a chapter with two closes, so add before the close, lettered after the paragraph it follows. Nothing comes before paragraph 1, so new opening material is an edit to paragraph 1 or a lettered paragraph after it.
 
-**Lettered tags accumulate, and `check-book.sh` reports every chapter that has them.** Each one is a patch on the chapter as first written. A chapter collecting several, or needing several at once, is due a rewrite, which is what renumbers them (§ When to stop editing in place).
+**Lettered tags accumulate, and `check-book.sh` reports every chapter that has them.** Each one is a patch on the chapter as first written. A chapter collecting several, or needing several at once, is due a rewrite, which is what renumbers them and which keeps the chapter's figures and slides (§ When to stop editing in place).
 
 ## Cutting prose
 
@@ -222,7 +223,7 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 | Level | When | What moves |
 |---|---|---|
 | **Edit in place** | The change is local, and the chapter's claim still holds | Only the edited passage and what § 4 carries with it |
-| **Rewrite one chapter**, keeping its number | A premise under the chapter changed, or it needs several new paragraphs at once, or it already carries several lettered tags | That chapter's tags renumber and citations into it are repointed. Every other chapter stays byte-identical |
+| **Rewrite one chapter**, keeping its number | A premise under the chapter changed, or it needs several new paragraphs at once, or it already carries several lettered tags | That chapter's tags renumber and citations into it are repointed. Its figures and slides are re-placed in the new draft, or dropped with a reason. Every other chapter stays byte-identical |
 | **Recreate the book** | The chapters' boundaries or order change, or the rules the book was written under do | Everything, through `/createbook --recreate` (`createbook/SKILL.md § Recreating a book`) and `§ When the book supersedes one that already exists` |
 
 **A premise is a fact the chapter's plans are built on**: the class size, the number of sessions, the version a procedure assumes. When one changes, the passages built on it are wrong in their structure, not only in a number. Patching the number leaves plans built for the old premise with an aside about the new one. When the reference guide's class size moved from twenty to eleven, five chapters gained "your roster is eleven, so..." beside plans built for twenty, and one of them carried both four-evening schedules with the arithmetic for the outdated one. Rewrite every chapter the premise reaches, cut what no longer serves, and accept the renumber.
@@ -233,11 +234,23 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 
 1. **Read `assertions.json`, not `git log -p`.** A rewrite works from the outline row, the sources and the file, and the file is where every fact a revision established already sits, since step 0 would not have let this run start without it. `assertions.sh list "$BOOK"` shows each entry that holds. Where the rewrite follows a changed premise, supersede its entry before drafting (step 2).
 2. **Update the chapter's outline row** for the change: the brief, the terms, the anchors, and the Carries row naming the entries it rests on.
-3. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row, its sources, and the entries it carries along with every `book` entry. This is the one edit this skill hands to a chapter agent. Its paragraphs cite their entries, so each `legacy` entry this chapter alone rested on can now turn `expected` (step 3).
-4. **Replace the file whole.** Its tags count from 1 again, and the lettered ones are gone.
-5. **Repoint every citation into the chapter**, inside the book folder and outside it, by finding where the cited sentence now lives. A citation whose content is gone is reworded or removed. `check-references.sh`'s check 4 names each citation whose paragraph changed, so run it before committing, for the reason § Cutting prose gives.
-6. **Redo the chapter's header, `## In short` and concept list**, and the glossary entries it owns (§ The glossary).
-7. **Run the checks in step 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed and the repointed files, and nothing else.
+3. **List every figure and slide the chapter places, before anything is drafted.** Each image on a line of its own and each inline SVG, fenced or raw, is a figure, except an image under the folder `book.json`'s `slide_figures` names, which is a slide. An image inside a sentence is neither. Record each as the chapter wrote it, with the paragraph beside it: the one before a figure, the one after a slide. Note that paragraph's tag, or its opening words in a book without tags, and what it says in a sentence. Add any slide this run was placing in the chapter when it became a rewrite (§ Placing slides). The new chapter answers to this list.
+4. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row, its sources, the entries it carries along with every `book` entry, and the list above as item 15. This is the one edit this skill hands to a chapter agent. Its paragraphs cite their entries, so each `legacy` entry this chapter alone rested on can now turn `expected` (§ 3). The agent re-places each figure and slide where the new prose needs it, and names any it left out in its findings file, with the reason.
+5. **Replace the file whole.** Its tags count from 1 again, and the lettered ones are gone. **Then read the agent's findings file**, `outline-findings/<chapter file stem>.md` in the book folder, where an absent file is the all-clear (`createbook/SKILL.md § 5. Draft the chapters`).
+6. **Re-check every figure the new chapter keeps against the paragraph it now follows.** It was drawn against the old prose, so a label, number or worked example in it can disagree with the new one, and a figure is checked the way prose is (`makebook/SKILL.md § Deciding where a figure helps`). Correct one that no longer matches the way a corrected fact is (§ 2's first row), or drop it with the reason. Then bring its `diagrams/README.md` row into line: the sentence saying why the figure is there has to be true of the new paragraph. Record a figure the rewrite dropped in the README as passed over, with its reason, the way the figure pass records one.
+7. **Repoint every citation into the chapter**, inside the book folder and outside it, by finding where the cited sentence now lives. A citation whose content is gone is reworded or removed. `check-references.sh`'s check 4 names each citation whose paragraph changed, so run it before committing, for the reason § Cutting prose gives.
+8. **Redo the chapter's header, `## In short` and concept list**, and the glossary entries it owns (§ The glossary).
+9. **Compare what the chapter places before and after**, while the rewrite is still uncommitted, so that `HEAD` is the old chapter:
+
+   ```bash
+   CHAPTER=<the chapter's file>
+   # each standalone image's path, and each inline SVG's <title>
+   placed() { grep -oE '^!\[[^]]*\]\([^)]+\)|<title>[^<]*</title>' | sed -E 's/^!\[[^]]*\]//'; }
+   diff <(git show "HEAD:./$CHAPTER" | placed | sort) <(placed <"$CHAPTER" | sort)
+   ```
+
+   A `<` line is a figure or slide the rewrite dropped, and each needs a reason, from the findings file or the re-check. A `>` line is one it gained, which only a slide this run was placing should be. **No output means every one was kept.** Where each now sits is for the report (§ 6).
+10. **Run the checks in step 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed, the repointed files, and `diagrams/README.md` and any figure the re-check corrected, and nothing else.
 
 ### Recreating the book
 
@@ -276,7 +289,7 @@ What appending obliges here, beyond that section:
 
 - **Place each slide where the chapter's lesson needs it, not where the old book had it.** A recreate changes chapter boundaries, so the old placement can name a chapter that no longer exists, beside a paragraph the new book does not have. Read the chapter, find the paragraph that explains what the slide shows, and put the slide on a line of its own directly before it: `![Caption](<slide folder>/<file>)`. That is the reverse of a figure, which follows the paragraph stating what it shows. A slide prints as a compact row with the paragraph after it running beside the art (`makebook/SKILL.md § Lesson-script slides`), so the paragraph that explains it belongs there. The path has to start with the folder `book.json`'s `slide_figures` names, or the bind numbers the slide as a figure.
 - **Where no paragraph explains what the slide shows**, rewrite the one after it where it stands, and it keeps its tag, or add the explanation after the slide with a lettered tag (§ Adding prose). Either way it is said to the reader, about what the slide shows, and never what to say over the slide in a room, which a chapter does not script (`createbook/reference/guide.md § A shape for a teaching chapter`).
-- **Paragraphs added for slides do not count toward § Adding prose's several-at-once rule.** The chapter's claim has not moved, and the rewrite that rule calls for would drop the slides this run placed, because the chapter prompt it drafts from places none (§ Rewriting one chapter). `check-book.sh` still reports the lettered tags.
+- **Paragraphs added for slides count toward § Adding prose's several-at-once rule like any others.** A chapter that needs several explanations at once is due a rewrite, and the rewrite takes the slides with it: the chapter agent places each one, the slides already in the chapter and the ones this run was placing, and writes each explanation as it drafts (§ Rewriting one chapter).
 - **A slide no lesson needs stays unplaced, with the reason**, so it leaves the book by a decision, the way a figure the figure pass passes over does.
 
 **Report each slide placed**, with its chapter and the tag of the paragraph beside it, and each one left unplaced with the reason. The bind's `slides:` line counts every slide the chapters place, from this run and any earlier one, so after this run it should print the total placed so far.
