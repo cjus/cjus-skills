@@ -1245,3 +1245,77 @@ If a recreate ever shows a candidate dropped without a reason, the check would f
 `assertions.json` precedent. The recreate would write the old figure names into the new
 folder, and `check-provenance.sh`, which already reads `diagrams/README.md`, would check them
 once a new README exists.
+
+## Figure candidates across a recreate, 2026-10-11
+
+Ticket #87, left by #80. The recreate's gate counted every figure the old chapters placed, but
+`/makebook`'s figure pass took only the old `diagrams/README.md` as its candidates. A figure the
+old chapters placed and the README never recorded could still leave the book by drift, which is
+the failure #80 closed for every other figure.
+
+**The candidates are both records, with a figure in both counted once.** The old chapters
+record what the reader saw, and the old README records why. Either can fall behind the other.
+A figure placed without the figure pass is in the chapters only. One an edit removed while its
+README line stayed is in the README only. The gate counts the same set the pass reads, so the
+placed-again and passed-over sum in `/makebook`'s report answers to the number the operator saw
+at the gate. The gate also names each figure only one record holds, because that list is where
+the old README fell behind its book.
+
+**The old chapters are read for their figures and never for their prose.** Step 2 refuses them
+as an input to drafting, and listing the images they reference reads no sentence of theirs.
+
+**No recorded candidate list in the new folder. Settled by the operator, 2026-10-11.** The pass
+reads the old folder when it runs, and the operator already keeps that folder until the pass is
+done. #80 made a recorded list wait on a recreate that drops a candidate without a reason, and
+widening the candidate set is not that evidence.
+
+**Asserted, not measured:** no book has yet been recreated with a README that missed a figure.
+The case is reasoned from how each record falls behind, not observed.
+
+## Slides across a recreate, 2026-10-11
+
+Ticket #87, left by #80. The recreate copies the folder `book.json`'s `slide_figures` names,
+but drafting never places a slide, so a recreated book carrying slides bound without them. The
+reference book's slides survived the recreate #80 measured only because the project that uses the book
+checks for them.
+
+**Settled by the operator, 2026-10-11: the operator places them, through `/updatebook`, where
+the new lesson needs each one.** Three options were weighed:
+
+- **The chapter agents, while drafting.** They would write each slide's notes as they drafted,
+  which is what this option buys. Handing them the slides rather than the old chapters' slide
+  references keeps step 2's rule. It is the largest change, to step 5.
+- **`/makebook`'s figure pass.** It would put teaching aids into a pass built for numbered
+  figures of the argument (`makebook/SKILL.md § Lesson-script slides`).
+- **The operator, after the recreate.** Chosen. The occasion is rare, where a slide goes is the
+  operator's judgment either way, and the drafting rules stay as they are.
+
+**Where the new lesson needs it, not where the old chapter had it.** A recreate is due when the
+chapters' boundaries change, so the old placement can name a chapter the new book does not have.
+
+**The accepted cost: no paragraph was drafted to explain a slide.** In the reference book, slide
+notes were 8,733 words, 14.1% of the page (§ The guide profile, 2026-09-20), and a recreate
+carries none of them. `/updatebook` puts each slide before the paragraph that already explains
+it. Where none does, it rewrites the paragraph after the slide in place, keeping its tag, or
+adds one with a lettered tag. Either way the explanation is said to the reader, never what to
+say over the slide, which no chapter scripts (`reference/guide.md § A shape for a teaching
+chapter`).
+
+**No bind warning for an unplaced slide. Settled by the operator, 2026-10-11.** The recreate's
+report is the one place that lists the copied slides as not yet placed. The bind's `slides:`
+line counts every slide the chapters place and prints nothing when none does, so the operator
+compares it against the report's count.
+
+**Corrected at the pre-test review, 2026-10-12: a slide goes before the paragraph that explains
+it.** The first text put a slide after the paragraph it supports, carrying the figure rule
+across. But a slide row floats, so the paragraph after it prints beside the art, as in the guide
+fixture's "The slide above" paragraph. Followed as first written, the rule would have rewritten
+each chapter's next point into an explanation of the slide. A figure still follows the paragraph
+that states what it shows.
+
+**Paragraphs added for slides are exempt from the several-at-once rewrite. Settled by the
+operator, 2026-10-12.** `/updatebook` says a chapter needing several new paragraphs at once is
+due a rewrite. That rewrite drafts from `/createbook`'s step 5 prompt, which places no slide, so
+it would drop every slide the run had just placed, and nothing would report it. The other answer
+was to rewrite such a chapter with its slides handed to the chapter agent, which is the drafting
+option the operator had already turned down.

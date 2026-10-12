@@ -87,6 +87,7 @@ What an edit obliges you to carry is decided by which of these it is. Read the r
 | **Supplies a fact no source holds, rules on the sources or the scope, or adopts a recommendation** | As the edit it comes with | An entry in `assertions.json`: added, or superseded where it replaces one, in this run and before the prose changes (`createbook/SKILL.md § The assertions file`). A measurement re-run supersedes its `measured` entry |
 | **Adds or retires a term** | Nothing moves | The term ledger row, and `glossary.md`. See § The glossary |
 | **Adds a figure** | Nothing moves: a figure line takes no tag and advances no count (`chapter-prose.md § Paragraph tags`) | `diagrams/README.md`, and the figure numbers after it in the same chapter |
+| **Places a slide** | Nothing moves: a slide line takes no tag, advances no count, and carries no figure number | Nothing in `diagrams/README.md`, which records figures and not slides. The paragraph after it, which prints beside it, where it does not explain the slide. See § Placing slides |
 | **Adds a chapter** | Appending is free; inserting rewrites every later filename and every tag inside it | See § Adding a chapter |
 | **Removes a chapter** | Breaks every citation into it, and renumbers everything after it | Stop and confirm with the operator first |
 
@@ -268,6 +269,17 @@ What appending obliges here, beyond that section:
 - **A term's owning chapter changes:** the `(ch. N)` moves with it.
 
 `check-book.sh` catches a malformed entry, an entry with no definition, a chapter the book does not have, a duplicate term, and a `book.json` that declares a glossary the folder is missing. It cannot catch the three that matter most here: a glossed term with no entry, an entry for a term no chapter glosses, and a definition that has drifted from its chapter. Those are read against the chapter.
+
+## Placing slides
+
+**A recreate copies the old book's slide folder and places none of its slides** (`createbook/SKILL.md § Recreating a book`), so a recreated book that carries slides comes here to have them placed. An instruction as broad as "place the copied slides" is fine. It reaches every chapter a slide lands in, and each of those chapters still gets the smallest edit. Where the book's outside citations are still to be repointed after a recreate, place the slides first, so a paragraph this run rewrites is repointed once.
+
+- **Place each slide where the chapter's lesson needs it, not where the old book had it.** A recreate changes chapter boundaries, so the old placement can name a chapter that no longer exists, beside a paragraph the new book does not have. Read the chapter, find the paragraph that explains what the slide shows, and put the slide on a line of its own directly before it: `![Caption](<slide folder>/<file>)`. That is the reverse of a figure, which follows the paragraph stating what it shows. A slide prints as a compact row with the paragraph after it running beside the art (`makebook/SKILL.md § Lesson-script slides`), so the paragraph that explains it belongs there. The path has to start with the folder `book.json`'s `slide_figures` names, or the bind numbers the slide as a figure.
+- **Where no paragraph explains what the slide shows**, rewrite the one after it where it stands, and it keeps its tag, or add the explanation after the slide with a lettered tag (§ Adding prose). Either way it is said to the reader, about what the slide shows, and never what to say over the slide in a room, which a chapter does not script (`createbook/reference/guide.md § A shape for a teaching chapter`).
+- **Paragraphs added for slides do not count toward § Adding prose's several-at-once rule.** The chapter's claim has not moved, and the rewrite that rule calls for would drop the slides this run placed, because the chapter prompt it drafts from places none (§ Rewriting one chapter). `check-book.sh` still reports the lettered tags.
+- **A slide no lesson needs stays unplaced, with the reason**, so it leaves the book by a decision, the way a figure the figure pass passes over does.
+
+**Report each slide placed**, with its chapter and the tag of the paragraph beside it, and each one left unplaced with the reason. The bind's `slides:` line counts every slide the chapters place, from this run and any earlier one, so after this run it should print the total placed so far.
 
 ## What this skill does not do
 

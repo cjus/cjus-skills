@@ -4459,8 +4459,9 @@ def main(argv: list[str]) -> int:
         print(f"    The figure pass writes it (makebook/SKILL.md § Deciding "
               f"where a figure helps): each figure placed and each chapter "
               f"passed over, with why. A book that rightly has no figures "
-              f"writes it too. After a recreate, the old book's "
-              f"{FIGURE_RECORD} lists the candidates.")
+              f"writes it too. After a recreate, the candidates are "
+              f"every figure the old book placed, in its chapters or "
+              f"its {FIGURE_RECORD}.")
     if glossary:
         linked = sum(1 for _, c, _ in glossary if c)
         print(f"glossary: {len(glossary)} terms, {linked} carrying a chapter "
