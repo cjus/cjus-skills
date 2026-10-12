@@ -93,7 +93,8 @@ stating what it shows.
 ### Release
 
 - [x] Bump bookcraft's version in `plugin.json` (currently 1.13.0), and run the fixture checks
-  CI runs. 1.13.0 to 1.14.0. The suite passes 18 of 18 and 231 citations resolve.
+  CI runs. 1.13.0 to 1.14.0. After the pre-test review's fixes the suite passes 18 of 18, 232
+  citations resolve, and CI passed all five jobs on PR #95 before them.
 
 ## Open Questions
 

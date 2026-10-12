@@ -232,7 +232,7 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
 
 ### Rewriting one chapter
 
-1. **Read `assertions.json`, not `git log -p`.** A rewrite works from the outline row, the sources and the file, and the file is where every fact a revision established already sits, since step 0 would not have let this run start without it. `assertions.sh list "$BOOK"` shows each entry that holds. Where the rewrite follows a changed premise, supersede its entry before drafting (step 2).
+1. **Read `assertions.json`, not `git log -p`.** A rewrite works from the outline row, the sources and the file, and the file is where every fact a revision established already sits, since step 0 would not have let this run start without it. `assertions.sh list "$BOOK"` shows each entry that holds. Where the rewrite follows a changed premise, supersede its entry before drafting (§ 2).
 2. **Update the chapter's outline row** for the change: the brief, the terms, the anchors, and the Carries row naming the entries it rests on.
 3. **List every figure and slide the chapter places, before anything is drafted.** Each image on a line of its own and each inline SVG, fenced or raw, is a figure, except an image under the folder `book.json`'s `slide_figures` names, which is a slide. An image inside a sentence is neither. Record each as the chapter wrote it, with the paragraph beside it: the one before a figure, the one after a slide. Note that paragraph's tag, or its opening words in a book without tags, and what it says in a sentence. Add any slide this run was placing in the chapter when it became a rewrite (§ Placing slides). The new chapter answers to this list.
 4. **Draft the chapter with `/createbook`'s step 5 prompt** (`createbook/SKILL.md § 5. Draft the chapters`), with its number, the book's profile, its outline row, its sources, the entries it carries along with every `book` entry, and the list above as item 15. This is the one edit this skill hands to a chapter agent. Its paragraphs cite their entries, so each `legacy` entry this chapter alone rested on can now turn `expected` (§ 3). The agent re-places each figure and slide where the new prose needs it, and names any it left out in its findings file, with the reason.
@@ -245,12 +245,12 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
    ```bash
    CHAPTER=<the chapter's file>
    # each standalone image's path, and each inline SVG's <title>
-   placed() { grep -oE '^!\[[^]]*\]\([^)]+\)|<title>[^<]*</title>' | sed -E 's/^!\[[^]]*\]//'; }
-   diff <(git show "HEAD:./$CHAPTER" | placed | sort) <(placed <"$CHAPTER" | sort)
+   placed() { grep -oE '^!\[[^]]*\]\([^)]+\)|<title[^>]*>[^<]*</title>' | sed -E 's/^!\[[^]]*\]//; s/^<title[^>]*>/<title>/'; }
+   diff <(git -C "$(dirname "$CHAPTER")" show "HEAD:./$(basename "$CHAPTER")" | placed | sort) <(placed <"$CHAPTER" | sort)
    ```
 
    A `<` line is a figure or slide the rewrite dropped, and each needs a reason, from the findings file or the re-check. A `>` line is one it gained, which only a slide this run was placing should be. **No output means every one was kept.** Where each now sits is for the report (§ 6).
-10. **Run the checks in step 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed, the repointed files, and `diagrams/README.md` and any figure the re-check corrected, and nothing else.
+10. **Run the checks in § 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed, the repointed files, and `diagrams/README.md` and any figure the re-check corrected, and nothing else.
 
 ### Recreating the book
 

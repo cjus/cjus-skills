@@ -32,3 +32,18 @@ The operator ruled on both:
   goes from 1.13.0 to 1.14.0.
 
 18 of 18 fixtures, 231 citations.
+
+### 2026-10-12 10:17:03 MDT: the pre-test review's in-scope findings, applied
+
+The review asked for changes. CI passed all five jobs on PR #95.
+- **Step 9 missed an inline SVG whose `<title>` carries an `id`**, which is the form the house
+  figure template writes. It now matches either form.
+- **Step 9 failed on an absolute chapter path**, which left the old side empty so no drop could
+  show. It now runs `git show` from the chapter's own folder.
+- **Item 15 told the agent to copy an inline SVG** that `chapter-prose.md § Never` forbids as
+  inline HTML. It now names the SVG as the one exception.
+- The rewrite list's own "step 2" and "step 5" now read "§ 2" and "§ 5".
+
+A script verified step 9 as written in the skill: no output for an unchanged chapter, by
+relative or absolute path, and every dropped figure and inline SVG when the rewrite drops them.
+The review's five suggestions were left as they are. 18 of 18 fixtures, 232 citations.
