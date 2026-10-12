@@ -93,8 +93,8 @@ stating what it shows.
 ### Release
 
 - [x] Bump bookcraft's version in `plugin.json` (currently 1.13.0), and run the fixture checks
-  CI runs. 1.13.0 to 1.14.0. After the pre-test review's fixes the suite passes 18 of 18, 232
-  citations resolve, and CI passed all five jobs on PR #95 before them.
+  CI runs. 1.13.0 to 1.14.0. At close the suite passes 18 of 18, 232 citations resolve, CI
+  passes all five jobs on PR #95, and the close review approved.
 
 ## Open Questions
 
@@ -113,3 +113,9 @@ stating what it shows.
 - A figure the rewrite drops is recorded in `diagrams/README.md` as passed over, but nothing
   says whether its SVG file leaves `diagrams/`. Left there, step 1's sweep of `.svg` files keeps
   finding facts no chapter shows; removed, a figure another chapter still places would break.
+
+**Triaged at close, 2026-10-12: six items, all DROP, none ticketed.** The one item above, plus
+five the pre-test review left as suggestions: a stale findings file read as the agent's, a book
+with no `diagrams/README.md` gaining a one-row one, no step 9 fallback for a book outside git, a
+retitled inline figure showing as a drop and a gain, and item 15's image-opening phrasing (since
+applied at close). None has both a concrete symptom and a named occasion that would pick it up.

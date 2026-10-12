@@ -249,7 +249,7 @@ An edit is the right tool while the change is local. Past that, a rewrite costs 
    diff <(git -C "$(dirname "$CHAPTER")" show "HEAD:./$(basename "$CHAPTER")" | placed | sort) <(placed <"$CHAPTER" | sort)
    ```
 
-   A `<` line is a figure or slide the rewrite dropped, and each needs a reason, from the findings file or the re-check. A `>` line is one it gained, which only a slide this run was placing should be. **No output means every one was kept.** Where each now sits is for the report (§ 6).
+   A `<` line is a figure or slide the rewrite dropped, and each needs a reason, from the findings file or the re-check. One with neither is put back where the new prose needs it, or dropped now with its reason, before the report. A `>` line is one it gained, which only a slide this run was placing should be. **No output means every one was kept.** Where each now sits is for the report (§ 6).
 10. **Run the checks in § 5.** The diff shows this chapter, `OUTLINE.md`, the glossary where it changed, the repointed files, and `diagrams/README.md` and any figure the re-check corrected, and nothing else.
 
 ### Recreating the book
