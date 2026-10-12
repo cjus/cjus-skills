@@ -82,7 +82,8 @@ source material.
 ### Release
 
 - [x] Bump bookcraft's version in `plugin.json`, and run the fixture checks CI runs. 1.12.1 to
-  1.13.0. The suite passes 18 of 18, and 225 citations resolve.
+  1.13.0. At close the suite passes 18 of 18, 227 citations resolve, and CI passes all five
+  jobs on PR #93.
 
 ## Open Questions
 
@@ -95,8 +96,9 @@ source material.
     as the way to place them.
   - A slide line takes no tag and advances no count, so placing slides moves no tag other files
     cite, before or after the figure pass.
-  - Accepted cost: the paragraph beside a slide was not drafted as its notes. `/updatebook` can
-    rewrite that paragraph in place, and the paragraph keeps its tag.
+  - Accepted cost: no paragraph was drafted to explain a slide. `/updatebook` puts each slide
+    before the paragraph that already explains it. Where none does, it rewrites the paragraph
+    after the slide in place, keeping its tag, or adds a lettered one (pre-test review, 2026-10-12).
 - ~~Should a slide go where the old chapter placed it, or wherever the new chapter's lesson calls
   for it?~~ **Resolved 2026-10-11 by the operator: where the new lesson needs it.** A recreate
   changes chapter boundaries, so the old placement may name a chapter that no longer exists.
@@ -125,3 +127,22 @@ From the pre-test review (`pr-review-2026-10-12.md`), for triage at `/pr:close`:
   chapter replaces the file whole from `/createbook`'s step 5 prompt, which carries neither, and
   nothing warns. This was already true on `main`. Occasion: the next chapter rewrite of a book
   that carries figures or slides.
+
+From the close review (`pr-review-2026-10-12-close.md`), for triage at `/pr:close`:
+
+- The option-A exemption covers only the several-at-once rewrite trigger. A chapter that already
+  carries several lettered tags is still due a rewrite (`updatebook/SKILL.md § Adding prose`,
+  § When to stop editing in place), and that rewrite drops its slides. The exemption sits in
+  § Placing slides, which a later run does not read. A two-clause edit would extend it, and the
+  operator's reason covers that trigger too. Fixing the item above would make this one moot.
+- Which provenance mark a paragraph explaining a slide carries. The slide folder is not a
+  declared source, so marking the slide path fails `check-provenance.sh`, and marking the
+  explanation `fill` moves the chapter header's Fills-in row. The checks catch either case.
+
+**Triaged at `/pr:close`, 2026-10-12.** Nine items. Seven were dropped, and two were ticketed
+together as #94 with the operator's approval.
+
+- **Dropped:** the provenance-mark question above, and the six items the two reviews had
+  already dropped.
+- **Ticketed as #94:** the chapter rewrite that drops figures and slides, and the exemption that
+  does not reach the lettered-tags trigger. They share a root cause.

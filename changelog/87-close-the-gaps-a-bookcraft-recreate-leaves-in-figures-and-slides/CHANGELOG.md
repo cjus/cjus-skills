@@ -2,71 +2,58 @@
 
 Start date: 2026-10-11 10:31:26 MDT
 
-A `/createbook --recreate` counts every figure the old chapters placed, but `/makebook`'s
-figure pass takes only the old `diagrams/README.md` as its candidates, so a figure the README
-never recorded can leave the book by drift. The recreate also copies the slide folder, but
-nothing places the copied slides in the new chapters, so the new book binds without them. This
-branch closes both gaps.
+A `/createbook --recreate` counted every figure the old chapters placed, but `/makebook`'s
+figure pass took only the old `diagrams/README.md` as its candidates, so a figure the README
+never recorded could leave the book by drift. The recreate also copied the slide folder, but
+nothing placed the copied slides, so the new book bound without them. This branch closes both
+gaps.
 
 ## Changes
 
 ### 2026-10-11 11:00:32 MDT: the open questions are settled
 
-The operator ruled on all four questions.
-- **Slides:** placed by the operator through `/updatebook`, wherever the new lesson needs each one.
-- **Bind:** gets no warning for unplaced slides.
-- **Figure candidates:** no recorded list goes into the new folder.
+The operator ruled on all four:
+- The operator places slides through `/updatebook`, where the new lesson needs each one.
+- The bind gets no warning for unplaced slides.
+- No candidate list is recorded in the new folder.
 
 ### 2026-10-11 11:00:51 MDT: the figure pass takes every figure the old book placed
 
-- **`makebook/SKILL.md § Deciding where a figure helps`.** The candidates are the old README's
-  placed figures plus every figure the old chapters place, outside the slide folder, with a
-  figure in both counted once. A candidate the README never recorded is named in the new README
-  by its old file name or `<title>`, and its old chapter.
-- **`createbook/SKILL.md § Recreating a book`.** The gate counts the same set and names each
-  figure only one record holds. Step 9, the candidates paragraph and the folder note in
-  § Notes name the old folder, not the old README.
-- **`build-book.py`.** The missing-record warning's last sentence names both records. No
-  fixture asserts that sentence.
-- **`createbook/NOTES.md`.** Gains § Figure candidates across a recreate, 2026-10-11.
-
-The suite passes 18 of 18, and 221 citations resolve.
+The candidates are the old README's placed figures plus every figure the old chapters place,
+counted once each (`makebook § Deciding where a figure helps`). A candidate the README never
+recorded is named by its old file name or `<title>`. The recreate's gate counts the same set and
+names each figure only one record holds. Step 9, the candidates paragraph and § Notes point at
+the old folder, and the binder's missing-README warning names both records. `NOTES.md` gains a
+dated section. 18 of 18 fixtures, 221 citations.
 
 ### 2026-10-11 11:07:49 MDT: the operator places a recreate's slides through /updatebook
 
-- **`createbook/SKILL.md § Recreating a book`.** Step 9's report lists every copied slide as not
-  yet placed, and names `/updatebook` to place them. The gate's slide count says the new chapters
-  will place none. A new paragraph explains why drafting places no slide, and why placing one
-  later moves no tag. § Notes covers it too.
-- **`updatebook/SKILL.md`.** Gains a "Places a slide" row in step 2's table, and § Placing
-  slides: where the lesson needs it, the slide folder's path prefix, the paragraph beside it as
-  its notes, a slide left unplaced with a reason, and what to report.
-- **`README.md`.** The `--recreate` row says how slides get placed.
-- **`createbook/NOTES.md`.** Gains § Slides across a recreate, 2026-10-11, with the three
-  options weighed.
-- **`plugin.json`.** 1.12.1 to 1.13.0.
+- **The recreate.** Step 9 lists the copied slides as not yet placed. The gate says the new
+  chapters will place none, and a paragraph explains why.
+- **`/updatebook`.** Gains a "Places a slide" row and § Placing slides.
+- **Elsewhere.** The README's `--recreate` row is updated, `NOTES.md` records the three options
+  weighed, and bookcraft goes from 1.12.1 to 1.13.0.
 
-The suite passes 18 of 18, and 225 citations resolve.
+18 of 18 fixtures, 225 citations.
 
 ### 2026-10-12 09:25:42 MDT: the pre-test review's six findings, applied
 
-The review (`pr-review-2026-10-12.md`) approved. The operator chose option A on finding 2.
+The review approved, and the operator chose option A on finding 2.
+- A slide goes before the paragraph that explains it, which is the paragraph its floating row
+  prints beside. The first text had carried the figure rule across.
+- Paragraphs added for slides are exempt from the several-at-once rewrite.
+- The explanation is said to the reader, never as what to say over the slide.
+- Slides are placed before outside citations are repointed.
+- The bind's `slides:` line is described as a running total.
+- The slide folder is left out of both candidate records.
 
-- **1. A slide goes before the paragraph that explains it** (`updatebook/SKILL.md § Placing
-  slides`). The first text carried the figure rule across. A slide row floats, so the paragraph
-  after a slide is the one printed beside it. The report gives the tag of the paragraph beside
-  each slide.
-- **2. Paragraphs added for slides are exempt from the several-at-once rewrite.** The rewrite
-  would drop the slides, because its prompt places none.
-- **3. The explanation is said to the reader**, never what to say over the slide, citing
-  `guide.md § A shape for a teaching chapter`.
-- **4. Place slides before repointing outside citations** (`createbook/SKILL.md § Recreating a
-  book` and `updatebook § Placing slides`), so a rewritten paragraph is repointed once.
-- **5. The bind's `slides:` line is a running total** across placing runs.
-- **6. The slide folder is left out of both candidate records** (`makebook/SKILL.md § Deciding
-  where a figure helps`, and the recreate's gate), not only the chapters.
-- **`createbook/NOTES.md`.** § Slides across a recreate records the correction to finding 1 and
-  the ruling on finding 2.
-- **Deferred.** A chapter rewrite drops its figures and slides, which was already true on `main`.
+`NOTES.md` records the correction and the ruling. A chapter rewrite dropping its figures and
+slides, which was already true on `main`, went to Deferred. 18 of 18 fixtures, 227 citations.
 
-The suite passes 18 of 18, and 227 citations resolve.
+### 2026-10-12 09:37:48 MDT: the close review's suggestions, applied
+
+The close review approved. Recreate step order now repoints outside citations only once the
+slides are placed. The unplaced-slide sentence names both reports. The summary's CI line and
+diff size are corrected. Two items went to Deferred: the exemption not reaching the
+accumulated-lettered-tags trigger, and which provenance mark a slide's explanation carries.
+18 of 18 fixtures, 227 citations.
