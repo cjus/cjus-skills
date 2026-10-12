@@ -111,3 +111,17 @@ source material.
   it now warns about a missing `diagrams/README.md`?~~ **Resolved 2026-10-11 by the operator:
   no.** `build-book.py` does not change. A recreate's report is the only place that shows
   which copied slides are not placed yet (plan item 4).
+- ~~Raised by the pre-test review, finding 2: should paragraphs added for slides in a placing run
+  be exempt from `/updatebook`'s several-at-once rewrite rule, or should such a chapter be
+  rewritten with its slides handed to the chapter agent?~~ **Resolved 2026-10-12 by the
+  operator: exempt.** A rewrite drafts from a prompt that places no slide, so it would drop the
+  slides the run had just placed.
+
+## Deferred
+
+From the pre-test review (`pr-review-2026-10-12.md`), for triage at `/pr:close`:
+
+- An `/updatebook` chapter rewrite drops the chapter's figures and slides. § Rewriting one
+  chapter replaces the file whole from `/createbook`'s step 5 prompt, which carries neither, and
+  nothing warns. This was already true on `main`. Occasion: the next chapter rewrite of a book
+  that carries figures or slides.

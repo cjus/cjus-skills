@@ -1293,13 +1293,29 @@ the new lesson needs each one.** Three options were weighed:
 **Where the new lesson needs it, not where the old chapter had it.** A recreate is due when the
 chapters' boundaries change, so the old placement can name a chapter the new book does not have.
 
-**The accepted cost: the paragraph beside a slide was not drafted as its notes.** The compact
-row prints the following paragraph beside the art, so a reader takes it as the slide's notes.
-`/updatebook` rewrites that paragraph in place where it does not speak to the slide, and it
-keeps its tag. In the reference book, slide notes were 8,733 words, 14.1% of the page (§ The
-guide profile, 2026-09-20).
+**The accepted cost: no paragraph was drafted to explain a slide.** In the reference book, slide
+notes were 8,733 words, 14.1% of the page (§ The guide profile, 2026-09-20), and a recreate
+carries none of them. `/updatebook` puts each slide before the paragraph that already explains
+it. Where none does, it rewrites the paragraph after the slide in place, keeping its tag, or
+adds one with a lettered tag. Either way the explanation is said to the reader, never what to
+say over the slide, which no chapter scripts (`reference/guide.md § A shape for a teaching
+chapter`).
 
 **No bind warning for an unplaced slide. Settled by the operator, 2026-10-11.** The recreate's
 report is the one place that lists the copied slides as not yet placed. The bind's `slides:`
-line counts only the slides a chapter places, and prints nothing when none does, so the operator
+line counts every slide the chapters place and prints nothing when none does, so the operator
 compares it against the report's count.
+
+**Corrected at the pre-test review, 2026-10-12: a slide goes before the paragraph that explains
+it.** The first text put a slide after the paragraph it supports, carrying the figure rule
+across. But a slide row floats, so the paragraph after it prints beside the art, as in the guide
+fixture's "The slide above" paragraph. Followed as first written, the rule would have rewritten
+each chapter's next point into an explanation of the slide. A figure still follows the paragraph
+that states what it shows.
+
+**Paragraphs added for slides are exempt from the several-at-once rewrite. Settled by the
+operator, 2026-10-12.** `/updatebook` says a chapter needing several new paragraphs at once is
+due a rewrite. That rewrite drafts from `/createbook`'s step 5 prompt, which places no slide, so
+it would drop every slide the run had just placed, and nothing would report it. The other answer
+was to rewrite such a chapter with its slides handed to the chapter agent, which is the drafting
+option the operator had already turned down.

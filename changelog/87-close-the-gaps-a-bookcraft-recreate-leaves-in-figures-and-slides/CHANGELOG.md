@@ -47,3 +47,26 @@ The suite passes 18 of 18, and 221 citations resolve.
 - **`plugin.json`.** 1.12.1 to 1.13.0.
 
 The suite passes 18 of 18, and 225 citations resolve.
+
+### 2026-10-12 09:25:42 MDT: the pre-test review's six findings, applied
+
+The review (`pr-review-2026-10-12.md`) approved. The operator chose option A on finding 2.
+
+- **1. A slide goes before the paragraph that explains it** (`updatebook/SKILL.md § Placing
+  slides`). The first text carried the figure rule across. A slide row floats, so the paragraph
+  after a slide is the one printed beside it. The report gives the tag of the paragraph beside
+  each slide.
+- **2. Paragraphs added for slides are exempt from the several-at-once rewrite.** The rewrite
+  would drop the slides, because its prompt places none.
+- **3. The explanation is said to the reader**, never what to say over the slide, citing
+  `guide.md § A shape for a teaching chapter`.
+- **4. Place slides before repointing outside citations** (`createbook/SKILL.md § Recreating a
+  book` and `updatebook § Placing slides`), so a rewritten paragraph is repointed once.
+- **5. The bind's `slides:` line is a running total** across placing runs.
+- **6. The slide folder is left out of both candidate records** (`makebook/SKILL.md § Deciding
+  where a figure helps`, and the recreate's gate), not only the chapters.
+- **`createbook/NOTES.md`.** § Slides across a recreate records the correction to finding 1 and
+  the ruling on finding 2.
+- **Deferred.** A chapter rewrite drops its figures and slides, which was already true on `main`.
+
+The suite passes 18 of 18, and 227 citations resolve.
