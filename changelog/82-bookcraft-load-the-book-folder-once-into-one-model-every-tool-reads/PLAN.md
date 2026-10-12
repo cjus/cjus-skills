@@ -127,6 +127,9 @@ and a missed copy ships a book the checkers grade differently from how it binds.
 
 ## Open Questions
 
+Every question below has a recommended answer, R1 to R10, in `CHANGELOG.md § recommendations
+for every open question`. Each stays open until the operator rules on it.
+
 - Where does `book_model.py` live? The five tools sit in three skills
   (`makebook/scripts/`, `createbook/scripts/`, `check-claims/scripts/`), so the model needs a
   path each can reach once the plugin is installed. Candidates: the plugin-level `scripts/`
