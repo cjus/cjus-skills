@@ -160,9 +160,10 @@ jobs:
   # quietly test something else.
   #
   # The binder is not installed here: it needs 3.12 and install.sh's venv, which
-  # the job above covers. So the two fixtures that bind a real book skip, and the
-  # suite runs without --strict, and the step then fails on any other skip, so
-  # the relaxation stops at those two.
+  # the job above covers. So the two fixtures that bind a real book skip, as
+  # does the one check in createbook/fixtures/book-model that reads the binder's
+  # chapter records. The suite runs without --strict, and the step then fails on
+  # any other skip, so the relaxation stops at those three.
   checkers-floor:
     name: checkers (macos-latest, python system)
     runs-on: macos-latest
@@ -187,8 +188,9 @@ jobs:
           printf '%s\n' "$out"
           [ "$rc" -eq 0 ] || exit "$rc"
           extra=$(printf '%s\n' "$out" | grep '^skip ' \
-                  | grep -v -e 'makebook/bind/run.sh' -e 'makebook/save-scripts/run.sh' || true)
+                  | grep -v -e 'makebook/bind/run.sh' -e 'makebook/save-scripts/run.sh' \
+                            -e 'createbook/book-model/run.sh passed with 1 check(s) skipped' || true)
           if [ -n "$extra" ]; then
-            echo "skipped beyond the two fixtures that bind a book:"
+            echo "skipped beyond the binder's own checks:"
             printf '%s\n' "$extra"; exit 1
           fi

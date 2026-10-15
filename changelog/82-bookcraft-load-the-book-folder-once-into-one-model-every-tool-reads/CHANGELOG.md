@@ -350,3 +350,37 @@ the plan's scope:
     fixtures that bind a book.
   - Simulated locally with 3.9.6 and no venv: 16 pass, and those two skip.
 - **18 of 18 fixtures pass**, also with 3.9.6 first on PATH.
+
+### 2026-10-15 12:44:22 MDT: the agreement fixture
+
+`createbook/fixtures/book-model/run.sh` has three parts:
+- **The model's own table, from names alone.** It covers:
+  - the ticket's four appendix names, which a case-insensitive disk cannot hold side by side
+  - `sql-02-appendix-1-of-the-standard.md`
+  - a two-digit appendix and a leading zero
+  - names numbered by position
+  - every skip rule
+  - gap, zero and name problems
+  - reading order, parts, and the title below a mark
+
+  That is 27 checks.
+- **Every tool on the same names, one folder each.** Each tool is read through what it produces:
+  - the binder's chapter records
+  - `check-provenance.sh`'s worklist index
+  - `check-references.sh`'s `units_of`
+  - `check-book.sh`'s verdicts
+
+  Further folders cover the skip list, an appendix under narration, and a mark above the H1. That
+  is 41 checks, and the binder's share skips without the venv.
+- **A guard against any tool regaining its own rule.** It fails on an appendix or chapter-number
+  filename regex, or on a `-name '*.md'` walk, in any of the four tools, and requires each to
+  read the model. That is 8 checks.
+
+Two mutations of a copy of the plugin are each caught:
+- `check-references.sh` dropping the appendix `A` fails five appendix checks.
+- The binder labelling by position fails `bk-appendix-10-ten.md`.
+
+`fixtures.yml`'s floor job also allows this fixture's one binder skip, matched by its exact
+count.
+
+19 of 19 fixtures pass. Simulated, the floor job passes 16 of 19, with its three expected skips.
