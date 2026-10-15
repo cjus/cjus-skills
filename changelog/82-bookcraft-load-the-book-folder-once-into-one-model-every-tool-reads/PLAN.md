@@ -93,42 +93,59 @@ and a missed copy ships a book the checkers grade differently from how it binds.
 
 ### One model
 
-- [ ] A stdlib-only `book_model.py` that reads `book.json` and the folder once and emits the
+- [x] A stdlib-only `book_model.py` that reads `book.json` and the folder once and emits the
   book as JSON: each file's kind (chapter, appendix, front matter, glossary, excluded), its
   number and display label, its title, its `sections` group, and, in a tagged book, each
   paragraph's tag and mark. It needs no venv, so every checker can call it. Ruled 2026-10-15:
   it lives at the plugin level as `scripts/book_model.py` and runs on Python 3.9 (R7). The
   paragraph half moved to `## Deferred` for #72 (R9), so the model is file-level only.
+  Done 2026-10-15: `scripts/book_model.py`, `classify` from names and `read` from a folder, with
+  `--tsv` and `--json`.
 
 ### Every tool reads it
 
-- [ ] `build-book.py` classifies files from the model, and `APPENDIX_FILE_RE` and its siblings
+- [x] `build-book.py` classifies files from the model, and `APPENDIX_FILE_RE` and its siblings
   go.
-- [ ] `check-provenance.sh` and `check-references.sh` classify from the model, and their
+  Done 2026-10-15: `APPENDIX_FILE_RE`, `prettify`, `load_config` and `group_for` are gone.
+- [x] `check-provenance.sh` and `check-references.sh` classify from the model, and their
   `APPENDIX_FILE` copies go.
-- [ ] `render-report.py` takes chapter and appendix numbers from the model, so they cannot
+  Done 2026-10-15: both `APPENDIX_FILE` copies, `chapter_id`, `CHAPTER_FILE` and `unit_of` are
+  gone.
+- [x] `render-report.py` takes chapter and appendix numbers from the model, so they cannot
   collide the way #21 describes. Status: `render-report.py` never reads the book folder. It
   takes `(kind, number)` from the index that `check-provenance.sh --emit-worklist` writes, so
   this item is done once that emitter reads the model. #21's collision is already fixed on main
   (#17), and `check-claims/fixtures/appendix/run.sh` reproduces it and passes.
-- [ ] `check-book.sh` reads the model's output for what a file is, in place of its own
+  Done 2026-10-15, through the emitter: `check-provenance.sh --emit-worklist` writes each file's
+  kind and number from the model.
+- [x] `check-book.sh` reads the model's output for what a file is, in place of its own
   filename rule. Ruled 2026-10-15 (R8): it reads tab-separated lines through `python3` and
   `jq` goes. The model also hands back the `book.json` declarations, and
   `fixtures/jq-unrunnable/` becomes a missing-or-broken `python3` test.
+  Done 2026-10-15: no `jq` read and no filename rule remains, and `fixtures/python-unrunnable/`
+  replaced `fixtures/jq-unrunnable/`.
 
 ### Prove they agree
 
-- [ ] A fixture hands every tool the same filenames and asserts each one classifies every file
+- [x] A fixture hands every tool the same filenames and asserts each one classifies every file
   the same way. It covers `bk-appendix-1-answer-key.md`, `bk-appendix-1-Answer-Key.md`,
   `bk-appendix-1-answer--key.md`, `bk-appendix-1-answer_key.md` and
   `sql-02-appendix-1-of-the-standard.md`.
-- [ ] The existing fixture suite passes unchanged, apart from any expectation a settled
+  Done 2026-10-15: `createbook/fixtures/book-model/run.sh`, 75 checks, and two deliberate
+  mutations each fail it.
+- [x] The existing fixture suite passes unchanged, apart from any expectation a settled
   canonical rule deliberately changes, each named in the changelog.
+  Done 2026-10-15: 19 of 19. The deliberate changes, each named in the changelog:
+  `guide-under-narration`'s expected message (R4), `jq-unrunnable` rewritten for `python3` (R8),
+  the appendix fixture's fifth test reading the model, and two fixtures loading
+  `check-provenance.sh` where it sits.
 
 ### Release
 
-- [ ] Bump bookcraft's version in `plugin.json` (currently 1.14.0), and run the fixture checks
+- [x] Bump bookcraft's version in `plugin.json` (currently 1.14.0), and run the fixture checks
   CI runs. Ruled 2026-10-15 (R7): CI gains a leg that runs the checkers under Python 3.9.
+  Done 2026-10-15: 1.14.0 to 1.15.0. The suite passes 19 of 19, and a local run of the floor job
+  under 3.9.6 passes with its three expected skips.
 
 ## Open Questions
 

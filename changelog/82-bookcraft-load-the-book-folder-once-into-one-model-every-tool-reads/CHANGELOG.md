@@ -371,7 +371,7 @@ the plan's scope:
   - `check-book.sh`'s verdicts
 
   Further folders cover the skip list, an appendix under narration, and a mark above the H1. That
-  is 41 checks, and the binder's share skips without the venv.
+  is 40 checks, and the binder's share skips without the venv.
 - **A guard against any tool regaining its own rule.** It fails on an appendix or chapter-number
   filename regex, or on a `-name '*.md'` walk, in any of the four tools, and requires each to
   read the model. That is 8 checks.
@@ -384,3 +384,29 @@ Two mutations of a copy of the plugin are each caught:
 count.
 
 19 of 19 fixtures pass. Simulated, the floor job passes 16 of 19, with its three expected skips.
+
+### 2026-10-15 12:47:31 MDT: the docs, and bookcraft 1.15.0
+
+- **Root `README.md`.**
+  - bookcraft's requirements now name `python3` 3.9 for the checkers, and `jq` is no longer
+    optional for it.
+  - The broken-`jq` paragraph keeps its lesson and says `check-book.sh` now probes `python3` the
+    same way.
+  - The workflow note describes the `python3` assertion and the 3.9 floor job.
+- **bookcraft `README.md`.**
+  - The 3.9 floor, and the fixture list (`python-unrunnable`, `book-model`).
+  - "Ten fixtures are scripts", up from a count that was already one short on main.
+  - `scripts/book_model.py` in the tree.
+- **`createbook/SKILL.md`.**
+  - § Filenames says every tool reads a name through the model.
+  - The `jq` clauses on `overview` and on undeclared books are gone, and the checker's
+    requirements name `python3`.
+- **`makebook/SKILL.md`.**
+  - The front-matter skip names the model.
+  - `sections` counts chapter numbers and never takes in an appendix.
+  - `exclude` lists everything always skipped, and a glossary's `(ch. N)` can't name an appendix.
+  - § Appendices gains how numbers are read and that a malformed name binds as what it says,
+    with a warning.
+- **`createbook/NOTES.md` gains § One book model for every tool, 2026-10-15.**
+- **Version.** bookcraft goes from 1.14.0 to 1.15.0. `PLAN.md` ticks every remaining item.
+- **Counts.** 19 of 19 fixtures pass, and 233 citations resolve.
