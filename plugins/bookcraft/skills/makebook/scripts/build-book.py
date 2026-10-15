@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import html as html_mod
 import html.entities
+import importlib.util
 import json
 import math
 import re
@@ -81,6 +82,26 @@ except ImportError as exc:  # pragma: no cover - setup guidance
         "then run this script through the wrapper it sets up:\n"
         f"    {_installer.with_name('bookcraft-python')} {Path(__file__).resolve()} ..."
     )
+
+
+def _load_book_model():
+    """The plugin's book model, which decides what each file in the folder is.
+
+    Every checker reads the same module, so the binder cannot bind a file as a
+    chapter that the checkers grade as an appendix, which is what four separate
+    copies of the rule once allowed (scripts/book_model.py). Loaded by path from
+    the plugin root, three parents up, for the reason _installer is.
+    """
+    path = Path(__file__).resolve().parents[3] / "scripts" / "book_model.py"
+    spec = importlib.util.spec_from_file_location("book_model", path)
+    if spec is None or not path.is_file():
+        sys.exit(f"error: {path} is missing; the binder reads the book through it")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+book_model = _load_book_model()
 
 # --------------------------------------------------------------------------
 # Tunables
@@ -713,26 +734,6 @@ def markdown_renderer() -> MarkdownIt:
     return MarkdownIt("gfm-like").disable("linkify").use(tasklists_plugin)
 
 
-def prettify(stem: str) -> str:
-    """Turn '03-why-models-matter' into 'Why Models Matter'."""
-    s = re.sub(r"^[\W_]*\d+[\W_]+", "", stem)
-    s = re.sub(r"[-_]+", " ", s).strip()
-    return s[:1].upper() + s[1:] if s else stem
-
-
-def load_config(src: Path) -> dict:
-    path = src / "book.json"
-    if not path.is_file():
-        return {}
-    try:
-        cfg = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        sys.exit(f"error: {path} is not valid JSON ({exc})")
-    if not isinstance(cfg, dict):
-        sys.exit(f"error: {path} must hold a JSON object")
-    return cfg
-
-
 # A provenance mark records where a unit of a chapter came from, for the checker
 # and for /updatebook. It is working metadata, never content, so it comes off
 # here rather than being left to render as an invisible HTML comment. Two
@@ -741,7 +742,11 @@ def load_config(src: Path) -> dict:
 # PDF's and the EPUB's markup, and strip_markdown does not remove comments, so
 # every source name inside one would reach the term harvest and put "syllabus"
 # and "outline" in the index.
-PROVENANCE_RE = re.compile(r"^[ \t]*<!--[ \t]*src:.*?-->[ \t]*$\n?", re.M)
+#
+# The pattern is the book model's, because the model strips the same lines
+# before it reads a chapter's title, and a mark above the H1 must not hide the
+# title from one of the two and not the other.
+PROVENANCE_RE = book_model.MARK_LINE
 
 # A paragraph tag is an address other files cite, and in the default edition it
 # reaches the printed page by design: the operator working on the book wants it
@@ -753,24 +758,6 @@ PROVENANCE_RE = re.compile(r"^[ \t]*<!--[ \t]*src:.*?-->[ \t]*$\n?", re.M)
 # tag. A bracketed pair of numbers mid-sentence is prose the book wrote and
 # stripping it would silently edit the text.
 PARA_TAG_RE = re.compile(r"^\[A?\d+-\d+[a-z]?\] ", re.M)
-
-# An appendix is a chapter-kind file holding reference matter, bound after the
-# chapters and before the glossary
-# (createbook/reference/guide.md § Appendices). The filename is what
-# says so: `<book-slug>-appendix-N-<slug>.md`, `-appendix-N-` where a chapter
-# carries `-NN-`. `a` sorts after every digit, so the plain filename sort that
-# orders the book already puts these last.
-#
-# Anchored the way check-book.sh, check-provenance.sh and check-references.sh
-# anchor it: the book slug is lowercase letters and dashes only, so the word
-# has to follow it directly. Unanchored, a chapter slug that happens to hold
-# the word, `sql-02-appendix-1-of-the-standard.md`, bound as Appendix 1 while
-# every checker read it as chapter 2.
-#
-# The binder still numbers every file sequentially for its own purposes --
-# probes, figure numbers, the index -- and that number is not what the reader
-# is shown. What they are shown is the label.
-APPENDIX_FILE_RE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-[a-z0-9-]+\.md$")
 
 # The two header rows the reading edition moves to chapter endnotes. They are
 # the operator's rows rather than the reader's: an inventory of sources at the
@@ -877,9 +864,16 @@ def swap_display_names(text: str, displays: dict[str, str]) -> str:
     return "\n".join(row(ln) for ln in text.split("\n"))
 
 
-def load_chapters(src: Path, skip: set[str], reading: bool = False,
+def load_chapters(src: Path, book: dict, reading: bool = False,
                   displays: dict[str, str] | None = None) -> list[dict]:
-    """Chapter records, one per markdown file in filename-sort order.
+    """Chapter records, one per chapter-kind file in the book model's reading
+    order: the chapters, then the appendices, each in filename order.
+
+    What a file is, its number, its label, its part and its title all come from
+    the model (scripts/book_model.py), which every checker reads too. `num` is
+    the binder's own running sequence, for probes, page lookups and element ids,
+    and it is never shown: a reader sees the model's number, as `label_num`,
+    `label` ("Appendix 1") and `unit` ("A1").
 
     `reading` selects the reading edition: paragraph tags come off the page and
     the header's `Draws on` and `Fills in` rows move to chapter endnotes. The
@@ -898,20 +892,19 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False,
     """
     md = markdown_renderer()
     chapters = []
-    for path in sorted(src.glob("*.md")):
-        if path.name in skip:
-            continue
+    for rec in book_model.chapters(book):
+        path = src / rec["name"]
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             sys.exit(f"error: {path} is not UTF-8")
         text = PROVENANCE_RE.sub("", text)
-        lines = text.splitlines()
-        if lines and lines[0].startswith("# "):
-            title = lines[0][2:].strip()
-            body_md = "\n".join(lines[1:]).strip()
+        title = rec["title"]
+        # The model has already decided whether line 1 is the title, so the body
+        # starts below it exactly when the model took the title from it.
+        if rec["title_from"] == "h1":
+            body_md = "\n".join(text.splitlines()[1:]).strip()
         else:
-            title = prettify(path.stem)
             body_md = text.strip()
         harvest_md = body_md
         notes: list[tuple[str, str]] = []
@@ -944,10 +937,12 @@ def load_chapters(src: Path, skip: set[str], reading: bool = False,
         body_html = boxify_callouts(md.renderer.render(tokens, md.options, {}))
         if notes:
             body_html += build_endnotes(md, notes)
-        am = APPENDIX_FILE_RE.search(path.name)
         chapters.append({
-            "appendix": bool(am),
-            "label_num": int(am.group(1)) if am else len(chapters) + 1,
+            "appendix": rec["kind"] == "appendix",
+            "label_num": rec["number"],
+            "label": rec["label"],
+            "unit": rec["unit"],
+            "part": rec["part"],
             "num": len(chapters) + 1,
             "path": path,
             "title": title,
@@ -1607,13 +1602,6 @@ def with_probe(html_text: str, tag: str) -> str:
     return s + probe
 
 
-def group_for(num: int, sections: list[dict]) -> str | None:
-    for sec in sections:
-        if num in sec.get("chapters", []):
-            return sec.get("title")
-    return None
-
-
 # The ids the contents and the list of figures link to. Prefixed because a
 # chapter's raw HTML can carry ids of its own, and a duplicate would send a link
 # to whichever page Chromium meets first.
@@ -1635,7 +1623,6 @@ def toc_link(target: str) -> str:
 def build_toc(chapters, cfg, pages, index_page, has_index,
               has_figures=False, lof_page=None,
               has_glossary=False, gloss_page=None) -> str:
-    sections = cfg.get("sections") or []
     rows, current = [], object()
     if has_figures:
         lof = str(lof_page) if lof_page else "&nbsp;"
@@ -1648,7 +1635,9 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
             f'{toc_link("mb-figures")}</div>'
         )
     for ch in chapters:
-        grp = group_for(ch["num"], sections)
+        # The model's part, which an appendix never has, so the contents page,
+        # the chapter's own opening page, the outline and the EPUB nav agree.
+        grp = ch["part"]
         if grp != current:
             if grp:
                 rows.append(f'<div class="toc-group">{html_mod.escape(grp)}</div>')
@@ -1657,8 +1646,7 @@ def build_toc(chapters, cfg, pages, index_page, has_index,
         rows.append(
             '<div class="toc-row">'
             f'<span class="toc-num">'
-            f'{"A" if ch.get("appendix") else ""}'
-            f'{ch.get("label_num", ch["num"])}</span>'
+            f'{ch["unit"]}</span>'
             f'<span class="toc-title">{html_mod.escape(ch["title"])}</span>'
             '<span class="toc-dots"></span>'
             f'<span class="toc-page">{pg}</span>'
@@ -2269,18 +2257,13 @@ def script_notes(body_html: str, ch: dict) -> str:
 def build_chapters(chapters, cfg, figures: list[dict], src: Path,
                    col_plan: dict | None = None,
                    slides: list[dict] | None = None) -> str:
-    sections = cfg.get("sections") or []
     counter = [0]
     out = []
     for ch in chapters:
-        # An appendix sits outside the chapter parts, so a `sections` range
-        # that happens to span its sequential number must not label it.
-        grp = None if ch.get("appendix") else group_for(ch["num"], sections)
+        grp = ch["part"]
         tail = f" &nbsp;&middot;&nbsp; {html_mod.escape(grp)}" if grp else ""
         body = figurize(ch["body_html"], ch["num"], counter, figures, src,
-                        slide_dir_of(cfg), slides,
-                        fig_prefix=(f'A{ch["label_num"]}' if ch.get("appendix")
-                                    else str(ch["num"])))
+                        slide_dir_of(cfg), slides, fig_prefix=ch["unit"])
         body = inject_colgroups(body, ch["num"], col_plan or {})
         body = script_notes(body, ch)
         out.append(
@@ -2289,8 +2272,7 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
             '<div class="chapter-head">'
             '<div class="chapter-eyebrow">'
             f'<span class="chapter-number">'
-            f'{"Appendix" if ch.get("appendix") else "Chapter"} '
-            f'{ch.get("label_num", ch["num"])}</span>'
+            f'{ch["label"]}</span>'
             f'{tail}{probe(f"CH{ch["num"]:03d}")}</div>'
             f'<h1 class="chapter-title">{html_mod.escape(ch["title"])}</h1>'
             '<div class="rule"></div></div>'
@@ -2983,8 +2965,7 @@ def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
             ef[NameObject("/Params")] = DictionaryObject(
                 {NameObject("/Size"): NumberObject(len(data))})
             name = Path(sc["name"]).name
-            label = (f'Appendix {ch["label_num"]}' if ch.get("appendix")
-                     else f'Chapter {ch["num"]}')
+            label = ch["label"]
             # pypdf's only way to make an object indirect, which a stream has
             # to be. It is underscored and has been stable across releases.
             ef_ref = writer._add_object(ef)
@@ -3231,7 +3212,6 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
             f"{f' opening page {on}' if on else ''}. Chromium's top-level "
             f"entries: {[(title_of(r), opens(r)) for r in tops[:12]]}")
 
-    sections = cfg.get("sections") or []
     counts = {"chapters": 0, "sections": 0, "parts": 0, "pages": 0}
     top: list = []
     parts: list[tuple] = []
@@ -3242,8 +3222,8 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
             retitle(kid)
         link(ref, kids, -len(kids))
         counts["sections"] += len(kids)
-        # Grouped as build_toc and epub_toc group them, so the three agree.
-        grp = group_for(ch["num"], sections) if ch else None
+        # The model's part, as build_toc and epub_toc group them.
+        grp = ch["part"] if ch else None
         if grp != current:
             current = grp
             if grp:
@@ -3255,8 +3235,7 @@ def build_outline(pdf: Path, html_text: str, title: str, chapters, cfg,
                 top.append(part)
         (parts[-1][1] if grp else top).append(ref)
         if ch:
-            retitle(ref, f'{"Appendix" if ch.get("appendix") else "Chapter"} '
-                         f'{ch.get("label_num", ch["num"])}')
+            retitle(ref, ch["label"])
             counts["chapters"] += 1
         else:
             retitle(ref)
@@ -3469,7 +3448,8 @@ MEDIA_TYPES = {
 
 
 def figurize_epub(body_html: str, chapter_num: int, counter: list[int],
-                  figures: list[dict], src: Path, slide_dir: str = "") -> str:
+                  figures: list[dict], src: Path, slide_dir: str = "",
+                  fig_prefix: str | None = None) -> str:
     """The EPUB's figures: numbered and captioned, anchored, and no probes.
 
     The PDF path plants an invisible marker in each caption so pdftotext can
@@ -3484,7 +3464,7 @@ def figurize_epub(body_html: str, chapter_num: int, counter: list[int],
         counter[0] += 1
         gid = counter[0]
         fid = f"fig{gid:03d}"
-        number = f"{chapter_num}.{local[0]}"
+        number = f"{fig_prefix or chapter_num}.{local[0]}"
         figures.append({"id": gid, "number": number, "caption": caption,
                         "chapter": chapter_num, "anchor": fid})
         if is_svg:
@@ -3677,7 +3657,7 @@ def epub_figures_body(figures: list[dict]) -> str:
 
 
 def epub_glossary_body(entries, chapters) -> str:
-    titles = {ch["num"]: ch["title"] for ch in chapters}
+    by_number = {ch["label_num"]: ch for ch in chapters if not ch.get("appendix")}
     blocks, current = [], None
     for term, ch, body in entries:
         # Letter and rendering both come off the stripped term, exactly as
@@ -3691,8 +3671,9 @@ def epub_glossary_body(entries, chapters) -> str:
             current = letter
         ref = ""
         if ch:
-            ref = (f' <a href="{epub_chapter_href(ch)}" title="'
-                   f'{html_mod.escape(titles.get(ch, ""), quote=True)}">'
+            target = by_number[ch]
+            ref = (f' <a href="{epub_chapter_href(target["num"])}" title="'
+                   f'{html_mod.escape(target["title"], quote=True)}">'
                    f'ch. {ch}</a>')
         blocks.append(
             f'<p class="entry"><strong>{inline_code_html(term)}</strong>{ref} '
@@ -3708,6 +3689,7 @@ def epub_glossary_body(entries, chapters) -> str:
 
 def epub_index_body(entries, chapters) -> str:
     titles = {ch["num"]: ch["title"] for ch in chapters}
+    units = {ch["num"]: ch["unit"] for ch in chapters}
     blocks, current = [], None
     for display, nums in entries:
         letter = display[0].upper() if display[0].isalpha() else "#"
@@ -3716,7 +3698,7 @@ def epub_index_body(entries, chapters) -> str:
             current = letter
         links = ", ".join(
             f'<a href="{epub_chapter_href(n)}" title="'
-            f'{html_mod.escape(titles.get(n, ""), quote=True)}">{n}</a>'
+            f'{html_mod.escape(titles.get(n, ""), quote=True)}">{units[n]}</a>'
             for n in nums
         )
         blocks.append(
@@ -3732,7 +3714,6 @@ def epub_index_body(entries, chapters) -> str:
 
 def epub_toc(chapters, items, cfg, front, back) -> tuple:
     """Nested nav entries where book.json groups chapters into sections."""
-    sections = cfg.get("sections") or []
     out, current, bucket = list(front), None, []
 
     def flush():
@@ -3745,7 +3726,7 @@ def epub_toc(chapters, items, cfg, front, back) -> tuple:
         bucket.clear()
 
     for ch, item in zip(chapters, items):
-        grp = group_for(ch["num"], sections)
+        grp = ch["part"]
         if grp != current:
             flush()
             current = grp
@@ -3809,14 +3790,11 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
     for ch in chapters:
         body = figurize_epub(SCRIPT_ATTR_RE.sub("", ch["body_html"]),
                              ch["num"], counter, figures, src,
-                             slide_dir_of(cfg))
+                             slide_dir_of(cfg), fig_prefix=ch["unit"])
         body = collect_images(body, src, assets, lost_images)
         heading = html_mod.escape(ch["title"])
-        section = (None if ch.get("appendix")
-                   else group_for(ch["num"], cfg.get("sections") or []))
-        eyebrow = (f'<p class="lead">'
-                   f'{"Appendix" if ch.get("appendix") else "Chapter"} '
-                   f'{ch.get("label_num", ch["num"])}'
+        section = ch["part"]
+        eyebrow = (f'<p class="lead">{ch["label"]}'
                    f'{" &#183; " + html_mod.escape(section) if section else ""}'
                    "</p>")
         body = xhtmlify(f"{eyebrow}<h1>{heading}</h1>{body}", str(ch["path"]))
@@ -3990,24 +3968,36 @@ def main(argv: list[str]) -> int:
         print(f"error: {src} is not a directory", file=sys.stderr)
         return 1
 
-    cfg = load_config(src)
-    skip = {"book.json"}
-    if cfg.get("description_file"):
-        skip.add(cfg["description_file"])
-    skip.update(cfg.get("exclude", []))
+    # What each file is comes from the book model, which every checker reads
+    # too: what is skipped, which file is the glossary and which the front
+    # matter, and each chapter's kind, number, label, part and title
+    # (scripts/book_model.py).
+    try:
+        book = book_model.read(src)
+    except book_model.ModelError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    cfg = book["config"]
+    gloss_name = book["glossary_file"]
+    fm_name = book["front_matter_file"]
+    unreadable = [p["file"] for p in book["problems"] if p["rule"] == "encoding"]
+    if unreadable:
+        print(f"error: {src / unreadable[0]} is not UTF-8", file=sys.stderr)
+        return 1
 
-    # The glossary is back matter, never a chapter, so it is skipped whether or
-    # not it gets bound and whether or not book.json remembered to exclude it.
-    # Leaving that to `exclude` would turn a forgotten line into a glossary bound
-    # as chapter 7, which reads like an editorial choice rather than a mistake.
-    gloss_name = cfg.get("glossary_file", "glossary.md")
-    skip.add(gloss_name)
-
-    # Front matter, skipped for the same reason the glossary is: it is not a
-    # chapter, and a forgotten `exclude` line would otherwise bind it as chapter
-    # one, where its filename sorts it ahead of everything.
-    fm_name = cfg.get("front_matter_file", "about-this-book.md")
-    skip.add(fm_name)
+    # A name the checkers would fail still binds, because this binds any folder
+    # of markdown. It binds as what the model says it is, and is reported, but
+    # only where the name claimed a place in a /createbook book: a plain folder
+    # of notes has no filename convention to break, and a warning for each of
+    # its files would bury the one that matters.
+    model_chapters = book_model.chapters(book)
+    claimed = {f["name"] for f in model_chapters
+               if f["kind"] == "appendix" or f["name_number"] is not None}
+    bound_as = {f["name"]: f["label"] for f in model_chapters}
+    name_warnings = [f'{p["text"]}; bound as {bound_as[p["file"]]}'
+                     for p in book["problems"]
+                     if p["rule"] == "position"
+                     or (p["rule"] in ("name", "zero") and p["file"] in claimed)]
 
     # The flag wins; else book.json; else the default edition.
     declared_edition = cfg.get("edition", "default")
@@ -4020,7 +4010,7 @@ def main(argv: list[str]) -> int:
     else:
         reading_edition = args.reading_edition
 
-    chapters = load_chapters(src, skip, reading=reading_edition,
+    chapters = load_chapters(src, book, reading=reading_edition,
                              displays=source_displays(cfg))
     if not chapters:
         print(f"error: no markdown files in {src}", file=sys.stderr)
@@ -4054,8 +4044,12 @@ def main(argv: list[str]) -> int:
         return 1
     if gloss_path.is_file() and not args.no_glossary and cfg.get("glossary") is not False:
         glossary = load_glossary(gloss_path)
+        # A chapter, never an appendix: an appendix never teaches, so no term is
+        # defined in one (createbook/reference/guide.md § Appendices). Counted
+        # by the running sequence, `(ch. 19)` in an 18-chapter book printed
+        # "ch. 19" over a link to Appendix 1.
         stray = sorted({c for _, c, _ in glossary if c
-                        and c not in {ch["num"] for ch in chapters}})
+                        and c not in book_model.chapter_numbers(book)})
         if stray:
             print(f"error: {gloss_name} points at chapter(s) this book does not "
                   f"have: {', '.join(str(c) for c in stray)}", file=sys.stderr)
@@ -4205,6 +4199,8 @@ def main(argv: list[str]) -> int:
     total = len(final) - (1 if not final[-1].strip() else 0)
     print(f"wrote {out}")
     print(f"pages: {total}   chapters: {len(chapters)}")
+    for w in name_warnings:
+        print(f"  warning: {w}")
     grouped = (f", grouped into {outline['parts']} parts"
                if outline["parts"] else "")
     print(f"outline: {outline['chapters']} chapter entries{grouped}, "

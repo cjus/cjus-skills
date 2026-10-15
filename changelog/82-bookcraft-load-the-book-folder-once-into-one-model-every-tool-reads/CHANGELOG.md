@@ -265,3 +265,28 @@ the plan's scope:
 - **R8:** `jq` leaves `check-book.sh` entirely, not only for the skip-list reads.
 - **R9:** the paragraph half of the model moves to `## Deferred`, for #72.
 - **R7:** CI gains a Python 3.9 leg.
+
+### 2026-10-15 12:24:23 MDT: the book model, and the binder reads it
+
+- **`scripts/book_model.py`.** It is stdlib-only and runs under Python 3.9.6 as well as 3.14.
+  - `classify(names, cfg)` is pure and touches no file. `read(folder)` adds `book.json` and each
+    chapter's title.
+  - Each chapter-kind file carries its kind, number, name number, position, conformance, label,
+    unit, part and title.
+  - `problems` words name and position faults the way `check-book.sh` worded them.
+  - `--tsv` and `--json` print the model.
+- **`build-book.py`.**
+  - `prettify`, `load_config`, `APPENDIX_FILE_RE` and `group_for` are gone. `PROVENANCE_RE` is
+    now the model's `MARK_LINE`.
+  - Chapters come in the model's reading order. Labels, parts and figure prefixes come from the
+    model, and the binder's running `num` stays internal.
+  - A glossary `(ch. N)` must name a chapter (R6).
+  - A misnamed or misplaced file is bound and warned about, but only where its name claimed a
+    place in a `/createbook` book.
+- **Two binder labels that disagreed with the PDF, fixed in passing.** The EPUB numbered an
+  appendix's figures by the running sequence, `3.1` where the PDF printed `A1.1`. Its index
+  printed that sequence as a chapter number.
+- **Fixtures.** `makebook/fixtures/bind`, `display-names` and `save-scripts` pass unchanged. A
+  probe binds a gap as Chapters 1 and 3 with a position problem. An appendix sorting first no
+  longer shifts the chapter labels. The three malformed appendix names bind as Appendices 1 to 3
+  with name problems. A plain folder binds by position and nothing warns about it.

@@ -39,9 +39,9 @@ With no first argument and no `--recreate`, ask what the book should be about an
 
 Both were measured against `${CLAUDE_PLUGIN_ROOT}/skills/makebook/scripts/build-book.py`, not assumed.
 
-**Chapter numbers must be zero-padded.** `/makebook` collects chapters with `sorted(src.glob("*.md"))` (`build-book.py:load_chapters`), which is a plain lexicographic sort. Unpadded numbers misorder: `bk-1-a.md`, `bk-10-c.md`, `bk-2-b.md` is the sorted order Python actually returns. Pad to two digits, or to three if the book runs past 99 chapters.
+**Chapter numbers must be zero-padded.** `/makebook` takes its chapters from the book model, which orders them with `sorted()` on the filenames (`book_model.py:classify`), a plain lexicographic sort. Unpadded numbers misorder: `bk-1-a.md`, `bk-10-c.md`, `bk-2-b.md` is the sorted order Python actually returns. Pad to two digits, or to three if the book runs past 99 chapters.
 
-**The H1 must be the file's first line.** `/makebook` reads the chapter title from `lines[0]` and only when it starts with `# ` (`build-book.py:load_chapters`). Anything else, a blank first line or YAML frontmatter included, drops the file to a prettified filename instead. `prettify` strips only a *leading* number (`build-book.py:prettify`), so `docker-basics-03-layers.md` would title the chapter "Docker basics 03 layers" on the contents page.
+**The H1 must be the file's first line.** `/makebook` reads the chapter title from the first line once provenance marks are stripped, and only when it starts with `# ` (`book_model.py:title_of`). Anything else, a blank first line or YAML frontmatter included, drops the file to a prettified filename instead. `prettify` strips only a *leading* number (`book_model.py:prettify`), so `docker-basics-03-layers.md` would title the chapter "Docker basics 03 layers" on the contents page.
 
 A chapter heads its parts with H2s (`reference/chapter-prose.md § Headings`), so the H1 naming the chapter is the file's first line and its only heading of that level.
 
@@ -464,7 +464,7 @@ The bare string form stays valid and unchanged, for every source whose key alrea
 
 **`glossary` declares that this book carries one**, which makes a missing `glossary.md` an error at bind time rather than a book that ships without the thing it promised. Drop the key for a book that wants none. See step 6.
 
-**`tags` records whether this book carries paragraph tags**, `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`build-book.py:load_config`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
+**`tags` records whether this book carries paragraph tags**, `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`book_model.py:load_config`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
 
 **`exclude` is not optional here.** `/makebook` turns every `*.md` in the folder into a chapter unless it is skipped (`build-book.py:load_chapters`), so `OUTLINE.md` would otherwise be bound into the book as a chapter. Any other non-chapter markdown added to the folder goes in the same list.
 
