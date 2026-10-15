@@ -249,9 +249,11 @@ HERE = pathlib.Path(__file__).resolve().parent
 
 
 def _borrow(filename, modname, what):
-    """Borrow a sibling script as a module rather than re-deriving what it does.
+    """Borrow a script as a module rather than re-deriving what it does.
 
-    Two are borrowed. check-references.sh's `quoted_spans` carries three rounds
+    Three are borrowed. The plugin's book model decides what each file in the
+    folder is, for the binder and every checker alike, so a file cannot be a
+    chapter here and an appendix in the bound book. check-references.sh's `quoted_spans` carries three rounds
     of review and a measured account of what each round fixed, and
     re-implementing it here would give this script a second, worse copy that
     drifts from the first. assertions.sh is the only definition of
@@ -278,6 +280,8 @@ def _borrow(filename, modname, what):
 
 
 refs = _borrow("check-references.sh", "check_references", "its quote pairing")
+book_model = _borrow("../../../scripts/book_model.py", "book_model",
+                     "what each file in a book is")
 register = _borrow("assertions.sh", "assertions", "the assertions.json format")
 MIN_QUOTE = refs.MIN_QUOTE
 
@@ -1210,33 +1214,11 @@ def check_ledger(book):
 # Emitting the worklist
 # --------------------------------------------------------------------------
 
-# `<book-slug>-appendix-N-<slug>.md`, the one chapter-kind filename that does
-# not carry a chapter number (`check-book.sh`, `reference/guide.md
-# § Appendices`). Tried before the chapter rule, exactly as check-book.sh tries
-# it, because the chapter rule would match the N and be wrong.
-APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
-
-
-def chapter_id(name):
-    """This file's kind and its number within that kind.
-
-    Two kinds, and an appendix numbers in its own sequence, so the pair is the
-    identifier rather than the number alone. Taking the filename's first digit
-    run for everything, which is the chapter rule `createbook/SKILL.md`
-    § Filenames fixes, reads appendix 1 as chapter 1: the two then collide, and
-    a book carrying an appendix could not be rendered at all.
-
-    For a chapter the rule is unchanged, and the book slug may still not carry a
-    digit, because that is what leaves one candidate rather than two.
-
-    Returns (None, None) when the filename carries no digit at all, which
-    `--chapters` then reports rather than silently skipping.
-    """
-    m = APPENDIX_FILE.search(name)
-    if m:
-        return "appendix", int(m.group(1))
-    m = re.search(r"\d+", name)
-    return ("chapter", int(m.group(0))) if m else (None, None)
+# A chapter-kind file is identified by its kind and its number within that
+# kind, both from the book model. An appendix numbers in its own sequence, so
+# the pair is the identifier rather than the number alone: read by number
+# alone, appendix 1 collides with chapter 1 and a book carrying an appendix
+# could not be rendered at all.
 
 
 def id_label(kind, number):
@@ -1395,7 +1377,7 @@ def entry_record(e):
     return rec
 
 
-def write_worklist(emit_dir, book, by_chapter, scoped, settled):
+def write_worklist(emit_dir, book, by_chapter, scoped, settled, ids):
     """One JSON file per chapter, plus a small index the caller can read.
 
     The split is the point: an orchestrator reads `index.json` and hands each
@@ -1414,7 +1396,7 @@ def write_worklist(emit_dir, book, by_chapter, scoped, settled):
     today = datetime.date.today().isoformat()
     index = []
     for path, units, used in by_chapter:
-        kind, number = chapter_id(path.name)
+        kind, number = ids[path.name]
         out = d / (path.stem + ".json")
         out.write_text(json.dumps({
             "book": str(book.resolve()),
@@ -1652,14 +1634,14 @@ def main(argv):
     if mode == "ledger":
         return check_ledger(book)
 
-    conf = {}
-    cf = book / "book.json"
-    if cf.exists():
-        try:
-            conf = json.loads(cf.read_text())
-        except json.JSONDecodeError as e:
-            print(f"error: {cf} is not valid JSON: {e}", file=sys.stderr)
-            return 2
+    # book.json and what each file is, from the book model the binder and every
+    # checker read.
+    try:
+        model = book_model.read(book)
+    except book_model.ModelError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    conf = model["config"]
 
     # assertions.json, read through its own helper and never parsed here. Three
     # states, because the entry checks below have to tell "nothing to read"
@@ -1749,15 +1731,16 @@ def main(argv):
         else:
             unsourced.append(label)
 
-    # Chapters, skipping what /makebook skips.
-    skip = {"OUTLINE.md", "glossary.md", "about-this-book.md"}
-    skip |= set(conf.get("exclude") or [])
-    chapters = sorted(p for p in book.glob("*.md") if p.name not in skip)
+    # Chapters and appendices, in the model's reading order. What the model
+    # skips, /makebook skips: the outline, the glossary and front matter by
+    # whatever names book.json gives them, and everything `exclude` lists.
+    chapters = [book / f["name"] for f in book_model.chapters(model)]
+    ids = {f["name"]: (f["kind"], f["number"]) for f in book_model.chapters(model)}
     if not chapters:
         print(f"error: no chapters found in {book}", file=sys.stderr)
         return 2
 
-    # The book's own tags and chapter count, for the in-book components.
+    # The book's own tags and chapter numbers, for the in-book components.
     # **Built from every chapter, never from the scoped subset below.** A mark
     # in chapter 3 may cite `[16-4]` or `ch. 18`, and those are claims about the
     # book rather than about the chapters this run happens to be looking at.
@@ -1770,6 +1753,10 @@ def main(argv):
             if m:
                 defined.add(refs.tag_key(m.group(1), m.group(2)))
     n_chapters = len(chapters)
+    # A `ch. N` names a chapter, never an appendix, which numbers in its own
+    # sequence and never teaches. Counting every file here once let `ch. 19`
+    # pass in an 18-chapter book because it had an appendix.
+    taught = book_model.chapter_numbers(model)
 
     # Every entry some mark cites, from every chapter, for the same reason and
     # never from the scoped subset: `--chapters 3` must not report an entry
@@ -1786,7 +1773,7 @@ def main(argv):
     if want_chapters is not None:
         by_id = {}
         for p in chapters:
-            by_id.setdefault(chapter_id(p.name), []).append(p)
+            by_id.setdefault(ids[p.name], []).append(p)
         # Keyed on (kind, number), which is what keeps `--chapters 2` off
         # appendix 2. Under the old number-only key the two shared a slot, so a
         # scoped re-check after an /updatebook edit quietly folded in a file the
@@ -1800,7 +1787,7 @@ def main(argv):
                   f"spells those {', '.join(id_token(*k) for k in missing)}",
                   file=sys.stderr)
             return 2
-        scan = [p for p in chapters if chapter_id(p.name) in want_chapters]
+        scan = [p for p in chapters if ids[p.name] in want_chapters]
         print(f"note: scoped to "
               f"{', '.join(id_label(*k) for k in sorted(want_chapters))} of "
               f"{n_chapters}; every figure below describes those only.")
@@ -1881,8 +1868,9 @@ def main(argv):
                 if m:
                     census["in-book"] += 1
                     wl_unchecked.append(c)
-                    if not 1 <= int(m.group(1)) <= n_chapters:
-                        problem(f"{where}: the mark cites {c}; the book has {n_chapters} chapters")
+                    if int(m.group(1)) not in taught:
+                        problem(f"{where}: the mark cites {c}; the book has no chapter "
+                                f"{int(m.group(1))}")
                     continue
 
                 key, rest = match_source(c, keys)
@@ -2050,7 +2038,7 @@ def main(argv):
         scoped = sorted(want_chapters) if want_chapters is not None else None
         settled = [entry_record(e) for _, e in sorted(reg.items())
                    if e["kind"] == "settled" and e["status"] == "holds"]
-        index = write_worklist(emit_dir, book, worklist, scoped, settled)
+        index = write_worklist(emit_dir, book, worklist, scoped, settled, ids)
         n_units = sum(c["units"] for c in index)
         n_ptr = sum(c["sources"] for c in index)
         print(f"WORKLIST {n_units} unit(s) across {len(index)} chapter(s), "

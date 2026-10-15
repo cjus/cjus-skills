@@ -290,3 +290,26 @@ the plan's scope:
   probe binds a gap as Chapters 1 and 3 with a position problem. An appendix sorting first no
   longer shifts the chapter labels. The three malformed appendix names bind as Appendices 1 to 3
   with name problems. A plain folder binds by position and nothing warns about it.
+
+### 2026-10-15 12:27:55 MDT: check-provenance.sh and check-references.sh read the model
+
+- **`check-provenance.sh`.**
+  - It borrows the model by path with its own `_borrow`. `APPENDIX_FILE` and `chapter_id` are
+    gone, and `book.json` comes through the model.
+  - The chapters, their reading order and each file's `(kind, number)` come from the model, for
+    `--chapters` and for the worklist index `render-report.py` reads.
+  - A mark's `ch. N` must name a chapter the book has (R6); before, it was bounded by a count
+    that included appendices.
+- **`check-references.sh`.**
+  - `APPENDIX_FILE`, `CHAPTER_FILE` and `unit_of` are gone. `units_of(model)` maps each unit to
+    its file.
+  - The `git ls-tree` baseline names go through `book_model.classify`, so a baseline is read by
+    the same rule as the working tree.
+  - A unit two files claim now prints a note, where a dict key once dropped the first file
+    silently. Its `json` import is unused and gone.
+- **Two fixtures load `check-provenance.sh` where it sits** instead of copying it to a temp
+  folder, so what it borrows by path resolves: `createbook/fixtures/ledger` and
+  `check-claims/fixtures/appendix`.
+- **One deliberate test change.** The appendix fixture's fifth test checks the model's
+  classification in place of the removed `chapter_id`, with the same five cases.
+- **18 of 18 fixtures pass.** Both checkers run under Python 3.9.6.

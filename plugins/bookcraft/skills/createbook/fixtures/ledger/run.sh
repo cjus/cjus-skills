@@ -117,13 +117,13 @@ if [ "$rc" -ne 0 ]; then printf '%s
 
 # The case fold is checked at the unit level: asserting it end to end would mean
 # committing a PDF or a .pptx, which fixtures/provenance already declines to do.
-cp "$checker" "$tmp/probe.py"
-cp "$here/../../scripts/check-references.sh" "$tmp/check-references.sh"
-cp "$here/../../scripts/assertions.sh" "$tmp/assertions.sh"
-python3 - "$tmp" <<'PROBE'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+# Loaded where it sits, by an explicit loader since the file is named .sh, so
+# what it borrows by path (its siblings, and the plugin's book model) resolves.
+python3 - "$checker" <<'PROBE'
+import sys, importlib.machinery, importlib.util
+loader = importlib.machinery.SourceFileLoader("probe", sys.argv[1])
+spec = importlib.util.spec_from_loader("probe", loader)
+m = importlib.util.module_from_spec(spec); loader.exec_module(m)
 bad = []
 for s in ("Slides 4-9", "PP. 3-5", "P. 12"):
     n = m._lower_lead(s)
