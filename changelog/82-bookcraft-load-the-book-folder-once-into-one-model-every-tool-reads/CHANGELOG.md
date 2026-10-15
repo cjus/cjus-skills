@@ -410,3 +410,20 @@ count.
 - **`createbook/NOTES.md` gains § One book model for every tool, 2026-10-15.**
 - **Version.** bookcraft goes from 1.14.0 to 1.15.0. `PLAN.md` ticks every remaining item.
 - **Counts.** 19 of 19 fixtures pass, and 233 citations resolve.
+
+### 2026-10-15 14:44:03 MDT: the pre-test review, and its two in-scope suggestions applied
+
+Draft PR #96 is open, so CI is running. The review (`pr-review-2026-10-15.md`) approved with no
+Critical or Important finding. Of its four suggestions, two were faults this branch introduced,
+and both are fixed:
+- **`"profile": 0` is refused again, as it was on main.** The `--tsv` profile row was tested with
+  `in (None, False)`, and `0 == False` in Python, so a profile of `0` read as absent and got the
+  narration rules. It is now tested by identity.
+- **A tab or line break in `glossary_file`, `front_matter_file` or `description_file` is
+  refused** by the model, rather than truncating the name in a `--tsv` row.
+
+The other two suggestions were left:
+- An empty mark above the H1 is stripped from the page by the binder.
+- `title_line` and `tail` differ only on a file with old Mac line endings.
+
+19 of 19 fixtures pass.

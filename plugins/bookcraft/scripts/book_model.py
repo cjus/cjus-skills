@@ -107,7 +107,7 @@ def _file_key(cfg: dict, key: str, default: str | None) -> str | None:
     val = cfg.get(key)
     if val is None:
         return default
-    if not isinstance(val, str) or not val:
+    if not isinstance(val, str) or not val or UNSAFE.search(val):
         raise ModelError(f'book.json "{key}" must name a file, not: {val!r}')
     return val
 
@@ -322,9 +322,12 @@ def tsv_rows(book: dict) -> list[list[str]]:
     for key in DECLARATIONS:
         if key in cfg and _tostring(cfg[key]):
             rows.append(["decl", key, _tostring(cfg[key])])
-    # `.profile // empty` was the read: null and false meant absent.
-    if cfg.get("profile") not in (None, False) and _tostring(cfg["profile"]):
-        rows.append(["decl", "profile", _tostring(cfg["profile"])])
+    # `.profile // empty` was the read: null and false meant absent, and nothing
+    # else did. Tested by identity, since `0 in (None, False)` is true in Python
+    # and would read "profile": 0 as absent rather than refuse it.
+    profile = cfg.get("profile")
+    if profile is not None and profile is not False and _tostring(profile):
+        rows.append(["decl", "profile", _tostring(profile)])
     rows.append(["setting", "glossary_file", book["glossary_file"]])
     rows.append(["setting", "front_matter_file", book["front_matter_file"]])
     sources = cfg.get("sources")
