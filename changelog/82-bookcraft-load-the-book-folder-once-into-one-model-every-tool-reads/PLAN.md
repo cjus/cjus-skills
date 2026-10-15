@@ -87,15 +87,18 @@ and a missed copy ships a book the checkers grade differently from how it binds.
   display label, title, `sections` group, and paragraph tag and mark. Record where the copies
   disagree beyond the appendix pattern. Done 2026-10-12: `CHANGELOG.md § the rules inventory`.
   It found six more disagreements, which are now listed under `## Open Questions`.
-- [ ] Settle the canonical rule for each disagreement (see `## Open Questions`) before
-  writing the model.
+- [x] Settle the canonical rule for each disagreement (see `## Open Questions`) before
+  writing the model. Done 2026-10-15: the operator accepted R1 to R10 as written in
+  `CHANGELOG.md § recommendations for every open question`.
 
 ### One model
 
 - [ ] A stdlib-only `book_model.py` that reads `book.json` and the folder once and emits the
   book as JSON: each file's kind (chapter, appendix, front matter, glossary, excluded), its
   number and display label, its title, its `sections` group, and, in a tagged book, each
-  paragraph's tag and mark. It needs no venv, so every checker can call it.
+  paragraph's tag and mark. It needs no venv, so every checker can call it. Ruled 2026-10-15:
+  it lives at the plugin level as `scripts/book_model.py` and runs on Python 3.9 (R7). The
+  paragraph half moved to `## Deferred` for #72 (R9), so the model is file-level only.
 
 ### Every tool reads it
 
@@ -109,7 +112,9 @@ and a missed copy ships a book the checkers grade differently from how it binds.
   this item is done once that emitter reads the model. #21's collision is already fixed on main
   (#17), and `check-claims/fixtures/appendix/run.sh` reproduces it and passes.
 - [ ] `check-book.sh` reads the model's output for what a file is, in place of its own
-  filename rule.
+  filename rule. Ruled 2026-10-15 (R8): it reads tab-separated lines through `python3` and
+  `jq` goes. The model also hands back the `book.json` declarations, and
+  `fixtures/jq-unrunnable/` becomes a missing-or-broken `python3` test.
 
 ### Prove they agree
 
@@ -123,47 +128,31 @@ and a missed copy ships a book the checkers grade differently from how it binds.
 ### Release
 
 - [ ] Bump bookcraft's version in `plugin.json` (currently 1.14.0), and run the fixture checks
-  CI runs.
+  CI runs. Ruled 2026-10-15 (R7): CI gains a leg that runs the checkers under Python 3.9.
 
 ## Open Questions
 
-Every question below has a recommended answer, R1 to R10, in `CHANGELOG.md § recommendations
-for every open question`. Each stays open until the operator rules on it.
+All settled 2026-10-15: the operator accepted R1 to R10 (`CHANGELOG.md § recommendations for
+every open question`).
 
-- Where does `book_model.py` live? The five tools sit in three skills
-  (`makebook/scripts/`, `createbook/scripts/`, `check-claims/scripts/`), so the model needs a
-  path each can reach once the plugin is installed. Candidates: the plugin-level `scripts/`
-  beside `install.sh`, or one skill's `scripts/` that the others call by relative path.
-- What is the canonical appendix rule? The model has to give each of the four odd names
-  above a single answer: appendix, chapter, or rejected as malformed. Should the binder,
-  which today binds any folder, refuse a name the checkers would reject, or bind it and warn?
-- Is retiring `check-book.sh`'s `jq` reads in scope? The ticket says the model *could* hand it
-  the resolved values, which would retire `fixtures/jq-unrunnable/`. The objective only
-  requires that `check-book.sh` read the model for what a file is. Its other `book.json` reads
-  could move too, or be deferred.
-- How do the bash checkers consume the JSON: through `python3` directly, through `jq`, or
-  through a flat form the model also emits? Whichever is picked, a checker must not need a
-  tool the checker did not already need.
-- #21 and #72 are both open and both land on this model. Confirm neither is in flight on
-  another branch that would conflict. Resolved 2026-10-12: both are `status:todo`, with no
-  branch, worktree or PR.
-
-The inventory (`CHANGELOG.md § the rules inventory`) adds these, each needing a canonical rule:
-
-- Where does a chapter's number come from: its sort position (the binder), or the filename's
-  `-NN-`? If the filename, which reading? Only `check-book.sh`'s strict reading rejects
-  `bk2-07-slug-digit.md` rather than reading it as chapter 2 or chapter 7.
-- What is the skip list? The four tools skip four different sets. The union is `OUTLINE.md`,
-  `description_file`, `glossary_file`, `front_matter_file` and `exclude`.
-- Is an appendix an appendix under the narration profile? The binder and two checkers say yes;
-  `check-book.sh` says no, and it reads `bk-appendix-10-x.md` as chapter 10 there.
-- Does a `sections` range ever take in an appendix? The binder's chapter eyebrows say no, while
-  its contents page, PDF outline and EPUB nav say yes.
-- Can a `ch. N` in a mark, or a glossary's `(ch. N)`, point at an appendix? Today all three
-  bounds count appendices as chapters.
-- Paragraph rules for the tagged-book half of the model: does a mark have to fill its line, and
-  is `~~~` a fence?
+- Where `book_model.py` lives: plugin-level `scripts/`, Python 3.9 floor (R7).
+- The appendix rule: the name's opening decides kind and number, and the whole name decides
+  whether it conforms. The binder binds a malformed appendix and warns (R1).
+- Whether `check-book.sh`'s `jq` reads retire: yes, all of them (R8).
+- How `check-book.sh` reads the model: tab-separated lines through `python3` (R8).
+- Whether #21 or #72 is in flight elsewhere: neither is.
+- Where a chapter's number comes from: its name, or its position when the name carries none (R2).
+- The skip list: the union of the four (R3).
+- Appendices under narration: the kind is profile-independent, and `check-book.sh` fails one
+  under narration with its own message (R4).
+- `sections` and appendices: an appendix is never in a part (R5).
+- `ch. N` and `(ch. N)`: chapters only (R6).
+- The paragraph rules: deferred with the paragraph half, for #72 (R9).
+- The title: the binder's rule (R10).
 
 ## Deferred
 
-- None yet.
+- The paragraph half of the model: each paragraph's tag, mark and fence, by ruling R9. It goes
+  to #72, with the rules recorded in R9. No consumer in this plan reads it.
+- Close #21. It was fixed by #17 before it was filed, and
+  `check-claims/fixtures/appendix/run.sh` reproduces it and passes on main.

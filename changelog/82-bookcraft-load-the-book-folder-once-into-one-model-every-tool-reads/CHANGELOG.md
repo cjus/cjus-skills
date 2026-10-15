@@ -257,3 +257,11 @@ allowed.**
 
 **Outside the plan:** #21 can be closed, with `check-claims/fixtures/appendix/run.sh` as the
 evidence. That is the operator's call.
+
+### 2026-10-15 12:17:49 MDT: the open questions are settled
+
+The operator accepted all ten recommendations, R1 to R10, as written above. Three of them change
+the plan's scope:
+- **R8:** `jq` leaves `check-book.sh` entirely, not only for the skip-list reads.
+- **R9:** the paragraph half of the model moves to `## Deferred`, for #72.
+- **R7:** CI gains a Python 3.9 leg.
