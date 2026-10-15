@@ -74,31 +74,15 @@ for c in "$CHECK_BOOK" "$CHECK_PROV" "$ASSERTIONS"; do
 done
 
 # ---------------------------------------------------------------------------
-# jq has to work, because the expectations below assume book.json was read.
-#
-# Absent jq is a supported configuration for check-book.sh -- it falls back to
-# inference and says so -- but it is a DIFFERENT configuration, with different
-# right answers. fixtures/guide/ passes only because its profile declaration is
-# read; with no jq the declaration is invisible, the narration rules apply, and
-# the folder correctly fails. Grading this manifest without jq would therefore
-# report failures that are not defects. The absent-jq path has its own coverage,
-# in fixtures/jq-unrunnable/run.sh.
-# ---------------------------------------------------------------------------
-JQ_OK=0
-if command -v jq >/dev/null 2>&1 && printf '{}' | jq -e . >/dev/null 2>&1; then
-  JQ_OK=1
-fi
-
-# ---------------------------------------------------------------------------
 # folder | checker | expected exit | strings the output must carry (~ separated,
 #                                        a leading ! means must NOT carry)
 # ---------------------------------------------------------------------------
 MANIFEST=$(cat <<'ROWS'
 createbook/fence|check-book|0|structure is sound
 createbook/guide|check-book|0|structure is sound
-createbook/guide-under-narration|check-book|1|body carries an H3 or deeper~body carries a block quote~filename does not match
+createbook/guide-under-narration|check-book|1|body carries an H3 or deeper~body carries a block quote~which the narration profile has none of
 createbook/guide-reports|check-book|0|structure is sound~reports: 7~a sentence in [1-2] runs 47 words~the Warning callout at body line 32 runs 6 sentences~names the source key "notes/policy.md"~!"notes/calendar.md"~"## In short" runs 124 words~"## In short" repeats 13 words~"the obvious move is" recurs in 3 chapters
-createbook/jq-unrunnable|check-book|0|structure is sound~provenance: required
+createbook/python-unrunnable|check-book|0|structure is sound~provenance: required
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
@@ -106,67 +90,63 @@ createbook/provenance|check-provenance|1|6 failure(s)~REVIEW provenance-fixture-
 ROWS
 )
 
-if [ "$JQ_OK" -eq 0 ]; then
-  skip "no working jq, so the manifest cannot be graded (see the note above)"
-else
-  while IFS='|' read -r rel checker want must; do
-    [ -n "$rel" ] || continue
-    skill=${rel%%/*}
-    name=${rel#*/}
-    folder="$ROOT/skills/$skill/fixtures/$name"
-    case "$checker" in
-      check-book)       cmd="$CHECK_BOOK" ;;
-      check-provenance) cmd="$CHECK_PROV" ;;
-      *) fail "$rel: manifest names an unknown checker: $checker"; continue ;;
+while IFS='|' read -r rel checker want must; do
+  [ -n "$rel" ] || continue
+  skill=${rel%%/*}
+  name=${rel#*/}
+  folder="$ROOT/skills/$skill/fixtures/$name"
+  case "$checker" in
+    check-book)       cmd="$CHECK_BOOK" ;;
+    check-provenance) cmd="$CHECK_PROV" ;;
+    *) fail "$rel: manifest names an unknown checker: $checker"; continue ;;
+  esac
+  if [ ! -d "$folder" ]; then
+    fail "$rel: the manifest names a fixture folder that does not exist"
+    continue
+  fi
+  # A row with an empty fourth field asserts the exit code and nothing else,
+  # which is precisely the weakness this runner exists to remove. Rather than
+  # let it degrade quietly, refuse the row.
+  if [ -z "$must" ]; then
+    fail "$rel under $checker: the manifest row names no required output; an exit code alone is not an assertion"
+    continue
+  fi
+  out=$("$cmd" "$folder" 2>&1 </dev/null); rc=$?
+  label="$rel under $checker"
+  if [ "$rc" -ne "$want" ]; then
+    fail "$label: expected exit $want, got $rc"
+    printf '%s\n' "$out" | sed 's/^/      | /'
+    continue
+  fi
+  # A leading ! inverts the term. Some expectations are about what the output
+  # must NOT say: the provenance fixture documents that a run reporting
+  # anything against its chapter 1 is a regression, and only an absence
+  # assertion can hold that.
+  missing=""
+  saved=$IFS; IFS='~'
+  for s in $must; do
+    case "$s" in
+      '!'*)
+        if printf '%s\n' "$out" | grep -qF -- "${s#!}"; then
+          missing="$missing
+    the output must not mention: ${s#!}"
+        fi
+        ;;
+      *)
+        printf '%s\n' "$out" | grep -qF -- "$s" || missing="$missing
+    missing from the output: $s"
+        ;;
     esac
-    if [ ! -d "$folder" ]; then
-      fail "$rel: the manifest names a fixture folder that does not exist"
-      continue
-    fi
-    # A row with an empty fourth field asserts the exit code and nothing else,
-    # which is precisely the weakness this runner exists to remove. Rather than
-    # let it degrade quietly, refuse the row.
-    if [ -z "$must" ]; then
-      fail "$rel under $checker: the manifest row names no required output; an exit code alone is not an assertion"
-      continue
-    fi
-    out=$("$cmd" "$folder" 2>&1 </dev/null); rc=$?
-    label="$rel under $checker"
-    if [ "$rc" -ne "$want" ]; then
-      fail "$label: expected exit $want, got $rc"
-      printf '%s\n' "$out" | sed 's/^/      | /'
-      continue
-    fi
-    # A leading ! inverts the term. Some expectations are about what the output
-    # must NOT say: the provenance fixture documents that a run reporting
-    # anything against its chapter 1 is a regression, and only an absence
-    # assertion can hold that.
-    missing=""
-    saved=$IFS; IFS='~'
-    for s in $must; do
-      case "$s" in
-        '!'*)
-          if printf '%s\n' "$out" | grep -qF -- "${s#!}"; then
-            missing="$missing
-      the output must not mention: ${s#!}"
-          fi
-          ;;
-        *)
-          printf '%s\n' "$out" | grep -qF -- "$s" || missing="$missing
-      missing from the output: $s"
-          ;;
-      esac
-    done
-    IFS=$saved
-    if [ -n "$missing" ]; then
-      fail "$label: exit $rc is right and the output is not$missing"
-      continue
-    fi
-    pass "$label: exit $rc, and the output says so"
-  done <<EOF
+  done
+  IFS=$saved
+  if [ -n "$missing" ]; then
+    fail "$label: exit $rc is right and the output is not$missing"
+    continue
+  fi
+  pass "$label: exit $rc, and the output says so"
+done <<EOF
 $MANIFEST
 EOF
-fi
 
 # ---------------------------------------------------------------------------
 # Every fixture folder carrying its own run.sh runs it. Those are the cases an

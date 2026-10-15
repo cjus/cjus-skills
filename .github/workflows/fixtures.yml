@@ -74,27 +74,18 @@ jobs:
             test -x "$f" || { echo "not executable: $f"; exit 1; }
           done
 
-      - name: Install jq
-        run: |
-          if ! command -v jq >/dev/null 2>&1; then
-            case "${{ runner.os }}" in
-              macOS) brew install jq ;;
-              Linux) sudo apt-get update -qq && sudo apt-get install -y -qq jq ;;
-            esac
-          fi
-
       # Assert rather than assume, and assert that it RUNS rather than that it
-      # exists. A jq that is on PATH and will not execute makes every book.json
-      # declaration read as absent, and the fixtures would then be graded in the
-      # weakest mode while still exiting 0 -- a green run proving nothing the
-      # declared mode covers. That is the failure the jq-unrunnable fixture
-      # exists for, and it is not one CI should be able to ship past.
-      - name: Assert jq runs
+      # exists. check-book.sh reads every book.json declaration through the
+      # plugin's book model under python3, and stops without one. The checker
+      # holds that line itself, and the python-unrunnable fixture proves it
+      # does; this step says so up front, by name, rather than through a page of
+      # fixture failures.
+      - name: Assert python3 runs
         run: |
-          command -v jq || { echo "jq is not on PATH"; exit 1; }
-          printf '{}' | jq -e . >/dev/null || {
-            echo "jq is on PATH at $(command -v jq) but will not run"; exit 1; }
-          jq --version
+          command -v python3 || { echo "python3 is not on PATH"; exit 1; }
+          python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' || {
+            echo "python3 is on PATH at $(command -v python3) but will not run, or is older than 3.9"; exit 1; }
+          python3 --version
 
       # The binder reads its own rendered PDF back through pdftotext to resolve
       # page numbers, so poppler is a hard dependency of every bind. install.sh
@@ -123,7 +114,7 @@ jobs:
         if: runner.os == 'Linux'
         run: plugins/bookcraft/scripts/bookcraft-python -m playwright install-deps chromium
 
-      # Assert that the toolchain RUNS, for the reason jq's step gives. A
+      # Assert that the toolchain RUNS, for the reason python3's step gives. A
       # Chromium that is downloaded but will not launch, or a pdftotext that is
       # on PATH but cannot read a PDF, fails every bind. So this does what a
       # bind does in miniature: Chromium prints a page to PDF through the venv
@@ -159,3 +150,45 @@ jobs:
       # the run would otherwise report success for having checked less.
       - name: Run the fixture suite
         run: plugins/bookcraft/scripts/test-fixtures.sh --strict
+
+  # The checkers, and the book model every one of them reads, run under whatever
+  # python3 is on PATH, and on a stock Mac that is the system's 3.9. The job
+  # above runs a setup-python 3.12, so without this one nothing would notice a
+  # change that only 3.10 or later can parse until it broke a checker on
+  # somebody's laptop. It runs the runner image's /usr/bin/python3 and asserts
+  # the version, as iac.yml does for the same floor, so an image change cannot
+  # quietly test something else.
+  #
+  # The binder is not installed here: it needs 3.12 and install.sh's venv, which
+  # the job above covers. So the two fixtures that bind a real book skip, and the
+  # suite runs without --strict, and the step then fails on any other skip, so
+  # the relaxation stops at those two.
+  checkers-floor:
+    name: checkers (macos-latest, python system)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Put the system python3 first on PATH, and assert it is 3.9
+        run: |
+          py=/usr/bin/python3
+          "$py" -c 'import sys; v = sys.version_info[:2]; print(sys.version); sys.exit(v != (3, 9))' || {
+            echo "/usr/bin/python3 on this runner is not 3.9, so this leg no longer tests the floor"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/floor"
+          ln -s "$py" "$RUNNER_TEMP/floor/python3"
+          echo "$RUNNER_TEMP/floor" >> "$GITHUB_PATH"
+
+      - name: Run the fixture suite under it
+        run: |
+          python3 --version
+          # The step's shell runs with -e, so the exit code is caught here
+          # rather than ending the step before the output is printed.
+          out=$(CI= plugins/bookcraft/scripts/test-fixtures.sh 2>&1) && rc=0 || rc=$?
+          printf '%s\n' "$out"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          extra=$(printf '%s\n' "$out" | grep '^skip ' \
+                  | grep -v -e 'makebook/bind/run.sh' -e 'makebook/save-scripts/run.sh' || true)
+          if [ -n "$extra" ]; then
+            echo "skipped beyond the two fixtures that bind a book:"
+            printf '%s\n' "$extra"; exit 1
+          fi

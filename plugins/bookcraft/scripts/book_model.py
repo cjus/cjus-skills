@@ -234,16 +234,26 @@ def prettify(stem: str) -> str:
     return s[:1].upper() + s[1:] if s else stem
 
 
-def title_of(path: pathlib.Path) -> tuple[str, str, str | None]:
-    """(title, where it came from, problem): the H1 on line 1, or the filename."""
+def title_of(path: pathlib.Path) -> tuple[str, str, int, str | None]:
+    """(title, where it came from, the H1's line number or 0, problem).
+
+    The title is the first line that is not a whole-line provenance mark, when
+    that line is an H1, and otherwise the prettified filename. The line number
+    is the H1's in the file as written, so check-book.sh can start the body
+    below it even when a mark sits above it.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        return prettify(path.stem), "filename", f"{path.name}: is not UTF-8"
-    lines = MARK_LINE.sub("", text).splitlines()
-    if lines and lines[0].startswith("# "):
-        return lines[0][2:].strip(), "h1", None
-    return prettify(path.stem), "filename", None
+        return prettify(path.stem), "filename", 0, f"{path.name}: is not UTF-8"
+    for n, line in enumerate(text.splitlines(keepends=True), 1):
+        if MARK_LINE.fullmatch(line):
+            continue
+        line = line.rstrip("\r\n")
+        if line.startswith("# "):
+            return line[2:].strip(), "h1", n, None
+        break
+    return prettify(path.stem), "filename", 0, None
 
 
 def read(folder) -> dict:
@@ -258,7 +268,8 @@ def read(folder) -> dict:
     book["folder"] = str(folder)
     book["config"] = cfg
     for rec in chapters(book):
-        rec["title"], rec["title_from"], problem = title_of(folder / rec["name"])
+        (rec["title"], rec["title_from"], rec["title_line"],
+         problem) = title_of(folder / rec["name"])
         if problem:
             book["problems"].append({"file": rec["name"], "rule": "encoding",
                                      "text": problem})
@@ -280,6 +291,19 @@ def chapter_numbers(book: dict) -> set[int]:
 # --tsv, for check-book.sh
 # ---------------------------------------------------------------------------
 
+# One row per line, fields split by tabs. bash's `read` treats a tab as
+# whitespace and collapses a run of them, so an empty field would shift every
+# field after it: no field is ever empty except a row's last. A declaration that
+# would print as the empty string is left out, which check-book.sh reads exactly
+# as it read jq's empty output, as absent.
+#
+#   decl     <key> <value>
+#   setting  glossary_file|front_matter_file <name>
+#   source   <key> <1 when it has a display name, else 0>
+#   file     <kind> <number> <position> <1|0 conforms> <h1|filename>
+#            <the H1's line, or 0> <name> <title>
+#   problem  <name> <name|zero|position|encoding> <text>
+#
 # The declarations check-book.sh validates itself. Each is handed over as jq's
 # `tostring` printed it, so the script's validation reads the value it always
 # read: true as "true", a string as the string, an object as compact JSON.
@@ -296,16 +320,16 @@ def tsv_rows(book: dict) -> list[list[str]]:
     cfg = book.get("config", {})
     rows = []
     for key in DECLARATIONS:
-        if key in cfg:
+        if key in cfg and _tostring(cfg[key]):
             rows.append(["decl", key, _tostring(cfg[key])])
     # `.profile // empty` was the read: null and false meant absent.
-    if cfg.get("profile") not in (None, False):
+    if cfg.get("profile") not in (None, False) and _tostring(cfg["profile"]):
         rows.append(["decl", "profile", _tostring(cfg["profile"])])
     rows.append(["setting", "glossary_file", book["glossary_file"]])
     rows.append(["setting", "front_matter_file", book["front_matter_file"]])
     sources = cfg.get("sources")
     if isinstance(sources, dict):
-        for key in sorted(sources):
+        for key in sorted(k for k in sources if k):
             if UNSAFE.search(key):
                 raise ModelError(f"book.json source key {key!r} holds a tab or a "
                                  "line break")
@@ -315,8 +339,9 @@ def tsv_rows(book: dict) -> list[list[str]]:
             rows.append(["source", key, "1" if display else "0"])
     for f in chapters(book):
         rows.append(["file", f["kind"], str(f["number"]), str(f["position"]),
-                     "1" if f["conforms"] else "0", f.get("title_from", ""),
-                     UNSAFE.sub(" ", f.get("title", "")), f["name"]])
+                     "1" if f["conforms"] else "0", f["title_from"],
+                     str(f["title_line"]), f["name"],
+                     UNSAFE.sub(" ", f["title"])])
     for p in book["problems"]:
         rows.append(["problem", p["file"], p["rule"], p["text"]])
     return rows

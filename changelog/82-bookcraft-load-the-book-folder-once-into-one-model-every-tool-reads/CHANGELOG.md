@@ -313,3 +313,40 @@ the plan's scope:
 - **One deliberate test change.** The appendix fixture's fifth test checks the model's
   classification in place of the removed `chapter_id`, with the same five cases.
 - **18 of 18 fixtures pass.** Both checkers run under Python 3.9.6.
+
+### 2026-10-15 12:39:05 MDT: check-book.sh reads the model through python3, and jq goes
+
+- **`check-book.sh` reads the model's `--tsv` rows (R8).**
+  - All 11 `jq` reads are gone: every declaration, the source keys, the glossary and
+    front-matter names, and the skip list.
+  - So are the `find | sort` walk and its own appendix, chapter-number and position rules.
+  - It needs `python3` 3.9 or newer. When `python3` is missing or will not run, it stops with
+    exit 2 and says which.
+- **Behavior that changed deliberately.**
+  - Under narration, an appendix fails as an appendix, by name, instead of under the chapter
+    rules (R4).
+  - A glossary `(ch. N)` must name a chapter number the book has, not a number up to the count of
+    checked files (R6).
+  - The title is the first line once whole-line marks are set aside, and the body starts below
+    it (R10).
+  - A file that is not UTF-8 now fails, as the binder refuses it.
+- **The model's TSV rows.**
+  - No field is ever empty but the last, since bash's `read` collapses a run of tabs. A
+    declaration that would print empty is left out, which reads as absent exactly as jq's empty
+    output did.
+  - `file` rows put the title last and carry the H1's line number.
+- **`fixtures/jq-unrunnable` is now `fixtures/python-unrunnable`**, with its chapter renamed and
+  its `jq` sentences revised. Its three cases cover a working `python3`, one that exits 126, and
+  none at all, which now expects a stop where the old one expected the fallback.
+- **The harness and the other fixtures.**
+  - `test-fixtures.sh` drops its `jq` gate.
+  - The manifest row for `guide-under-narration` expects the new narration message, and the
+    `jq-unrunnable` row is renamed.
+  - `assertions/run.sh` drops its `jq` skip.
+- **CI.**
+  - `fixtures.yml` asserts that `python3` runs, in place of installing and asserting `jq`.
+  - A new `checkers-floor` job puts the runner's `/usr/bin/python3` first on PATH and asserts it
+    is 3.9 (R7). It runs the suite without `--strict` and fails on any skip besides the two
+    fixtures that bind a book.
+  - Simulated locally with 3.9.6 and no venv: 16 pass, and those two skip.
+- **18 of 18 fixtures pass**, also with 3.9.6 first on PATH.
