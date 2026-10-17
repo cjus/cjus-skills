@@ -34,7 +34,7 @@ and `#!/usr/bin/env bash` scripts and are run through their shebangs.
 
 | Plugin | Needs | Optional |
 |---|---|---|
-| **bookcraft** | For `/makebook` only: `python3` **3.12 or newer**, the packages in `skills/makebook/requirements.txt`, Chromium via Playwright, and `pdftotext` (poppler). The other three skills need nothing beyond the standard library. | `jq`, `epubcheck` |
+| **bookcraft** | `python3` **3.9 or newer**, standard library only, for the checkers and the book model they read. For `/makebook`: `python3` **3.12 or newer**, the packages in `skills/makebook/requirements.txt`, Chromium via Playwright, and `pdftotext` (poppler). | `epubcheck` |
 | **council** | Nothing. With no roster file it seats four Claude members, which needs no key, no Node and no `jq`. | `jq` **or** Node for a roster file — either, not both; `curl` to probe Ollama; Node plus `COUNCIL_OPENROUTER_API_KEY` for OpenRouter members; the `codex` CLI, logged in, for a Codex member |
 | **explain** | Nothing. | Network when a `/explain:qve` page is opened, since Mermaid loads from a CDN at view time — unreachable means the diagram source stays visible, degraded rather than broken. Graphviz (`dot`) for a guaranteed-offline page |
 | **iac** | `python3` **3.9 or newer**, standard library only, and the `gh` CLI logged in. | Ollama, or an OpenAI-compatible server such as LM Studio, for a local agent; `IAC_OPENROUTER_API_KEY` for an OpenRouter agent; the `codex` CLI, logged in, for a Codex agent; a ChatGPT dot with a GitHub connector |
@@ -45,12 +45,13 @@ outside the plugin directory, at `${XDG_CACHE_HOME:-$HOME/.cache}/bookcraft/venv
 plugin installs to a version-scoped path and a venv kept under it would be discarded on every
 release.
 
-**A broken `jq` is worse than no `jq`.** Where `jq` is optional, the plugins mean absent, not
-present-but-unrunnable. bookcraft's `check-book.sh` probes it with `printf '{}' | jq -e .` and
-exits 2 rather than run, because every `book.json` declaration would otherwise read as absent
-and the book would be checked in the weakest mode while reporting success. The case that
-motivated the probe: a stale x86-only `jq` at `/usr/local/bin/jq` shadowing a working universal
-one on an arm64 Mac. Move the stale binary aside; do not weaken the probe.
+**A broken tool is worse than a missing one.** Where `jq` is optional, the plugins mean absent,
+not present-but-unrunnable. The case that set the rule: a stale x86-only `jq` at
+`/usr/local/bin/jq` shadowing a working universal one on an arm64 Mac, under which bookcraft's
+`check-book.sh`, which read `book.json` through `jq` then, saw every declaration as absent and
+checked every book in the weakest mode while reporting success. It now reads the book through
+`python3`, and probes that the same way: a `python3` that is missing, or present and unable to
+run, stops the check with exit 2. Move a stale binary aside; do not weaken the probe.
 
 ## Platform support
 
@@ -137,12 +138,13 @@ conclusion stays `success`, while the job and its check run both report
 failing, and anything reading check runs will stop on it. Treat a red Linux leg
 as something to explain, not something to wave through.
 
-**The workflow asserts that `jq` runs rather than that it exists.** A `jq` on
-`PATH` that will not execute makes every `book.json` declaration read as absent,
-and the fixtures would then be graded in the weakest mode while still exiting 0 —
-a green run proving nothing the declared mode covers. Absent `jq` is a supported
-configuration and a different one, with different right answers, and it has its
-own coverage in `skills/createbook/fixtures/jq-unrunnable/run.sh`.
+**The workflow asserts that `python3` runs rather than that it exists.**
+`check-book.sh` reads every `book.json` declaration through bookcraft's book model
+under `python3`, and stops without one rather than grading in a weaker mode.
+`skills/createbook/fixtures/python-unrunnable/run.sh` covers a `python3` that is
+missing and one that will not run. A second job runs the checkers under the
+runner's own `/usr/bin/python3`, 3.9, the floor they claim, because the main job's
+3.12 would not notice a change only a newer Python can parse.
 
 **The suite binds a book, so the workflow installs the binder's toolchain.**
 `skills/makebook/fixtures/bind/run.sh` binds fixture books with `build-book.py`

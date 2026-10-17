@@ -49,7 +49,32 @@ it is not equivalent, so the REVIEW line reports the counts and leaves the
 conclusion to the reader; an insert paired with a cut in one chapter is the case
 it cannot separate.
 """
-import re, sys, json, pathlib, subprocess, unicodedata
+import re, sys, pathlib, subprocess, unicodedata
+import importlib.machinery, importlib.util
+
+
+def _book_model():
+    """The plugin's book model, which decides what each file in a book is.
+
+    The binder and every checker read the same module, so this script cannot
+    count a file as a chapter that the binder binds as an appendix, which is
+    what four separate copies of the filename rule once allowed
+    (scripts/book_model.py, three levels above this folder). Loaded by path for
+    the reason check-provenance.sh borrows this file by path.
+    """
+    path = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "book_model.py"
+    if not path.is_file():
+        print(f"error: {path} is missing; this script reads the book through it",
+              file=sys.stderr)
+        sys.exit(2)
+    loader = importlib.machinery.SourceFileLoader("book_model", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+book_model = _book_model()
 
 MIN_QUOTE = 25   # shorter runs are ordinary phrases, not attributions
 REF = re.compile(r"\bch(?:apter|\.)\s*(\d+)\b", re.I)
@@ -80,22 +105,21 @@ def tag_key(unit, para):
     m = re.match(r"(A?)0*(\d+)$", unit)
     p = re.match(r"0*(\d+)([a-z]?)$", para)
     return (m.group(1) + m.group(2), p.group(1) + p.group(2))
-# Anchored the way check-book.sh and check-provenance.sh anchor it, so a
-# chapter slug that happens to hold the word, `sql-02-appendix-1-of-the-standard.md`,
-# stays chapter 2 in all three tools.
-APPENDIX_FILE = re.compile(r"^[a-z]+(?:-[a-z]+)*-appendix-(\d+)-")
-CHAPTER_FILE = re.compile(r"-(\d{2,})-")
+def units_of(model):
+    """Each chapter-kind file by its tag's chapter half, `3` or `A2`, in the
+    model's reading order, plus the units two files claim.
 
-
-def unit_of(name):
-    """The tag's chapter half for a file: `3` for a chapter, `A2` for an
-    appendix, or None. The appendix test runs first, because an appendix's own
-    number could otherwise be read as a chapter's."""
-    m = APPENDIX_FILE.search(name)
-    if m:
-        return f"A{int(m.group(1))}"
-    m = CHAPTER_FILE.search(name)
-    return str(int(m.group(1))) if m else None
+    The first file holding a unit keeps it. A unit held twice is returned
+    rather than dropped in silence, which is what keying a dict on it used to
+    do to the first file.
+    """
+    out, twice = {}, []
+    for f in book_model.chapters(model):
+        if f["unit"] in out:
+            twice.append((f["unit"], f["name"]))
+            continue
+        out[f["unit"]] = f["name"]
+    return out, twice
 
 
 def para_order(para):
@@ -380,7 +404,7 @@ def tag_citations(lines):
             yield (i, *tag_key(m.group(1), m.group(2)))
 
 
-def baseline_paragraphs(book, units, excluded, ref):
+def baseline_paragraphs(book, units, cfg, ref):
     """Read every chapter at `ref` and return its tag map, plus a status note.
 
     Returns (paragraphs, note). A None map means there is no baseline and check
@@ -422,14 +446,14 @@ def baseline_paragraphs(book, units, excluded, ref):
                         capture_output=True, text=True)
     if ls.returncode != 0:
         return None, f"could not read {book} at {ref}: {ls.stderr.strip()}", set()
-    base_paths = {}
-    for name in ls.stdout.splitlines():
-        leaf = name.rsplit("/", 1)[-1]
-        if not leaf.endswith(".md") or leaf in excluded:
-            continue
-        u = unit_of(leaf)
-        if u:
-            base_paths[u] = name
+    # The baseline's names are classified by the same model as the working
+    # tree's, from the listing alone: the files are not on disk at `ref`.
+    listed = {name.rsplit("/", 1)[-1]: name for name in ls.stdout.splitlines()}
+    try:
+        base_units, _ = units_of(book_model.classify(list(listed), cfg))
+    except book_model.ModelError as exc:
+        return None, f"could not read {book} at {ref}: {exc}", set()
+    base_paths = {u: listed[leaf] for u, leaf in base_units.items()}
 
     out, missing, renamed = {}, [], []
     for n in sorted(units, key=lambda u: (u.startswith("A"), int(u.lstrip("A")))):
@@ -501,37 +525,25 @@ def main(argv):
         print(f"error: no such folder: {book}", file=sys.stderr)
         return 2
 
-    # book.json says which files are not chapters. The filename pattern below
-    # already excludes OUTLINE.md and glossary.md, which carry no digit run, but
-    # a book may exclude a file that does; reading the same keys check-book.sh
-    # reads (:79-97) is what keeps the two tools looking at one set of chapters.
-    excluded, tags_declared = set(), None
-    bj = book / "book.json"
-    if bj.is_file():
-        try:
-            cfg = json.loads(bj.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            print(f"error: {bj} is not readable JSON: {e}", file=sys.stderr)
-            return 2
-        excluded = set(cfg.get("exclude", []))
-        excluded.add(cfg.get("glossary_file", "glossary.md"))
-        if "tags" in cfg:
-            tags_declared = bool(cfg["tags"])
+    # What each file is, from the book model the binder and every checker read:
+    # which files are skipped, and each chapter-kind file's kind and number.
+    try:
+        model = book_model.read(book)
+    except book_model.ModelError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    cfg = model["config"]
+    tags_declared = bool(cfg["tags"]) if "tags" in cfg else None
 
     # Chapters by number, for the chapter references and quotations of checks 1
-    # and 2; and every tagged file by its tag's chapter half, appendices
-    # included, for checks 3 and 4. An appendix is tested for first, so its own
-    # number is never read as a chapter's.
-    chapters, units = {}, {}
-    for p in sorted(book.glob("*.md")):
-        if p.name in excluded:
-            continue
-        u = unit_of(p.name)
-        if u is None:
-            continue
-        units[u] = p
-        if not u.startswith("A"):
-            chapters[int(u)] = p
+    # and 2; and every chapter-kind file by its tag's chapter half, appendices
+    # included, for checks 3 and 4.
+    held, twice = units_of(model)
+    units = {u: book / name for u, name in held.items()}
+    chapters = {int(u): p for u, p in units.items() if not u.startswith("A")}
+    for u, name in twice:
+        print(f"note: {name} is also {unit_label(u)}; citations of it are read "
+              f"against {held[u]}", file=sys.stderr)
     if not chapters:
         print(f"error: no numbered chapters in {book}", file=sys.stderr)
         return 2
@@ -578,7 +590,7 @@ def main(argv):
 
     base, base_note, renamed = (None, "disabled with --no-baseline", set())
     if check_tags and ref is not None:
-        base, base_note, renamed = baseline_paragraphs(book, units, excluded, ref)
+        base, base_note, renamed = baseline_paragraphs(book, units, cfg, ref)
         # A baseline the caller ASKED for and did not get is a usage error, not
         # a degraded run. Reporting the reason and then exiting 0 hands back a
         # green result for a check that never happened, which is the whole

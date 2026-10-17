@@ -14,8 +14,9 @@
 # every chapter follows, and in the profile files ../reference/guide.md and
 # ../reference/narration.md. They are cited below by rule name rather than by
 # line, so that editing the spec does not silently repoint every citation into
-# it. At runtime it reads nothing but
-# the book folder given to it; the build-book.py citations below say where a
+# it. At runtime it reads the book folder given to it, through the plugin's book
+# model (../../../scripts/book_model.py), which says what each file is for the
+# binder and every checker alike. The build-book.py citations below say where a
 # format constraint comes from, and are not files this script opens.
 #
 # Usage: check-book.sh [--require-tags | --no-tags] <book-folder>
@@ -81,19 +82,14 @@ unchecked=()
 tagged_chapters=0
 untagged_chapters=0
 
-# Files /makebook will skip, so the checker skips them too: OUTLINE.md always,
-# the glossary and the about-this-book front matter always because neither is a
-# chapter, plus whatever book.json excludes.
-skip="OUTLINE.md"
+# The book.json declarations, filled in from the book model's rows below. Each
+# is initialised here because a book that leaves a key out sends no row for it,
+# and `set -u` would turn the unset variable into a dead run.
 declared_tags=""
 declared_gloss=""
 declared_prov=""
 declared_sugg=""
 declared_ovw=""
-# Both are read inside the jq block below, and both must exist before it: the
-# no-jq fallback skips that block entirely and `set -u` turns an unset variable
-# into a dead run rather than a degraded one. Initialising them here is what
-# keeps the documented no-jq configuration working.
 declared_profile=""
 source_keys=""
 display_keys=""
@@ -145,70 +141,97 @@ phrase_report_max=10
 # A tag at the head of a paragraph, written with bracket expressions rather
 # than backslashes so it survives being passed to awk with -v.
 tag_head_re='^[[]A?[0-9]+-[0-9]+[a-z]?[]] '
-# jq missing is a supported configuration: the run falls back to inference and
-# says so. jq present but unable to run is not, and it is the more dangerous of
-# the two, because every `jq ... 2>/dev/null` below yields an empty string and
-# every declaration in book.json reads as absent. The book is then checked in
-# the weakest mode available while book.json plainly declares otherwise, and
-# nothing on the summary line distinguishes that from a book that declared
-# nothing. Found on an arm64 Mac carrying a stale x86_64 jq on PATH, where every
-# book had been passing in the weakest mode for as long as the binary sat there.
-if command -v jq >/dev/null 2>&1 && ! printf '{}' | jq -e . >/dev/null 2>&1; then
-  echo "error: jq is on PATH at $(command -v jq) but will not run." >&2
-  echo "       Every book.json declaration would read as absent and the book" >&2
-  echo "       would be checked in the weakest mode while declaring otherwise." >&2
-  echo "       Repair or remove that jq, or take it off PATH to use the" >&2
-  echo "       documented no-jq fallback deliberately." >&2
+# What each file in the folder is, and every book.json declaration this script
+# reads, come from the plugin's book model, the one module the binder and every
+# checker read. The model decides which files are skipped (OUTLINE.md, the
+# glossary and the front matter by whatever names book.json gives them, the
+# description file, and everything `exclude` lists), each chapter-kind file's
+# kind, number, position and title, and what is wrong with its name.
+#
+# It needs python3, which check-provenance.sh and check-references.sh need
+# already, and there is no fallback without it. The fallback this replaced,
+# for a machine without jq, read every declaration in book.json as absent and
+# checked the book in the weakest mode while book.json declared otherwise, and
+# nothing on the summary line told the two apart. It was found on an arm64 Mac
+# carrying a stale x86_64 jq on PATH, where every book had been passing in the
+# weakest mode for as long as the binary sat there.
+model="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/scripts/book_model.py"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "error: python3 is not on PATH, and this script reads the book through" >&2
+  echo "       $model." >&2
+  echo "       Install Python 3.9 or newer." >&2
   exit 2
 fi
-if [ -f "$dir/book.json" ] && command -v jq >/dev/null 2>&1; then
-  extra=$(jq -r '(.exclude // [])[]' "$dir/book.json" 2>/dev/null)
-  [ -n "$extra" ] && skip="$skip
-$extra"
-  declared_gloss=$(jq -r 'if has("glossary") then (.glossary | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  # glossary_file renames the glossary, and /makebook skips whatever it names.
-  # Reading the same key is what keeps the two tools looking at one file: hard
-  # coding glossary.md here would grade a renamed glossary as a chapter, leave
-  # its entries unchecked, and report the default name missing from a book that
-  # has a glossary.
-  gname=$(jq -r '.glossary_file // empty' "$dir/book.json" 2>/dev/null)
-  [ -n "$gname" ] && gloss_name="$gname"
-  # Front matter is skipped for exactly the glossary's reason, and the key is
-  # read from the same place /makebook reads it so the two tools never disagree
-  # about which file is a chapter.
-  fmname=$(jq -r '.front_matter_file // empty' "$dir/book.json" 2>/dev/null)
-  [ -n "$fmname" ] && fm_name="$fmname"
-  # `.tags // empty` would be wrong here: jq's alternative operator treats
-  # `false` as absent, so a book that declares itself untagged would read as
-  # one that declared nothing. Ask whether the key exists instead.
-  declared_tags=$(jq -r 'if has("tags") then (.tags | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  # Same reasoning for the two resource-first keys. `provenance` says every unit
-  # on the page carries a src mark naming where it came from; `suggested_reading`
-  # says every chapter ends with the concept list. Both are opt-in, because a
-  # book written before they existed is still a correct book.
-  declared_prov=$(jq -r 'if has("provenance") then (.provenance | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  declared_sugg=$(jq -r 'if has("suggested_reading") then (.suggested_reading | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  # `overview` says every chapter opens with "## In short". Opt-in on the same
-  # terms as the two above: a book written before the section existed is still a
-  # correct book and must pass untouched.
-  declared_ovw=$(jq -r 'if has("overview") then (.overview | tostring) else "" end' "$dir/book.json" 2>/dev/null)
-  # `profile` selects the rule set: ../reference/guide.md or ../reference/narration.md,
-  # each read on top of ../reference/chapter-prose.md. Absent means
-  # the narration rules, which is every book written before the guide profile
-  # existed, so the default cannot be anything else.
-  declared_profile=$(jq -r '.profile // empty' "$dir/book.json" 2>/dev/null)
-  # Source display names, for the repo-path check below. A `sources` value may
-  # be a bare path, a list of them, or an object carrying a reader-facing name
-  # beside the path; only the last form has a display name to check against.
-  source_keys=$(jq -r '(.sources // {}) | keys[]' "$dir/book.json" 2>/dev/null)
-  # The keys that carry a reader-facing name. /makebook prints that name in
-  # place of the key in the chapter header and its endnotes, so a path-like key
-  # there is only a problem when it has no name to be swapped for.
-  display_keys=$(jq -r '(.sources // {}) | to_entries[] | select((.value | type) == "object" and ((.value.display // "") | length) > 0) | .key' "$dir/book.json" 2>/dev/null)
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+  echo "error: python3 is on PATH at $(command -v python3) but will not run, or is" >&2
+  echo "       older than 3.9, and this script reads the book through" >&2
+  echo "       $model." >&2
+  exit 2
 fi
-skip="$skip
-$gloss_name
-$fm_name"
+# The model prints its own error, naming the file, when the folder or its
+# book.json cannot be read.
+model_rows=$(python3 "$model" --tsv "$dir") || exit 2
+
+# One row per line, tab-separated; book_model.py documents the rows. Each
+# chapter-kind file arrives in reading order, the chapters and then the
+# appendices, and its fields land in arrays indexed alongside `chapters`.
+chapters=()
+file_kind=()
+file_num=()
+file_title_from=()
+file_title_line=()
+file_title=()
+# A file's name problems, one per line as <name><TAB><rule><TAB><text>.
+model_problems=""
+# The chapter numbers a glossary's (ch. N) may name, space-delimited for an
+# exact match: chapters only, since an appendix never teaches
+# (../reference/guide.md § Appendices).
+chapter_numbers=" "
+while IFS=$'\t' read -r row f1 f2 f3 f4 f5 f6 f7 f8; do
+  case "$row" in
+    decl)
+      case "$f1" in
+        glossary) declared_gloss="$f2" ;;
+        tags) declared_tags="$f2" ;;
+        provenance) declared_prov="$f2" ;;
+        suggested_reading) declared_sugg="$f2" ;;
+        overview) declared_ovw="$f2" ;;
+        profile) declared_profile="$f2" ;;
+      esac
+      ;;
+    setting)
+      case "$f1" in
+        glossary_file) gloss_name="$f2" ;;
+        front_matter_file) fm_name="$f2" ;;
+      esac
+      ;;
+    # Source display names, for the repo-path check below. A `sources` value may
+    # be a bare path, a list of them, or an object carrying a reader-facing name
+    # beside the path. /makebook prints that name in place of the key in the
+    # chapter header and its endnotes, so a path-like key there is only a
+    # problem when it has no name to be swapped for.
+    source)
+      source_keys="${source_keys:+$source_keys
+}$f1"
+      if [ "$f2" = 1 ]; then
+        display_keys="${display_keys:+$display_keys
+}$f1"
+      fi
+      ;;
+    file)
+      chapters+=("$dir/$f7")
+      file_kind+=("$f1")
+      file_num+=("$f2")
+      file_title_from+=("$f5")
+      file_title_line+=("$f6")
+      file_title+=("$f8")
+      [ "$f1" = chapter ] && chapter_numbers="$chapter_numbers$f2 "
+      ;;
+    problem)
+      model_problems="$model_problems$f1"$'\t'"$f2"$'\t'"$f3"$'\n'
+      ;;
+  esac
+done <<<"$model_rows"
 
 # What this run expects of the tags. A flag wins; else book.json's declaration;
 # else inference from the chapters themselves, which is the weakest of the three
@@ -248,7 +271,8 @@ esac
 # The profile is the rule set, not a mode with an inferred setting: a book either
 # names one or gets the narration rules. Inferring "this book meant to be a
 # guide" from a chapter that happens to carry an H3 would turn a failure into a
-# silent reclassification, which is the same shape as the jq bug above.
+# silent reclassification, which is the same shape as the jq bug the book model
+# replaced.
 case "$declared_profile" in
   ""|narration) profile=narration ;;
   guide) profile=guide ;;
@@ -271,16 +295,6 @@ if [ "$profile" = guide ]; then
   fi
   ovw_mode=required
 fi
-is_skipped() {
-  printf '%s\n' "$skip" | grep -qxF "$1"
-}
-
-chapters=()
-while IFS= read -r path; do
-  base=$(basename "$path")
-  is_skipped "$base" || chapters+=("$path")
-done < <(find "$dir" -maxdepth 1 -name '*.md' | sort)
-
 if [ "${#chapters[@]}" -eq 0 ]; then
   echo "error: no chapter markdown files in $dir" >&2
   exit 2
@@ -292,11 +306,6 @@ titles_file=$(mktemp)
 phrases_file=$(mktemp)
 trap 'rm -f "$titles_file" "$phrases_file"' EXIT
 
-expected=1
-# Appendices are numbered in their own sequence, so they need their own counter.
-# Sharing `expected` would make appendix 1 read as chapter 19 of an 18-chapter
-# book, which is exactly the kind of off-by-one that reads as a real failure.
-expected_app=1
 total_words=0
 total_struct=0
 total_ovw=0
@@ -315,79 +324,58 @@ carried_records=()
 longest_words=-1
 longest_chapter=""
 
-for path in "${chapters[@]}"; do
+for i in "${!chapters[@]}"; do
+  path="${chapters[$i]}"
   base=$(basename "$path")
 
-  # An appendix is a chapter-kind file holding reference matter, bound after the
-  # chapters and before the glossary (../reference/guide.md § Appendices).
-  # It is recognised before the chapter filename rule because it deliberately does
-  # not match it: `-appendix-N-` in place of `-NN-`. Sorting still puts it after
-  # every chapter, because `a` sorts after every digit, so a plain filename sort
-  # is still the reading order.
-  #
-  # Guide-only. Under narration such a file is not a kind the profile has, so it
-  # falls through to the chapter rule and fails there by name, which is the right
-  # answer: a narration book that grew an appendix has either mis-set its profile
-  # or mis-named a chapter, and both are worth stopping on.
+  # What the file is and its number come from the book model. An appendix is a
+  # chapter-kind file holding reference matter, bound after the chapters and
+  # before the glossary (../reference/guide.md § Appendices), and it numbers in
+  # its own sequence. The tag's chapter half for an appendix is A<N>, so `num`
+  # holds the appendix number there and the tag check below branches on
+  # `is_appendix` rather than parsing it back out of the tag.
+  num="${file_num[$i]}"
   is_appendix=0
-  app_num=""
-  if [ "$profile" = guide ] && printf '%s' "$base" | grep -qE '^[a-z]+(-[a-z]+)*-appendix-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*\.md$'; then
-    is_appendix=1
-    app_num=$(printf '%s' "$base" | sed -E 's/^.*-appendix-([0-9]+)-.*/\1/')
-    if [ "$app_num" != "$((10#$app_num))" ]; then
-      problem "$base: appendix numbers carry no leading zeros"
-    elif [ "$((10#$app_num))" -ne "$expected_app" ]; then
-      problem "$base: is appendix $((10#$app_num)) but sits at position $expected_app among the appendices"
-    fi
-    expected_app=$((expected_app + 1))
+  [ "${file_kind[$i]}" = appendix ] && is_appendix=1
+
+  # The appendix is a guide-profile kind. Under narration the model still calls
+  # the file an appendix, because the binder will bind it as one whatever the
+  # profile says, and the run says so by name rather than grading it under the
+  # chapter rules: a narration book that grew an appendix has either mis-set its
+  # profile or mis-named a chapter, and both are worth stopping on.
+  if [ "$is_appendix" -eq 1 ] && [ "$profile" != guide ]; then
+    problem "$base: is an appendix, which the narration profile has none of; set \"profile\": \"guide\" in book.json or name it as a chapter"
+    unchecked+=("$base — an appendix under the narration profile, so its content was never examined")
+    continue
   fi
 
-  # Filename: lowercase, dashes only, zero-padded chapter number in the middle.
-  # The BOOK slug may not contain a digit. The chapter number is found by taking
-  # the first digit run, so a digit in the book slug makes that read ambiguous,
-  # and the ambiguity used to surface as an arithmetic error rather than as a
-  # failure. The chapter slug may still hold digits (`...-07-from-1nf-to-bcnf`),
-  # because everything after the number is unambiguous.
-  if [ "$is_appendix" -eq 0 ] && ! printf '%s' "$base" | grep -qE '^[a-z]+(-[a-z]+)*-[0-9]{2,}-[a-z0-9]+(-[a-z0-9]+)*\.md$'; then
-    problem "$base: filename does not match <book-slug>-<NN>-<chapter-slug>.md (lowercase and dashes; no digit in the book slug)"
+  # What the model found wrong with the name: a filename off the pattern
+  # (lowercase and dashes, zero-padded number, no digit in the book slug, since
+  # the number is the name's first digit run), an appendix number with a
+  # leading zero, or a number that is not the file's position in its kind,
+  # which is the whole point of the padding and catches a gap, a duplicate and a
+  # book that starts at 00. A file off the pattern is not examined further.
+  rejected=0
+  while IFS=$'\t' read -r pfile prule ptext; do
+    [ "$pfile" = "$base" ] || continue
+    problem "$ptext"
+    [ "$prule" = name ] && rejected=1
+  done <<<"$model_problems"
+  if [ "$rejected" -eq 1 ]; then
     unchecked+=("$base — filename rejected, so its content was never examined")
     continue
   fi
 
-  if [ "$is_appendix" -eq 1 ]; then
-    # The tag's chapter half for an appendix is A<N>, so the numeric `num` the
-    # tag check compares against is not a number here. It is set to the appendix
-    # number and the tag check below branches on `is_appendix` rather than
-    # parsing it back out of the tag.
-    num="$app_num"
+  # /makebook titles a chapter from its first line once whole-line provenance
+  # marks are set aside, when that line is an H1 (book_model.py:title_of). The
+  # body starts below the H1, wherever a mark above it put it.
+  if [ "${file_title_from[$i]}" = h1 ]; then
+    printf '%s\n' "${file_title[$i]}" >>"$titles_file"
+    body=$(tail -n +"$((${file_title_line[$i]} + 1))" "$path")
   else
-    num=$(printf '%s' "$base" | sed -E 's/^[^0-9]*-([0-9]{2,})-.*/\1/')
-
-    # sed returns its input unchanged when the pattern does not match, so a failed
-    # read yields the whole filename rather than an error. Catch that here instead
-    # of letting it reach the arithmetic below.
-    if ! printf '%s' "$num" | grep -qE '^[0-9]+$'; then
-      problem "$base: could not read a chapter number from the filename"
-      unchecked+=("$base — chapter number unreadable, so its content was never examined")
-      continue
-    fi
-
-    # Sorted position must be the chapter number, which is the whole point of the
-    # padding. This catches a gap, a duplicate, and a book that starts at 00.
-    if [ "$((10#$num))" -ne "$expected" ]; then
-      problem "$base: is chapter $((10#$num)) but sits at position $expected in filename sort order"
-    fi
-    expected=$((expected + 1))
+    problem "$base: first line is not an H1, so /makebook will title the chapter from the filename"
+    body=$(tail -n +2 "$path")
   fi
-
-  # /makebook reads the title from line 1 only (build-book.py:406).
-  first=$(head -n 1 "$path")
-  case "$first" in
-    "# "*) printf '%s\n' "${first#\# }" >>"$titles_file" ;;
-    *) problem "$base: first line is not an H1, so /makebook will title the chapter from the filename" ;;
-  esac
-
-  body=$(tail -n +2 "$path")
 
   # Prose and structure are counted apart, and neither is capped. The spec sets
   # no chapter length at all (../reference/chapter-prose.md § Length): a chapter
@@ -435,11 +423,12 @@ for path in "${chapters[@]}"; do
   # there. A book that uses those two words for an ordinary part heading later
   # on fails both tests and is counted and swept exactly as it was.
   #
-  # Structural rather than declared, because book.json is only readable where
-  # jq is, and the no-jq fallback is a supported configuration. Gating the
-  # exemptions on the declaration made a declared book fail on a machine
-  # without jq: the key read as absent, the section became ordinary prose, and
-  # every paragraph in it was reported as missing its tag.
+  # Structural rather than declared. It was made so when book.json could be read
+  # only where jq ran, and a declared book failed on a machine without jq: the
+  # key read as absent, the section became ordinary prose, and every paragraph
+  # in it was reported as missing its tag. The book model now always reads the
+  # declaration, and the test stays structural, so a book is swept the same
+  # whether or not it remembered to declare the section.
   ovw_seen=0
   ovw_present=0
   ovw_start=0
@@ -1322,7 +1311,7 @@ if [ "$declared_gloss" = "true" ] && [ ! -f "$gloss_file" ]; then
   problem "book.json declares a glossary but $gloss_name is not in $dir"
 fi
 if [ -f "$gloss_file" ]; then
-  gloss_report=$(awk -v maxch="$checked" -v gname="$gloss_name" '
+  gloss_report=$(awk -v chnums="$chapter_numbers" -v gname="$gloss_name" '
     BEGIN { RS = ""; n = 0 }
     /^[[:space:]]*#/ { next }
     {
@@ -1351,11 +1340,12 @@ if [ -f "$gloss_file" ]; then
         next
       }
       # A chapter reference has to name a chapter this book has, or a reader
-      # following it lands nowhere. Zero is not a chapter either, and catching
-      # it needs sawch rather than ch: ch is also 0 for an entry that carried no
-      # reference at all, so a bare "ch > 0 && ch < 1" can never be true.
-      if (sawch && (ch < 1 || ch > maxch)) {
-        printf "P %s: \"%s\" points at chapter %d and this book has %d\n", gname, term, ch, maxch
+      # following it lands nowhere: a chapter, never an appendix, since an
+      # appendix never teaches. Zero is not a chapter either, and catching it
+      # needs sawch rather than ch: ch is also 0 for an entry that carried no
+      # reference at all.
+      if (sawch && index(chnums, " " ch " ") == 0) {
+        printf "P %s: \"%s\" points at chapter %d, which this book does not have\n", gname, term, ch
       }
       key = tolower(term)
       if (key in seen) {
@@ -1514,19 +1504,6 @@ if [ "$tag_mode" = "inferred" ]; then
   echo "note: this book neither declares \"tags\" in book.json nor was given a flag,"
   echo "      so the tag state was inferred from the chapters. A book where every"
   echo "      chapter forgot its tags is indistinguishable from an untagged book."
-fi
-# A book.json that exists and could not be read is the case worth naming, and
-# the profile is the half that fails loudest: without jq the declaration reads
-# as absent, the narration rules apply, and a guide book fails on every H3 and
-# every callout it was written to carry. Those failures are true of the rules
-# that ran and say nothing about the book, so the run says which rules ran and
-# why rather than leaving the operator to read a screen of them and guess.
-if [ -f "$dir/book.json" ] && ! command -v jq >/dev/null 2>&1; then
-  echo "note: book.json is present and jq is not, so no declaration in it was read."
-  echo "      This run used the $profile rules because that is the default, not"
-  echo "      because the book asked for them. Install jq before trusting a"
-  echo "      failure list from this run: a guide-profile book checked under the"
-  echo "      narration rules fails on every construct the profile exists to allow."
 fi
 # The overview has no end marker of its own, so the sweeps find its end at the
 # chapter's first paragraph tag, or failing that at the first paragraph a

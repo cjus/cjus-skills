@@ -124,7 +124,7 @@ Each candidate was drawn against prose the new book no longer has, so decide eac
 
 **Every cover carries a creation stamp**, the bound book's version marker. Directly under the author name, in the byline's type, the PDF cover and the EPUB's cover both print a line like `Created: 2026-09-24 06:14:10 MDT`: the local time the binding ran, with the zone's abbreviation, or its UTC offset where the zone has none. Two bindings of one folder otherwise look the same to a reader, down to the EPUB's identifier, so the stamp is how you tell which one you are holding. It is read once per run, so the PDF and the EPUB from one binding carry the same stamp. A book with no `byline` still gets one, in the byline's place. There is no way to fix it to another time: every binding takes the time it ran.
 
-**`about-this-book.md` is front matter, never a chapter**, and both this tool and `check-book.sh` skip it by name whether or not `exclude` mentions it. `book.json`'s `front_matter_file` renames it, and both tools read that same key so neither can disagree about which file is a chapter. It carries no paragraph tags and gets no contents entry: a reader reaches it by turning the page from the listing, and the page it would list is the next one.
+**`about-this-book.md` is front matter, never a chapter**, and this tool and every `/createbook` checker skip it by name whether or not `exclude` mentions it. `book.json`'s `front_matter_file` renames it, and every tool reads that key through the same book model (`scripts/book_model.py`), so none can disagree about which file is a chapter. It carries no paragraph tags and gets no contents entry: a reader reaches it by turning the page from the listing, and the page it would list is the next one.
 
 **Provenance marks are stripped before anything renders.** A line reading `<!-- src: ... -->` records where a unit of a chapter came from, for `check-book.sh` and `/updatebook`. Two reasons it is removed rather than left to be an invisible comment: markdown-it passes an HTML comment straight into the output, so it would ship inside the PDF's and the EPUB's markup, and `strip_markdown` does not remove comments, so every source name inside one would reach the term harvest and put "syllabus" and "outline" in the index.
 
@@ -319,8 +319,8 @@ Drop it in the same folder. Every field is optional.
 ```
 
 - `description` takes a string or a list of paragraphs, and is markdown. `description_file` names a markdown file instead; that file is then excluded from the chapters.
-- `sections` groups chapters by their 1-based position in sort order. The section title also prints on each chapter's opening page, and becomes a nested entry in the EPUB's navigation. Omit it for a flat contents page.
-- `exclude` drops files from the chapter list. `book.json` and the glossary file are always excluded.
+- `sections` groups chapters by their chapter number, which in a folder of plain names is their 1-based position in sort order (see **Appendices**). An appendix is never in a part, whatever a range spans. The section title also prints on each chapter's opening page, and becomes a nested entry in the EPUB's navigation. Omit it for a flat contents page.
+- `exclude` drops files from the chapter list. The glossary file, the front matter file, the `description_file` and `OUTLINE.md` are always excluded, by name, since a forgotten `exclude` line would bind any of them as a chapter.
 - `glossary` declares that this book is meant to carry one, so a missing file errors rather than binding silently without it. `glossary_file` renames it from the default `glossary.md`. See **The glossary**.
 - `cover_image` is **EPUB only**, and optional: the file becomes the book's cover art in a library or on a device. Around 1600×2560 JPEG suits a Kindle Scribe. The PDF ignores it and keeps its typeset cover page. **Omit it and the EPUB still gets cover art**: the builder rasterises the PDF's own cover page at 1600px wide and uses that, so a library shows the book's title rather than a blank tile. It keeps the printed page's 7.1:9.1 proportions, so a device letterboxes it rather than cropping a page that was designed. Generated art is a picture of the cover page, so the EPUB leaves the text cover page out and opens on the art alone rather than on the same page twice. Name a `cover_image` when you want art of your own; the generated one is never used then. Supplied art is used as it is and does not carry the creation stamp, so the text cover page stays in the book behind it and still does.
 
@@ -341,7 +341,7 @@ two different things at once.
 ```
 
 - **The term is bold and the chapter reference follows it in parentheses.** Both halves parse strictly, so a paragraph that does not read `**term** (ch. N) definition` stops the build rather than rendering as something that looks deliberate. An entry may wrap across lines; a blank line ends it.
-- **The chapter reference is optional in the grammar and wanted in practice.** It is what makes an entry a pointer back into the prose that defines the term properly. The PDF prints it; the EPUB makes it a link to that chapter. A chapter number the book does not have stops the build.
+- **The chapter reference is optional in the grammar and wanted in practice.** It is what makes an entry a pointer back into the prose that defines the term properly. The PDF prints it; the EPUB makes it a link to that chapter. A chapter number the book does not have stops the build, and an appendix's number is not a chapter's: an appendix never teaches, so no term is defined in one.
 - **A leading `#` heading is the file's own title** and is skipped. Everything else has to parse.
 - **Entries are sorted case-insensitively and grouped under letter dividers**, so the source file's order does not matter. A term defined twice stops the build, since one of the two would be unreachable.
 
@@ -501,6 +501,10 @@ A file named `<book-slug>-appendix-<N>-<slug>.md` is bound as an appendix: after
 `-appendix-` has to follow the book slug directly, and the book slug is lowercase letters and dashes only, which is how `/createbook`'s checkers read the name. So `sql-02-appendix-1-of-the-standard.md` is chapter 2, whose slug happens to hold the word, and `09-appendix-1-tables.md`, with no book slug in front, is a chapter too.
 
 The appendix kind comes from `/createbook`'s guide profile; see `createbook/reference/guide.md § Appendices` for what belongs in one.
+
+**What each file is, and its number, comes from the plugin's book model** (`scripts/book_model.py`), which `/createbook`'s checkers read too, so the binder cannot bind a file as something they grade as another. A chapter's number is the `-NN-` in its filename, and a file whose name carries none takes its position among the chapters, so a plain folder of notes binds as Chapters 1 to N in filename order. Appendices number in their own sequence and bind after every chapter.
+
+**A name that claims a place in a `/createbook` book and breaks its pattern still binds, as what its name says, and the bind warns.** `bk-appendix-1-Answer-Key.md` binds as Appendix 1, never as a chapter, with the name problem `check-book.sh` would fail it on. A gap binds as written, Chapter 1 then Chapter 3, so the chapter numbers keep matching the paragraph tags printed beside them. A plain folder's names claim nothing and draw no warning.
 
 ## Type size
 

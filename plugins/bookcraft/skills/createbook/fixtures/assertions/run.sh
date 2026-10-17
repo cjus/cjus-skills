@@ -273,15 +273,11 @@ mode=$(python3 -c 'import os, stat, sys; print(oct(stat.S_IMODE(os.stat(sys.argv
 report $? "assertions.sh: a write keeps the file's mode (got $mode)"
 
 # ---------------------------------------------------------------------------
-# check-book.sh reads book.json through jq, so without a working one this half
-# would grade the folder in a different mode (scripts/test-fixtures.sh says why).
+# check-book.sh reads book.json through the plugin's book model, under the same
+# python3 this fixture already runs, so this half needs nothing more.
 # ---------------------------------------------------------------------------
-if command -v jq >/dev/null 2>&1 && printf '{}' | jq -e . >/dev/null 2>&1; then
-  out=$("$scripts/check-book.sh" "$here" 2>&1); rc=$?
-  expect "check-book: the folder passes, so an assertion mark is a mark it accepts" "$rc" "$out" 0 \
-    "structure is sound"
-else
-  echo "skip  no working jq, so check-book.sh cannot read this folder's book.json"
-fi
+out=$("$scripts/check-book.sh" "$here" 2>&1); rc=$?
+expect "check-book: the folder passes, so an assertion mark is a mark it accepts" "$rc" "$out" 0 \
+  "structure is sound"
 
 exit $fails

@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **This chapter** | Why a checker that cannot read `book.json` is more dangerous than one that cannot run at all, and what the guard does about it. Scope: the single chapter of the jq fixture. |
-| **Act on this** | Run `run.sh` in this folder after any edit to how `check-book.sh` reads `book.json`, and expect both halves to pass. |
+| **This chapter** | Why a checker that cannot read `book.json` is more dangerous than one that cannot run at all, and what the guard does about it. Scope: the single chapter of the python3 fixture. |
+| **Act on this** | Run `run.sh` in this folder after any edit to how `check-book.sh` reads `book.json`, and expect all three halves to pass. |
 | **Draws on** | `scripts/check-book.sh`; `changelog/29-add-a-guide-profile-to-createbook-and-makebook/PLAN.md § Phase 0`. |
 | **Fills in** | Nothing. Every claim here is read out of the checker itself. |
 
 ## In short
 
-A checker reads this book's declarations from a JSON file, and it needs a working `jq` to do it.
+A checker reads this book's declarations from a JSON file, through a helper it runs under `python3`.
 Where that tool is present but cannot run, the declarations read as absent, the folder is graded
 against the weakest rules available, and the run still ends by saying the structure is sound.
 What follows walks through why the empty answer is the dangerous one, then through what the
@@ -22,9 +22,9 @@ edges. A checker reads that file to know what to hold the book to.
 
 ## Why an empty answer is worse than a missing tool
 
-[1-2] A tool that is absent announces itself, and the checker has a documented path for it: grade
-what can be graded without the file and say on the summary line that it did. The reader of that
-line knows exactly how much the run was worth.
+[1-2] A tool that is absent announces itself, and the checker stops and says which tool it
+looked for. Nobody reads a run that never happened as a pass, so the reader knows exactly how much
+the run was worth: nothing, and nothing claimed otherwise.
 <!-- src: scripts/check-book.sh -->
 
 [1-3] A tool that is present and cannot run announces nothing. Every call to it returns an empty

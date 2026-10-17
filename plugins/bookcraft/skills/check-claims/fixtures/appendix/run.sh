@@ -137,18 +137,24 @@ report $? "old shape: the report is still written for the chapter that was fine"
 # to contain "appendix-N-" is still a chapter.
 #
 # An unanchored pattern reopened the very collision this fixture exists to close:
-# guide-07-the-appendix-2-problem.md returned ('appendix', 2). check-book.sh:291
-# is the authority on the filename shape and anchors it, so chapter_id must
-# agree with it. No book folder can carry that file as a fixture, since
-# check-book.sh rejects the name, so the rule is checked at the unit level.
+# guide-07-the-appendix-2-problem.md returned ('appendix', 2). The rule now
+# lives in the plugin's book model, which check-provenance.sh and every other
+# tool read, so the model is what is checked here. No book folder can carry
+# that file as a fixture, since check-book.sh rejects the name, so the rule is
+# checked at the unit level.
 # ---------------------------------------------------------------------------
-cp "$prov" "$tmp/probe.py"
-cp "$here/../../../createbook/scripts/check-references.sh" "$tmp/check-references.sh"
-cp "$here/../../../createbook/scripts/assertions.sh" "$tmp/assertions.sh"
-python3 - "$tmp" <<'PROBE'
-import sys, importlib.util, pathlib
-spec = importlib.util.spec_from_file_location("probe", pathlib.Path(sys.argv[1]) / "probe.py")
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+python3 - "$here/../../../../scripts/book_model.py" <<'PROBE'
+import sys, importlib.machinery, importlib.util
+loader = importlib.machinery.SourceFileLoader("book_model", sys.argv[1])
+spec = importlib.util.spec_from_loader("book_model", loader)
+m = importlib.util.module_from_spec(spec); loader.exec_module(m)
+
+
+def chapter_id(name):
+    f = m.chapters(m.classify([name], {}))[0]
+    return f["kind"], f["number"]
+
+
 cases = {
     # a chapter whose SLUG contains the word, which must stay a chapter
     "guide-07-the-appendix-2-problem.md": ("chapter", 7),
@@ -159,8 +165,8 @@ cases = {
     # ordinary chapters
     "book-03-normal.md": ("chapter", 3),
 }
-bad = [f"{n}: got {m.chapter_id(n)}, want {w}"
-       for n, w in cases.items() if m.chapter_id(n) != w]
+bad = [f"{n}: got {chapter_id(n)}, want {w}"
+       for n, w in cases.items() if chapter_id(n) != w]
 for b in bad:
     print("   ", b, file=sys.stderr)
 sys.exit(1 if bad else 0)

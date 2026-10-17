@@ -1358,3 +1358,43 @@ with what it places after, each image by its path and each inline SVG by its `<t
 every one that went needs a reason from the agent's findings or the re-check.
 
 **Asserted, not measured:** no chapter has yet been rewritten under this procedure.
+
+## One book model for every tool, 2026-10-15
+
+Ticket #82. The binder and the three checkers each carried their own copy of the rules that say
+what a file is, and the copies had drifted. The appendix filename rule existed four times and no
+two agreed: `bk-appendix-1-Answer-Key.md` bound as a chapter while two checkers graded it as an
+appendix and `check-book.sh` rejected it. An inventory on `498a68a` found six more
+disagreements beyond that one: four ways of reading a chapter's number, four skip lists, an
+appendix that `check-book.sh` graded as chapter 10 under narration, a `sections` range that put
+an appendix inside a part on the contents page but not on its own page, and chapter references
+bounded by counts that included appendices.
+
+**`scripts/book_model.py` now answers for every tool.** `/makebook`, `check-provenance.sh` and
+`check-references.sh` load it by path. `check-book.sh` runs it under `python3` and reads
+tab-separated rows, which retired every `jq` read and the no-`jq` fallback with them.
+`render-report.py` reads no book folder; it takes each file's kind and number from the worklist
+index `check-provenance.sh` writes, so it reaches the model through that emitter.
+
+**Settled by the operator, 2026-10-15, all ten recommendations as written** (the branch's
+`CHANGELOG.md`, R1 to R10). The ones that shape what a reader of this file will meet:
+
+- **The opening of a name decides kind and number; the whole name decides whether it
+  conforms.** A malformed appendix name binds as an appendix and warns, and `check-book.sh`
+  still fails it. Binding it as "Chapter 5" was the failure that shipped.
+- **A chapter's number is the one in its name, or its position when the name carries none.**
+  The filename number is what the tags, the marks and every citation already address. For every
+  book `check-book.sh` passes the two are the same, so no passing book changed.
+- **No appendix is in a part, and no `ch. N` or `(ch. N)` names one.** `guide.md § Appendices`
+  gives an appendix no parts and says it never teaches.
+- **The paragraph half of the model was deferred to #72**, which already rewrites `units_of()`.
+  No tool in this change reads paragraph data, and emitting it with no reader would have been a
+  fifth copy of the rules.
+
+**Measured.** `createbook/fixtures/book-model/run.sh` hands every tool the same names and
+requires the model's answer from each. Two deliberate mutations of a copy of the plugin, one in
+`check-references.sh` and one in the binder, each failed it. The checkers and the model run
+under macOS's `/usr/bin/python3`, 3.9.6, and CI now has a job holding them to that floor.
+
+**Asserted, not measured:** that no real book on disk relied on a disagreement. The fixtures
+are the only books this change was run against.
