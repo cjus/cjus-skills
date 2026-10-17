@@ -9,7 +9,8 @@ __pycache__
 # Local session helper, not part of the marketplace
 hdr.sh
 
-# Project instructions for Claude Code: local only, never published.
-# Holds the cross-project reference rules, which name the very projects
+# Project instructions for Claude Code and Codex: local only, never published.
+# They hold the cross-project reference rules, which name the very projects
 # this repo must not mention.
 CLAUDE.md
+AGENTS.md
