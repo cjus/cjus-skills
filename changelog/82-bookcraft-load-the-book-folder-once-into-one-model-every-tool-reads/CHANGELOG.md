@@ -13,13 +13,10 @@ file the same way.
 ### 2026-10-12 10:57:05 MDT: the rules inventory
 
 Line numbers are on `498a68a`. "binder" is `makebook/scripts/build-book.py`, and the three
-checkers are in `createbook/scripts/`.
-
-**`render-report.py` has no rule of its own.** It never reads the book folder. It takes each
-file's `(kind, number)` from `index.json` and the findings files, both written by
-`check-provenance.sh --emit-worklist` (:1416-1430), so the model reaches it only through that
-emitter. #21's collision was fixed in the emitter by #17, merged 2026-09-21, the day before #21
-was filed. `check-claims/fixtures/appendix/run.sh` reproduces #21 and passes 17 of 17 on main.
+checkers are in `createbook/scripts/`. `render-report.py` has no rule of its own: it reads the
+worklist index `check-provenance.sh --emit-worklist` writes. #21's collision was already
+repaired in that emitter by #17, a day before #21 was filed, and
+`check-claims/fixtures/appendix/run.sh` reproduces it and passes on main.
 
 | Rule | binder | `check-book.sh` | `check-provenance.sh` | `check-references.sh` |
 |---|---|---|---|---|
@@ -33,397 +30,156 @@ was filed. `check-claims/fixtures/appendix/run.sh` reproduces #21 and passes 17 
 | Mark | whole line only, stripped :744 | whole line only; any other comment fails :1227 | anywhere on a line, `MARK.search` :706 | n/a |
 | Fence | markdown-it: backtick and `~~~` fences | backtick fences only :764 | backtick fences only :698 | backtick fences only :325 |
 
-**Disagreements beyond the appendix pattern.** Each row in the first table below came from
-running the tools' own code on the name: the real `load_chapters`, `chapter_id` and `unit_of`,
-and `check-book.sh`'s grep and sed patterns.
+Six disagreements beyond the appendix pattern, each confirmed by running the tools' own code:
+1. **Chapter numbers, four ways.** The binder's number is a position. Each checker reads the
+   filename differently: `bk2-07-slug-digit.md` is chapter 2 to provenance, chapter 7 to
+   references, and rejected by `check-book.sh`.
+2. **Skip lists, four ways.** Only the binder skipped `description_file`, and only through
+   `exclude` did it skip `OUTLINE.md`. `check-provenance.sh` hard-coded the default glossary and
+   front-matter names.
+3. **Appendices under narration.** `check-book.sh` recognised them only under guide, and graded
+   `bk-appendix-10-x.md` as chapter 10 there.
+4. **`sections` within the binder.** The chapter pages left appendices out of a part. The
+   contents, outline and EPUB nav put them in.
+5. **Bounds that counted appendices as chapters.** Provenance's `ch. N`, and the glossary's
+   `(ch. N)` in the binder and in `check-book.sh`.
+6. **Paragraph rules.** A mark above the H1, a mark mid-line, `~~~` fences, non-ASCII digits.
 
-1. **Chapter number has four rules.** The binder's number is a position. Every checker reads one
-   from the filename, and no two of them read it the same way:
-
-   | Filename | binder | provenance | references | check-book |
-   |---|---|---|---|---|
-   | `bk2-07-slug-digit.md` | chapter (position) | chapter 2 | chapter 7 | rejected |
-   | `notes-v2.md` | chapter (position) | chapter 2 | ignored | rejected |
-   | `bk-1-one-digit.md` | chapter (position) | chapter 1 | ignored | rejected |
-   | `01-intro.md` | chapter 1 | chapter 1 | ignored | rejected |
-
-   In a book with a gap (`-01-`, `-03-`), the binder prints "Chapter 2" over the file every
-   checker calls chapter 3. `check-book.sh` fails the gap, but the binder runs without it.
-2. **Three skip lists.**
-   - Only the binder skips `description_file`.
-   - The binder skips `OUTLINE.md` only because `createbook/SKILL.md:419` writes it into
-     `exclude`.
-   - `check-provenance.sh` hard-codes the default glossary and front-matter names, so a renamed
-     one is a chapter to it: scanned for marks, and counted in `n_chapters`.
-   - No fixture sets `description_file`, `glossary_file` or `front_matter_file`.
-3. **Appendices under the narration profile.**
-   - `check-book.sh` recognises an appendix only under the guide profile. The other three
-     recognise one under any profile.
-   - Its comment says a narration appendix "falls through to the chapter rule and fails there by
-     name". That holds only for a one-digit number. Under narration, `bk-appendix-10-x.md` passes
-     the chapter rule as chapter 10, and `bk-appendix-01-x.md` passes as chapter 1.
-4. **`sections` disagrees within the binder itself.**
-   - The chapter eyebrows leave appendices out of a part (:2278, :3815).
-   - The contents (:1651), the PDF outline (:3246) and the EPUB nav (:3748) group appendices by
-     their sequential number. So a range that spans an appendix's number nests it under a part
-     its own page does not name.
-5. **Numbers that count appendices as chapters.**
-   - `check-provenance.sh` bounds a mark's `ch. N` by `n_chapters`, which counts every file it
-     did not skip, appendices included (:1772, :1884).
-   - The glossary's `(ch. N)` is bounded the same way by the binder (:4057) and by
-     `check-book.sh` (:1325). Both accept a `(ch. N)` past the last chapter, and the binder then
-     resolves it to an appendix.
-6. **Paragraph rules, which matter only where `check-book.sh` has not run.**
-   - Line 1 that is a mark above the H1: the binder finds the title, `check-book.sh` fails it.
-     Its comment cites `build-book.py:406`; the rule is now at :910.
-   - A mark that does not fill its line: provenance reads it, the binder leaves it in the page.
-   - A `~~~` fence: the binder renders it as code, the checkers read its contents as prose.
-   - Python's `\d` matches non-ASCII digits, where `check-book.sh`'s `[0-9]` does not.
-
-**For the agreement fixture.** On a case-insensitive disk (macOS's default),
-`bk-appendix-1-answer-key.md` and `bk-appendix-1-Answer-Key.md` are one file, so the probe lost
-one of them. The ticket's four names cannot share a folder, so the fixture needs one folder
-per name, or it must classify names without creating the files.
+A case-insensitive disk cannot hold `bk-appendix-1-answer-key.md` and
+`bk-appendix-1-Answer-Key.md` side by side, so the agreement fixture classifies names without
+creating them.
 
 ### 2026-10-12 11:27:13 MDT: recommendations for every open question, awaiting the operator
 
-These are proposals. None is settled until the operator rules. Each one was checked against the
-specs and the fixtures, and the less obvious findings were confirmed by running the tools' own
-code.
+The investigation confirmed findings 3 and 4 by running the tools. It also found:
+- an appendix sorting ahead of the chapters shifted every chapter label in the binder
+- `check-references.sh` silently dropped one of two files sharing a number
+- a glossary `(ch. N)` past the last chapter printed "ch. 19" over Appendix 1
+- no fixture covered `sections` or the three filename keys
+- CI tested only Python 3.12 while the checkers run on macOS's 3.9.6
 
-**Confirmed since the inventory:**
-- **The `sections` mismatch.** In a folder with two chapters and an appendix, and `sections`
-  covering 1 to 3, `build_toc` lists `A1` under "Part One" while `build_chapters` heads it
-  "Appendix 1" with no part.
-- **The narration-profile appendix.** On a narration book, `check-book.sh` reports
-  `bk-appendix-10-key.md: is chapter 10 but sits at position 2`, then checks its content under
-  the chapter rules.
-
-**New findings:**
-- **An appendix that sorts ahead of the chapters shifts every chapter label.** The binder
-  counts appendices in a chapter's label (`len(chapters) + 1`, :950). So with
-  `aa-appendix-1-key.md` before `bk-01-one.md`, the binder prints "Chapter 2" over the file
-  every checker calls chapter 1.
-- **`check-references.sh` silently drops one of two files that share a chapter number.** It
-  keys chapters by number in a dict (:534), so the second file overwrites the first.
-- **A glossary `(ch. N)` past the last chapter prints wrong.** The binder prints "ch. 19" over a
-  link to Appendix 1 (:2363, :3693).
-- **Untested areas.** No fixture sets `sections`, `description_file`, `glossary_file` or
-  `front_matter_file`. No fixture glossary points past its chapters.
-- **The checkers' Python version isn't tested.** They run under macOS's `/usr/bin/python3`
-  (3.9.6, verified), but bookcraft's CI tests only 3.12 (`fixtures.yml:60`).
-
-**R1. The appendix rule: the name's opening decides kind and number, the whole name decides
-whether it conforms.**
-- The opening part is `<book-slug>-appendix-<N>-` for an appendix, tested first as every tool
-  tests it today, then `<book-slug>-<NN>-` for a chapter. The book slug is ASCII lowercase
-  letters and dashes. This is the `check-provenance.sh` and `check-references.sh` rule.
-- Conformance is the full pattern from `check-book.sh`, plus no leading zero in an appendix
-  number.
-- All four `bk-appendix-1-…` names are appendix 1, and three of them do not conform.
-  `sql-02-appendix-1-of-the-standard.md` is chapter 2 and conforms.
-- `check-book.sh` fails a non-conforming name, as it does today. The binder binds it as an
-  appendix and warns, and never refuses: it "binds any folder of markdown, including folders
-  `/createbook` never wrote" (`makebook/SKILL.md:600`).
-- **Why appendix rather than chapter or rejected.** The name says what it was meant to be.
-  Binding it as "Chapter 5" is the failure that has already shipped, and "rejected" is not
-  something the binder can do with a file.
-- **What changes:** the binder, for `…Answer-Key.md` and `…answer_key.md`.
-
-**R2. A chapter's number is the one in its name, or its position when the name carries none.**
-- **Why the name, not the position.** The filename number is what the book's addressing uses:
-  - the tag's chapter half
-  - a mark's `ch. N`
-  - `chapter N` in a referring file
-  - `--chapters 2`
-  - a glossary's `(ch. N)`
-
-  Renumbering a chapter means renaming the file and retagging it (`createbook/SKILL.md:664`).
-  Four of the five tools already read the filename number, and the binder already does for
-  appendices.
-- **No book that passes today changes.** `check-book.sh` requires the number to equal the
-  position, so for every book it passes the two are the same.
-- **What changes.**
-  - A book with a gap or a duplicate. The binder prints the names' numbers ("Chapter 1",
-    "Chapter 3"), which match the tags printed on the page, and warns. The model reports the gap
-    or duplicate, and `check-book.sh` fails it as it does now.
-  - `check-provenance.sh` stops reading `bk2-07-…` as chapter 2.
-  - `check-references.sh` stops ignoring a file whose name carries no number.
-  - The binder keeps its own running sequence for page ids and probes, separate from the label.
-- **Numbers count within each kind**, which fixes the label shift above. The reading order is
-  the chapters, then the appendices, so "bound after the chapters" (`guide.md:181`) holds by
-  construction.
-
-**R3. One skip list, the union of the four.**
-- `OUTLINE.md` always, `description_file`, `glossary_file` (default `glossary.md`),
-  `front_matter_file` (default `about-this-book.md`), and `exclude`.
-- **Why `OUTLINE.md` is skipped unconditionally.** The binder's own reason for skipping the
-  glossary and front matter applies to it: a forgotten `exclude` line would bind the file as a
-  chapter (:3999-4010).
-- **What changes:**
-  - A plain folder's `OUTLINE.md` no longer binds.
-  - The checkers skip `description_file`, so `check-book.sh` stops failing a book that uses one.
-  - The checkers skip a renamed glossary or front matter.
-- Add fixture coverage for the three filename keys.
-
-**R4. An appendix is an appendix under either profile, and the profile decides whether one is
-allowed.**
-- The model classifies by name alone. The binder never reads `profile`.
-- Under narration, `check-book.sh` fails an appendix with its own message instead of grading it
-  under the chapter rules. This fixes the `bk-appendix-10-…` case.
-- **What changes:** one deliberate fixture change.
-  `createbook/guide-under-narration`'s expected string `filename does not match`
-  (`test-fixtures.sh:99`) becomes the new message.
-
-**R5. No appendix is ever in a `sections` part.**
-- `guide.md:185` gives an appendix "No parts", and the chapter pages already follow that.
-- The model gives each file its part (none for an appendix), and the contents page, outline and
-  EPUB nav read it.
-- `sections.chapters` lists chapter numbers in R2's sense. `makebook/SKILL.md:322` changes
-  accordingly, since today it says "1-based position in sort order".
-- **What changes:** the binder, for a `sections` range that reaches past the last chapter.
-
-**R6. A mark's `ch. N` and a glossary's `(ch. N)` can name chapters only.**
-- `guide.md:187`: "An appendix never teaches", so no glossary term can be taught in one.
-- The bound becomes the set of chapter numbers, not a count of files. `check-references.sh`
-  already leaves appendices out, and an appendix paragraph is cited by its `[A1-3]` tag.
-- **What changes:** a book that cites past its last chapter fails, which is correct.
-
-**R7. Put the model at the plugin level: `scripts/book_model.py`.**
-- **Why there.** That folder already holds the plugin-wide tools (`install.sh`,
-  `bookcraft-python`, `test-fixtures.sh`). It installs beside `skills/`, which the installed
-  plugin cache shows.
-- **Why not `createbook/scripts/`.** The binder binds folders `/createbook` never wrote, so it
-  should not depend on that skill's folder.
-- **How each tool reaches it.**
-  - The Python tools load it by path, three levels up, with the `_borrow` loader
-    `check-provenance.sh` already uses (:251).
-  - `check-book.sh` runs `python3` on it.
-- **Version floor: Python 3.9**, the version on a stock Mac. Add a 3.9 CI leg, as `iac.yml`
-  already has for its own floor (:9-10), or nothing stops the model from breaking the checkers
-  there.
-
-**R8. `check-book.sh` reads the model through `python3`, and `jq` goes (this answers both the
-`jq` question and the format question).**
-- **`python3` is already required.** `/createbook` needs it for `check-provenance.sh`,
-  `check-references.sh` and `assertions.sh`, and the README says the three non-binder skills
-  "use the Python standard library and bash" (`README.md:37`).
-- **Why `jq` should go too.** Keeping it for the remaining `book.json` reads would mean two
-  required tools and two degraded modes. The model reads `book.json` anyway, so it hands back
-  the declarations as well.
-  - The three skip-list reads have to move under the plan as written.
-  - The other eight are the recommendation.
-  - Raw values keep the existing validation `case` blocks unchanged.
-- **The output format.**
-  - Tab-separated lines for bash: one `file` row per file, plus `decl` and `source` rows. The
-    model refuses a filename that holds a tab or a newline.
-  - `--json` for people and the fixture.
-  - The Python tools import the module directly.
-- **No `python3` means exit 2 with a message, and no degraded mode.** This follows the code's
-  own stance that degraded grading "reads as absent" while `book.json` declares otherwise
-  (`check-book.sh:151-158`).
-- **What changes:**
-  - `fixtures/jq-unrunnable/` becomes a test for a missing or broken `python3`, with the same
-    three cases; the absent case now expects a stop rather than a fallback.
-  - `test-fixtures.sh` drops its `jq` gate.
-  - The no-`jq` notes in the docs go.
-
-**R9. Move the paragraph half of the model to `## Deferred`, for #72, and record its rules now.**
-- **Why defer.** Every consumer step in the plan is file-level ("classify files from the
-  model"), and none reads paragraph data. Emitting it with no reader would be a fifth copy of
-  the rules, which is the drift this ticket exists to remove.
-- **Why #72.** It already rewrites `units_of()` (blind spot 1, a mark after a blank line yields
-  an empty unit), and asks to "confirm the three functions agree on what a fence is".
-- **The rules for when it lands:**
+The recommendations:
+- **R1.** The name's opening, `<book-slug>-appendix-<N>-` tried first, then `<book-slug>-<NN>-`,
+  decides kind and number. The whole name decides conformance, plus no leading zero on an
+  appendix. `check-book.sh` fails a malformed name. The binder binds it as what it says and
+  warns, never refusing.
+- **R2.** A chapter's number is the one in its name, or its position when the name carries none.
+  The filename number is what tags, marks, citations and `--chapters` address. Numbers count
+  within each kind, and the reading order is chapters, then appendices.
+- **R3.** One skip list, the union of all four: `OUTLINE.md`, `description_file`,
+  `glossary_file`, `front_matter_file` and `exclude`.
+- **R4.** An appendix is an appendix under either profile. `check-book.sh` fails one under
+  narration with its own message.
+- **R5.** No appendix is in a `sections` part. Parts list chapter numbers.
+- **R6.** A mark's `ch. N` and a glossary's `(ch. N)` name chapters only, since an appendix never
+  teaches (`guide.md:187`).
+- **R7.** The model lives at plugin-level `scripts/book_model.py` with a Python 3.9 floor, and CI
+  gains a 3.9 job.
+- **R8.** `check-book.sh` reads the model through `python3` as tab-separated rows. Every `jq`
+  read goes, there is no degraded mode, and `fixtures/jq-unrunnable/` becomes a `python3` test.
+- **R9.** The paragraph half of the model moves to `## Deferred`, for #72, which already rewrites
+  `units_of()`. Its rules for when it lands:
   - A mark fills its line.
   - A fence follows CommonMark: three or more backticks or tildes, closed by the same character
-    at least as many times. That is how the binder renders one.
+    at least as many times.
   - A mark after a blank line covers the unit above it, as `check-book.sh` already treats it
     (:931) and as #72 proposes.
   - Digits are ASCII only.
-- The objective names only file classification, so it is unaffected.
+- **R10.** The title is the first line once whole-line marks are stripped, when that line is an
+  H1, and otherwise comes from the filename.
 
-**R10. The title comes from the binder's rule.**
-- The title is line 1 once whole-line marks are stripped, when that line is an H1. Otherwise it
-  comes from the filename.
-- `check-book.sh` fails only the filename case, which is what its message already says. That
-  ends the false failure on a mark above the H1.
-
-**For books that pass `check-book.sh` today, only three things change.**
-- R5 changes the binder's contents page, outline and nav where a part's range reaches an
-  appendix.
-- R6 fails a citation past the last chapter.
-- R8 adds `python3` as a requirement of `check-book.sh`.
-
-**Outside the plan:** #21 can be closed, with `check-claims/fixtures/appendix/run.sh` as the
-evidence. That is the operator's call.
+For books `check-book.sh` passes today, only R5's parts, R6's bounds and R8's `python3`
+requirement change anything.
 
 ### 2026-10-15 12:17:49 MDT: the open questions are settled
 
-The operator accepted all ten recommendations, R1 to R10, as written above. Three of them change
-the plan's scope:
-- **R8:** `jq` leaves `check-book.sh` entirely, not only for the skip-list reads.
-- **R9:** the paragraph half of the model moves to `## Deferred`, for #72.
-- **R7:** CI gains a Python 3.9 leg.
+The operator accepted R1 to R10 as written. Three change the plan's scope: R8 removes `jq`
+entirely, R9 defers the paragraph half to #72, and R7 adds a Python 3.9 CI leg.
 
 ### 2026-10-15 12:24:23 MDT: the book model, and the binder reads it
 
-- **`scripts/book_model.py`.** It is stdlib-only and runs under Python 3.9.6 as well as 3.14.
-  - `classify(names, cfg)` is pure and touches no file. `read(folder)` adds `book.json` and each
-    chapter's title.
+- **`scripts/book_model.py`.** It runs under 3.9.6 and 3.14.
+  - `classify(names, cfg)` is pure, and `read(folder)` adds titles.
   - Each chapter-kind file carries its kind, number, name number, position, conformance, label,
     unit, part and title.
-  - `problems` words name and position faults the way `check-book.sh` worded them.
-  - `--tsv` and `--json` print the model.
+  - `problems` words faults as `check-book.sh` did, and `--tsv` and `--json` print the model.
 - **`build-book.py`.**
   - `prettify`, `load_config`, `APPENDIX_FILE_RE` and `group_for` are gone. `PROVENANCE_RE` is
-    now the model's `MARK_LINE`.
-  - Chapters come in the model's reading order. Labels, parts and figure prefixes come from the
-    model, and the binder's running `num` stays internal.
-  - A glossary `(ch. N)` must name a chapter (R6).
-  - A misnamed or misplaced file is bound and warned about, but only where its name claimed a
-    place in a `/createbook` book.
-- **Two binder labels that disagreed with the PDF, fixed in passing.** The EPUB numbered an
-  appendix's figures by the running sequence, `3.1` where the PDF printed `A1.1`. Its index
-  printed that sequence as a chapter number.
-- **Fixtures.** `makebook/fixtures/bind`, `display-names` and `save-scripts` pass unchanged. A
-  probe binds a gap as Chapters 1 and 3 with a position problem. An appendix sorting first no
-  longer shifts the chapter labels. The three malformed appendix names bind as Appendices 1 to 3
-  with name problems. A plain folder binds by position and nothing warns about it.
+    the model's `MARK_LINE`.
+  - Labels, parts and figure prefixes come from the model, and `num` stays internal.
+  - A glossary `(ch. N)` must name a chapter, and a claimed-but-malformed name warns.
+- **Fixed in passing:** the EPUB's appendix figure numbers and index labels, which disagreed with
+  the PDF.
+- **Fixtures.** The bind, display-names and save-scripts fixtures pass.
 
 ### 2026-10-15 12:27:55 MDT: check-provenance.sh and check-references.sh read the model
 
-- **`check-provenance.sh`.**
-  - It borrows the model by path with its own `_borrow`. `APPENDIX_FILE` and `chapter_id` are
-    gone, and `book.json` comes through the model.
-  - The chapters, their reading order and each file's `(kind, number)` come from the model, for
-    `--chapters` and for the worklist index `render-report.py` reads.
-  - A mark's `ch. N` must name a chapter the book has (R6); before, it was bounded by a count
-    that included appendices.
-- **`check-references.sh`.**
-  - `APPENDIX_FILE`, `CHAPTER_FILE` and `unit_of` are gone. `units_of(model)` maps each unit to
-    its file.
-  - The `git ls-tree` baseline names go through `book_model.classify`, so a baseline is read by
-    the same rule as the working tree.
-  - A unit two files claim now prints a note, where a dict key once dropped the first file
-    silently. Its `json` import is unused and gone.
-- **Two fixtures load `check-provenance.sh` where it sits** instead of copying it to a temp
-  folder, so what it borrows by path resolves: `createbook/fixtures/ledger` and
-  `check-claims/fixtures/appendix`.
-- **One deliberate test change.** The appendix fixture's fifth test checks the model's
-  classification in place of the removed `chapter_id`, with the same five cases.
-- **18 of 18 fixtures pass.** Both checkers run under Python 3.9.6.
+- **`check-provenance.sh`.** It borrows the model, and `APPENDIX_FILE` and `chapter_id` are gone.
+  `--chapters` and the worklist index take `(kind, number)` from the model, and `ch. N` must name
+  a chapter.
+- **`check-references.sh`.** `APPENDIX_FILE`, `CHAPTER_FILE`, `unit_of` and the unused `json`
+  import are gone. `units_of(model)` notes a unit two files claim, and the `git ls-tree` baseline
+  is classified by `book_model.classify`.
+- **Fixtures.** `createbook/fixtures/ledger` and `check-claims/fixtures/appendix` load
+  `check-provenance.sh` in place rather than from a temp copy. The appendix fixture's fifth test
+  checks the model in place of `chapter_id`, a deliberate change.
+- 18 of 18 fixtures pass, and both checkers run under 3.9.6.
 
 ### 2026-10-15 12:39:05 MDT: check-book.sh reads the model through python3, and jq goes
 
-- **`check-book.sh` reads the model's `--tsv` rows (R8).**
-  - All 11 `jq` reads are gone: every declaration, the source keys, the glossary and
-    front-matter names, and the skip list.
-  - So are the `find | sort` walk and its own appendix, chapter-number and position rules.
-  - It needs `python3` 3.9 or newer. When `python3` is missing or will not run, it stops with
-    exit 2 and says which.
-- **Behavior that changed deliberately.**
-  - Under narration, an appendix fails as an appendix, by name, instead of under the chapter
-    rules (R4).
-  - A glossary `(ch. N)` must name a chapter number the book has, not a number up to the count of
-    checked files (R6).
-  - The title is the first line once whole-line marks are set aside, and the body starts below
-    it (R10).
-  - A file that is not UTF-8 now fails, as the binder refuses it.
-- **The model's TSV rows.**
-  - No field is ever empty but the last, since bash's `read` collapses a run of tabs. A
-    declaration that would print empty is left out, which reads as absent exactly as jq's empty
-    output did.
-  - `file` rows put the title last and carry the H1's line number.
-- **`fixtures/jq-unrunnable` is now `fixtures/python-unrunnable`**, with its chapter renamed and
-  its `jq` sentences revised. Its three cases cover a working `python3`, one that exits 126, and
-  none at all, which now expects a stop where the old one expected the fallback.
-- **The harness and the other fixtures.**
-  - `test-fixtures.sh` drops its `jq` gate.
-  - The manifest row for `guide-under-narration` expects the new narration message, and the
-    `jq-unrunnable` row is renamed.
+- **`check-book.sh` reads `--tsv` rows (R8).**
+  - All 11 `jq` reads are gone, and so are its `find | sort` walk and its own filename rules.
+  - It needs `python3` 3.9 or newer, and exits 2 when it is missing or will not run.
+- **Deliberate behavior changes.**
+  - An appendix under narration fails by name (R4).
+  - A `(ch. N)` must name a chapter (R6).
+  - The body starts below the H1 (R10).
+  - A file that is not UTF-8 fails.
+- **The TSV rows.** No field is empty but the last, since bash's `read` collapses tabs. A
+  declaration that would print empty is omitted, which reads as absent, as jq's empty output did.
+- **Fixtures.**
+  - `fixtures/jq-unrunnable` became `fixtures/python-unrunnable`, with a working, a broken and a
+    missing `python3`; the missing case now expects a stop.
+  - `test-fixtures.sh` drops its `jq` gate, and the `guide-under-narration` row expects the new
+    message.
   - `assertions/run.sh` drops its `jq` skip.
-- **CI.**
-  - `fixtures.yml` asserts that `python3` runs, in place of installing and asserting `jq`.
-  - A new `checkers-floor` job puts the runner's `/usr/bin/python3` first on PATH and asserts it
-    is 3.9 (R7). It runs the suite without `--strict` and fails on any skip besides the two
-    fixtures that bind a book.
-  - Simulated locally with 3.9.6 and no venv: 16 pass, and those two skip.
-- **18 of 18 fixtures pass**, also with 3.9.6 first on PATH.
+- **CI.** It asserts that `python3` runs. A new `checkers-floor` job runs the suite under the
+  runner's `/usr/bin/python3`, asserting 3.9. It runs without `--strict` and fails on any skip
+  besides the binding fixtures.
+- 18 of 18 pass, also with 3.9.6 first on PATH.
 
 ### 2026-10-15 12:44:22 MDT: the agreement fixture
 
-`createbook/fixtures/book-model/run.sh` has three parts:
-- **The model's own table, from names alone.** It covers:
-  - the ticket's four appendix names, which a case-insensitive disk cannot hold side by side
-  - `sql-02-appendix-1-of-the-standard.md`
-  - a two-digit appendix and a leading zero
-  - names numbered by position
-  - every skip rule
-  - gap, zero and name problems
-  - reading order, parts, and the title below a mark
+`createbook/fixtures/book-model/run.sh` holds 75 checks:
+- **27 on the model's own table, from names alone.** The ticket's names, `sql-02-…`, a two-digit
+  appendix and a leading zero, names numbered by position, every skip rule, problems, reading
+  order, parts, and the title below a mark.
+- **40 that run every tool on the same names, one folder each.** The binder's records, the
+  worklist index, `units_of` and `check-book.sh`'s verdicts, plus folders for the skip list,
+  narration and a mark above the H1. The binder's share skips without the venv.
+- **8 that guard against any tool regaining a filename rule.**
 
-  That is 27 checks.
-- **Every tool on the same names, one folder each.** Each tool is read through what it produces:
-  - the binder's chapter records
-  - `check-provenance.sh`'s worklist index
-  - `check-references.sh`'s `units_of`
-  - `check-book.sh`'s verdicts
-
-  Further folders cover the skip list, an appendix under narration, and a mark above the H1. That
-  is 40 checks, and the binder's share skips without the venv.
-- **A guard against any tool regaining its own rule.** It fails on an appendix or chapter-number
-  filename regex, or on a `-name '*.md'` walk, in any of the four tools, and requires each to
-  read the model. That is 8 checks.
-
-Two mutations of a copy of the plugin are each caught:
-- `check-references.sh` dropping the appendix `A` fails five appendix checks.
-- The binder labelling by position fails `bk-appendix-10-ten.md`.
-
-`fixtures.yml`'s floor job also allows this fixture's one binder skip, matched by its exact
-count.
-
-19 of 19 fixtures pass. Simulated, the floor job passes 16 of 19, with its three expected skips.
+Mutating `check-references.sh` to drop the appendix `A`, or the binder to label by position, each
+fails it. The floor job allows its one binder skip by exact count. 19 of 19 pass.
 
 ### 2026-10-15 12:47:31 MDT: the docs, and bookcraft 1.15.0
 
-- **Root `README.md`.**
-  - bookcraft's requirements now name `python3` 3.9 for the checkers, and `jq` is no longer
-    optional for it.
-  - The broken-`jq` paragraph keeps its lesson and says `check-book.sh` now probes `python3` the
-    same way.
-  - The workflow note describes the `python3` assertion and the 3.9 floor job.
-- **bookcraft `README.md`.**
-  - The 3.9 floor, and the fixture list (`python-unrunnable`, `book-model`).
-  - "Ten fixtures are scripts", up from a count that was already one short on main.
-  - `scripts/book_model.py` in the tree.
-- **`createbook/SKILL.md`.**
-  - § Filenames says every tool reads a name through the model.
-  - The `jq` clauses on `overview` and on undeclared books are gone, and the checker's
-    requirements name `python3`.
-- **`makebook/SKILL.md`.**
-  - The front-matter skip names the model.
-  - `sections` counts chapter numbers and never takes in an appendix.
-  - `exclude` lists everything always skipped, and a glossary's `(ch. N)` can't name an appendix.
-  - § Appendices gains how numbers are read and that a malformed name binds as what it says,
-    with a warning.
-- **`createbook/NOTES.md` gains § One book model for every tool, 2026-10-15.**
-- **Version.** bookcraft goes from 1.14.0 to 1.15.0. `PLAN.md` ticks every remaining item.
-- **Counts.** 19 of 19 fixtures pass, and 233 citations resolve.
+The docs now describe the model, the `python3` floor and the retired `jq` fallback:
+- the root `README.md`
+- the bookcraft `README.md`, whose script-fixture count of "Ten" corrects one already short on
+  main
+- `createbook/SKILL.md` and `makebook/SKILL.md`
+- a dated `createbook/NOTES.md` section
+
+bookcraft goes from 1.14.0 to 1.15.0, and every plan item is ticked. 19 of 19 pass, and 233
+citations resolve.
 
 ### 2026-10-15 14:44:03 MDT: the pre-test review, and its two in-scope suggestions applied
 
-Draft PR #96 is open, so CI is running. The review (`pr-review-2026-10-15.md`) approved with no
-Critical or Important finding. Of its four suggestions, two were faults this branch introduced,
-and both are fixed:
-- **`"profile": 0` is refused again, as it was on main.** The `--tsv` profile row was tested with
-  `in (None, False)`, and `0 == False` in Python, so a profile of `0` read as absent and got the
-  narration rules. It is now tested by identity.
-- **A tab or line break in `glossary_file`, `front_matter_file` or `description_file` is
-  refused** by the model, rather than truncating the name in a `--tsv` row.
+Draft PR #96 opened, and the review (`pr-review-2026-10-15.md`) approved. Two of its four
+suggestions were faults this branch introduced, and both are fixed:
+- `"profile": 0` is refused again, as on main, now that the check tests by identity.
+- A tab or line break in a `book.json` filename key is refused.
 
-The other two suggestions were left:
-- An empty mark above the H1 is stripped from the page by the binder.
-- `title_line` and `tail` differ only on a file with old Mac line endings.
-
-19 of 19 fixtures pass.
+The other two were left: an empty mark above the H1, which the binder strips, and old Mac line
+endings in `title_line`. 19 of 19 pass.

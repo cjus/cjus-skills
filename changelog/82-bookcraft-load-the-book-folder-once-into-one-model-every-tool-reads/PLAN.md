@@ -145,7 +145,8 @@ and a missed copy ships a book the checkers grade differently from how it binds.
 - [x] Bump bookcraft's version in `plugin.json` (currently 1.14.0), and run the fixture checks
   CI runs. Ruled 2026-10-15 (R7): CI gains a leg that runs the checkers under Python 3.9.
   Done 2026-10-15: 1.14.0 to 1.15.0. The suite passes 19 of 19, and a local run of the floor job
-  under 3.9.6 passes with its three expected skips.
+  under 3.9.6 passes with its three expected skips. CI passes all six jobs on `9ee270a`, the 3.9
+  `checkers` job among them.
 
 ## Open Questions
 
@@ -170,6 +171,17 @@ every open question`).
 ## Deferred
 
 - The paragraph half of the model: each paragraph's tag, mark and fence, by ruling R9. It goes
-  to #72, with the rules recorded in R9. No consumer in this plan reads it.
-- Close #21. It was fixed by #17 before it was filed, and
-  `check-claims/fixtures/appendix/run.sh` reproduces it and passes on main.
+  to #72, with the rules recorded in R9. No consumer in this plan reads it. Triaged 2026-10-17:
+  R9's rules posted to #72 as a comment, by the operator's approval.
+- The appendix-number collision ticket, #21. It was repaired by #17 before it was filed, and
+  `check-claims/fixtures/appendix/run.sh` reproduces it and passes on main. Triaged 2026-10-17:
+  closed by hand, with that evidence, by the operator's approval.
+
+Triaged at the close, 2026-10-17: the two items above survived and acted on existing issues, so
+no follow-up issue was filed. Six were dropped:
+- non-ASCII names missing from the `check-references.sh` baseline, which predates this branch
+- the binder's internal number in an operator-only message, which predates it
+- an empty mark above the H1, which the binder strips
+- old Mac line endings in `title_line`
+- fixture rows for the two `9ee270a` fixes
+- two omissions from the summary
