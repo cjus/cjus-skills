@@ -1,0 +1,13 @@
+{
+  "subtitle": "A fixture for check-references.sh",
+  "byline": "Claude Opus 5",
+  "description": [
+    "A two-chapter book, the Field Guide, and the referring files that cite it: one that also cites a companion book, one whose tags are all the companion's, one quoting named files, one carrying fenced examples, and three whose declarations this run cannot read. run.sh asserts what check-references.sh reports for each, and every case it asserts was reported differently, or not at all, before #72.",
+    "The companion book does not exist. It is only ever named, which is the case the declarations are for: this run cannot open it, so its citations have to be recognised and left alone rather than resolved here."
+  ],
+  "tags": true,
+  "cited_as": [
+    "Field Guide",
+    "the field book"
+  ]
+}

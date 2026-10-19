@@ -333,7 +333,7 @@ Four checks run over a book, in ascending order of what they are worth. The firs
 |---|---|---|
 | `check-book.sh` | Inside the book | Filenames, ordering, the H1, the H2 per part, the paragraph tags, the markdown a chapter may not carry |
 | `check-provenance.sh` | Marks pointing **out** | Is the named source declared and present? Does the locator resolve? Does every quotation of 25+ characters appear in a source the mark names? Does every `assertion <id>` a mark cites still hold, and is any prose still built on a superseded premise? |
-| `check-references.sh` | Citations pointing **in** | Do `ch. N` and `[N-M]` citations from other files resolve to chapters and paragraphs that exist? Does a quotation attributed to a chapter appear in *that* chapter? |
+| `check-references.sh` | Citations pointing **in** | Do `ch. N` and `[N-M]` citations from other files resolve to chapters and paragraphs that exist? Does a quotation attributed to a chapter appear in *that* chapter, and one attributed to a named file in that file? In a file that declares it cites two books, is each citation read against the book it names? |
 | `/check-claims` | Both, with a reader | Does the source actually support the paraphrase beside the mark? |
 
 ```bash
@@ -368,7 +368,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-book.sh fixtures/guide                    # exits 0, the guide profile
 ./scripts/check-book.sh fixtures/guide-under-narration    # exits 1, five failures by design
 ./scripts/check-book.sh fixtures/provenance               # exits 0
-./scripts/check-provenance.sh fixtures/provenance         # exits 1, six failures by design
+./scripts/check-provenance.sh fixtures/provenance         # exits 1, seven failures by design
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
 ./scripts/check-book.sh fixtures/guide-reports            # exits 0, with seven REPORT lines
 ./fixtures/python-unrunnable/run.sh                       # exits 0, the python3 guard still fires
@@ -376,6 +376,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./fixtures/ledger/run.sh                                  # exits 0, --ledger-only still fires
 ./fixtures/paragraph-stop/run.sh                          # exits 0, the stop fails a guide and reports under narration
 ./fixtures/lettered-tags/run.sh                           # exits 0, every checker accepts [1-2a]
+./fixtures/attribution/run.sh                             # exits 0, each citation is read against the book or file it names
 ./fixtures/assertions/run.sh                              # exits 0, the helper rebuilds its file and the checks read it
 ../makebook/fixtures/display-names/run.sh                 # exits 0, the binder swaps only the source rows
 ../makebook/fixtures/bind/run.sh                          # exits 0, binds three books, the guide twice; skips without install.sh's venv

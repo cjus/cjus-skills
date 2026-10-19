@@ -56,3 +56,34 @@ with access to it, and are described here without its paths.
   `## 10.` and no `## 1.` (fails), and a misquoting paragraph a blank line separates from its
   mark (reviews). Under `main`'s script both new failing cases pass silently: 6 failures and 3
   quotations checked, against 7 and 4 on the branch.
+
+### 2026-10-18 21:10:00 MDT: which book a citation cites, file-sourced quotations, and fences
+
+- **`book_model.Fence`** is now every fence reader in `check-references.sh`: `blocks()`,
+  `tag_paragraphs()` and `tag_citations()`. `blocks()` yields nothing for a fence, and a fence
+  clears `lead`.
+- **Declarations and `cited_as`** (D3). `declarations()` reads `<!-- cites: NAME -->` lines
+  outside fences; `attribution()` matches them against `cited_as` and refuses, as a FAIL that
+  checks nothing in the file, a declaration it cannot read: no `cited_as`, no declared name that
+  is this book, or two or more books with other than one `(default)`. `Attribution.refs()` gives
+  each chapter reference its book and whether the name shares its sentence. Names drop a leading
+  "the", as `check-provenance.sh`'s `match_source` does.
+- **Check 1** reads `blocks()` instead of lines. Against this plugin's own docs, run as
+  referring files, it stopped counting 12 of 93 `ch. N` references, all 12 inside fences, and 7
+  of them had been FAILs, and check 2 stopped reviewing the one quotation inside a fence. No
+  other output moved for an undeclared file except the reworded REVIEW paragraph.
+- **Checks 3 and 4** skip a declared file whose default book is not this one, and count its
+  tags per file.
+- **Check 2** scopes a chapter-attributed quotation by its nearest-before reference's book, and
+  reads a file-sourced quotation against every visible file of that name (D4). Only a file
+  nobody can read still leaves a quotation unchecked, and only that qualifies the banner as
+  `OK*`; another book's citations are noted and the banner says it speaks for this book.
+- **`REF` and `FILEREF`** take ASCII digits (D2).
+- **`bj`** is defined again. #82 removed it and kept its use in the `"tags": true` error, so
+  that error raised a NameError on `main`.
+- **`fixtures/attribution/run.sh`**, check 2's first fixture: nine cases. Run against `main`'s
+  `check-references.sh`, eight fail; the ninth is the undeclared file, which passes on both by
+  design.
+- **Docs.** `createbook/SKILL.md` documents the declaration, `cited_as` and the file-sourced
+  read; `updatebook/SKILL.md` step 5 points at it; the plugin README's checker table and fixture
+  list follow. bookcraft is 1.16.0, and `createbook/NOTES.md` records the change.

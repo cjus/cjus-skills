@@ -161,10 +161,10 @@ Line numbers are on `fd1d571`.
 
 ### 3. A citation is checked against the book it names (#51 § 3)
 
-- [ ] Checks 1 and 3 of `check-references.sh` (`REF` at `:80`, and the `[N-M]` tags) count a
+- [x] Checks 1 and 3 of `check-references.sh` (`REF` at `:80`, and the `[N-M]` tags) count a
   citation only when its nearest attribution names this book, and report the rest as
   attributed elsewhere, the way check 2 already reports quotations sourced to a named file.
-- [ ] A fixture: a referring file that cites two books.
+- [x] A fixture: a referring file that cites two books.
 
 How a citation is attributed was settled on 2026-10-18 as D3 below, and it is not "the nearest
 attribution" for every kind: a tag follows the file's declared book, a chapter reference the
@@ -172,27 +172,27 @@ book named in its block, and check 2's chapter-attributed quotations take the sa
 
 ### 4. Check 2 reads the file a quotation names (#65)
 
-- [ ] Read the named file and confirm the quotation appears in it, the way a
+- [x] Read the named file and confirm the quotation appears in it, the way a
   chapter-attributed quotation is confirmed against its chapter. The exemption sits at
   `check-references.sh:789-816`.
-- [ ] Decide the severity when it does not appear.
-- [ ] Resolve a `file.md:NN` attribution's line number too, or state why the line is not
+- [x] Decide the severity when it does not appear.
+- [x] Resolve a `file.md:NN` attribution's line number too, or state why the line is not
   checked.
-- [ ] Keep the count-and-name report (`:958-966`), so an exemption that verifies nothing never
+- [x] Keep the count-and-name report (`:958-966`), so an exemption that verifies nothing never
   reads like one that verified something.
 
 ### 5. `blocks()` knows about fences (#65)
 
-- [ ] Skip fenced blocks in `blocks()` (`check-references.sh:185`).
-- [ ] `lead` cannot attach across a fence boundary.
-- [ ] `blocks()`, `tag_paragraphs()` (`:325`) and `tag_citations()` (`:374`) agree on what a
+- [x] Skip fenced blocks in `blocks()` (`check-references.sh:185`).
+- [x] `lead` cannot attach across a fence boundary.
+- [x] `blocks()`, `tag_paragraphs()` (`:325`) and `tag_citations()` (`:374`) agree on what a
   fence is, by R9's CommonMark rule.
 
 ### 6. Fixtures and release
 
-- [ ] Each fix above has a fixture that fails without it, with its row in
+- [x] Each fix above has a fixture that fails without it, with its row in
   `scripts/test-fixtures.sh`. A fixture for check 2 is that check's first.
-- [ ] Bump bookcraft's version in `.claude-plugin/plugin.json` (now `1.15.0`), and record the
+- [x] Bump bookcraft's version in `.claude-plugin/plugin.json` (now `1.15.0`), and record the
   change in `createbook/NOTES.md`.
 
 ## Decisions
@@ -258,3 +258,10 @@ None open.
 - **A word locator ending in a number still matches by prefix.** `§ Worked Reasoning #1`
   resolves against `### Worked Reasoning #10 - ...` after item 1 is gone, the same shape as
   #51 § 2 one step over. Step 2 fixes only the bare-number locator.
+- **A loose list's earlier items go unchecked.** `units_of()` starts a new unit at each item
+  after a blank line, so a mark after a list with blanks between its items covers only the last
+  item, while `check-book.sh`'s sweep reads the whole list as one unit. The quotations in the
+  earlier items are the ones left out.
+- **The binder's `fenced_lines` still toggles on a backtick line** (`build-book.py:1022`), for
+  attaching a chapter's scripts. It is the binder's last line-based fence reader; its
+  markdown-it pass already reads fences by CommonMark.

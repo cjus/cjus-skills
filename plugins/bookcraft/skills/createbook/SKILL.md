@@ -432,6 +432,7 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 | Key | Add it when | Leaving it out means |
 |---|---|---|
 | `"slide_figures": "diagrams/slides"` | The book carries slide art in that folder | No slides; every image is a numbered figure |
+| `"cited_as": ["Field Guide"]` | A file that cites this book also cites another, and declares which (§ When the book supersedes one that already exists) | `check-references.sh` cannot match a declared file to this book, so it fails the file unread |
 
 **`"edition": "reading"` is in the template for a `guide` book, and left out of a `narration` one.** It is `/makebook`'s key (`makebook/SKILL.md § The reading edition`), and it only changes what a bind with no flag produces. A guide is handed to readers, and the paragraph tags and source rows are the operator's, so a guide binds the reading edition by default and the operator's copy is the one that takes a flag. A narration book leaves the key out and binds the default edition, with `--reading-edition` for the times you want the other. Where a guide's operator wants the tagged copy as the default, they drop the key.
 
@@ -814,7 +815,16 @@ So the rule is: **verify a repointed reference against what the target says, not
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-references.sh [--since <ref> | --no-baseline] <book-folder> <referring-file>...
 ```
 
-It runs four checks and reports them separately so a weaker one cannot stand in for a stronger. Every `ch. N` names a chapter the book has; every quotation attributed to the book appears in it; every `[N-M]` paragraph tag cited names a paragraph the book defines; and that paragraph is still the one it was at the baseline, which defaults to `HEAD`. Needs `python3`, and check 4 additionally needs the book to be in a git repository. Pass the book's own `OUTLINE.md` and `diagrams/README.md` as referring files too: tags are cited there like anywhere else, and only the chapter itself holds them as definitions.
+It runs four checks and reports them separately so a weaker one cannot stand in for a stronger. Every `ch. N` names a chapter the book has; every quotation attributed to the book appears in it; every `[N-M]` paragraph tag cited names a paragraph the book defines; and that paragraph is still the one it was at the baseline, which defaults to `HEAD`. Needs `python3`, and check 4 additionally needs the book to be in a git repository. Pass the book's own `OUTLINE.md` and `diagrams/README.md` as referring files too: tags are cited there like anywhere else, and only the chapter itself holds them as definitions. A quotation whose nearest attribution is a named markdown file is read against that file instead of the book, and fails in a key row or reviews in prose when the file does not carry it; a `file.md:NN` line number is not checked.
+
+**A file that cites two books has to say which is which**, or every citation in it is resolved against the one book the run was given: another book's tags resolve silently against this book's paragraphs, and its chapter numbers against this book's chapters. Declare each book the file cites on a line of its own, and mark the one its bare citations cite as the default:
+
+```markdown
+<!-- cites: Field Guide (default) -->
+<!-- cites: SQLite Guide -->
+```
+
+Each book that file is checked against then lists, in its `book.json`, the names other files use for it (`"cited_as": ["Field Guide"]`); a name is matched case-insensitively, as a phrase, with a leading "the" dropped. A tag belongs to the default book whatever is written beside it. A chapter reference belongs to the book named nearest it in its own block, and to the default when the block names none; a missing chapter fails when the name shares the reference's sentence, and reviews when the name sits only elsewhere in the block. A citation of the other book is counted, named and left to that book's own run. A file that declares nothing is read as citing only the book it is checked against, as before.
 
 **What no script here can catch is the one that matters most for a resource-first book: a claim attributed to a source that the source does not make.** The mark says where a sentence came from and nothing verifies that it came from there. That check is `reference/chapter-prose.md § Before sending`, done by reading, and it is the reason step 5 hands chapter agents paths rather than summaries.
 
