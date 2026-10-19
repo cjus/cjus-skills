@@ -87,3 +87,32 @@ with access to it, and are described here without its paths.
 - **Docs.** `createbook/SKILL.md` documents the declaration, `cited_as` and the file-sourced
   read; `updatebook/SKILL.md` step 5 points at it; the plugin README's checker table and fixture
   list follow. bookcraft is 1.16.0, and `createbook/NOTES.md` records the change.
+
+### 2026-10-18 22:40:00 MDT: the review's findings, addressed
+
+`pr-review-2026-10-18.md` asked for changes. Every finding is addressed here, and each has a
+fixture case in `fixtures/attribution` or `fixtures/provenance`:
+
+- **Critical: the quoting file was one of its own candidates**, so a quotation of a file sharing
+  its name was always "found". It is left out; when it is the only file carrying the name, the
+  quotation is reported as one this run could not check, and the banner is `OK*`.
+- **`ch.` and `e.g.` ended a sentence**, turning `The Field Guide's ch. 1 and ch. 8` into a
+  REVIEW. Other references are removed before the sentence test, and `e.g.`, `i.e.`, `cf.` and
+  `vs.` are not ends.
+- **An empty `<!-- cites: -->` made "" a book.** A declaration naming nothing now fails the file.
+- **An unclosed fence hid the rest of a referring file silently.** It is a REVIEW now, using the
+  line `Fence.opened_at` records.
+- **The "nothing quotes the book" note** is gated on another book's quotations, not on its
+  chapter references.
+- **Docs**: the Attribution docstring says what does change for an undeclared file, which is the
+  fence and a reference wrapped across a line break; `SKILL.md` says every same-named file but
+  the quoting one is read, and lists the declarations that fail.
+- **The review's two questions, answered conservatively.** `§ 2` resolves against a source that
+  heads only `2.1` and `2.2` again, as it did on `main`, since a subsection is inside its
+  section; `§ 1` still never resolves against `10.` or `1.20`. A key-row quotation resting on a
+  reference whose book was read from another sentence reviews rather than fails, matching
+  check 1.
+- **Its deferred note, folded in**: `check-provenance.sh` read the book's tag definitions
+  without skipping fences. It now reads them through `check-references.sh`'s `tag_paragraphs`,
+  so the two checkers agree on what a tag is.
+- Under `main`, 11 of the 12 attribution cases fail; the undeclared guard passes on both.

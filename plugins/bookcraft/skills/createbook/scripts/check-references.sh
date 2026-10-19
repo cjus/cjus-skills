@@ -199,8 +199,10 @@ OPENING = 68     # how much of a drifted paragraph to show on each side
 CITES = re.compile(r"[ \t]*<!--[ \t]*cites:[ \t]*(.*?)[ \t]*-->[ \t]*")
 DEFAULT = re.compile(r"\s*\(default\)$", re.I)
 # The end of a sentence, for asking whether a book's name and a chapter
-# reference share one. See Attribution.refs().
-SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+# reference share one. See Attribution.refs(). The abbreviations a citation
+# sentence carries are not ends: `e.g.`, `i.e.`, `cf.` and `vs.` here, and the
+# `ch.` of another chapter reference, which refs() removes before it asks.
+SENTENCE_END = re.compile(r"(?<!\be\.g)(?<!\bi\.e)(?<!\bcf)(?<!\bvs)[.!?](?=\s|$)", re.I)
 
 
 def declarations(lines):
@@ -253,8 +255,11 @@ class Attribution:
 
     `this` is the declared name that is this book, and `default` the book a bare
     citation cites. For a file that declares nothing both are the empty string,
-    no name is searched for, and every citation is this book's, so an undeclared
-    file reads exactly as it did before declarations existed.
+    no name is searched for, and every citation is this book's, as before
+    declarations existed. What does change for such a file comes from check 1
+    reading blocks rather than lines: a reference inside a fence is skipped, and
+    one wrapped across a line break (`chapter` at a line's end, `8` on the next)
+    is now seen.
 
     The rule differs by kind of citation, and the difference was measured
     before it was decided, on a teaching guide's course material citing that
@@ -313,6 +318,9 @@ class Attribution:
                 return s[0] - m.end() if s[0] >= m.end() else max(m.start() - s[1], 0)
             a, b, book = min(spans, key=gap)
             between = text[b:m.start()] if b <= m.start() else text[m.end():a]
+            # Another reference in between is not a sentence end, so `The Field
+            # Guide's ch. 1 and ch. 8` keeps ch. 8 in the name's sentence.
+            between = REF.sub(" ", between)
             out.append((m, book, "block" if SENTENCE_END.search(between) else "sentence"))
         return out
 
@@ -327,6 +335,11 @@ def attribution(lines, cited_as):
     if not decl:
         return Attribution(), None
     names = [n for n, _, _ in decl]
+    # A declaration naming nothing would make "" a book, and every bare citation
+    # in the file its citation, so nothing would be checked under an OK.
+    blank = next((line for n, _, line in decl if not n), None)
+    if blank is not None:
+        return None, f"line {blank} declares a book with no name"
     if not cited_as:
         return None, (f"declares the books it cites ({', '.join(names)}), but this book's "
                       "book.json lists no \"cited_as\" names to match one against")
@@ -864,9 +877,10 @@ def main(argv):
     # file a quotation names, and two files can share a name.
     visible_md = {}
     for p in [*search_root.rglob("*.md"), *(pathlib.Path(a) for a in rest[1:])]:
-        paths = visible_md.setdefault(p.name, [])
-        if p.is_file() and p.resolve() not in paths:
-            paths.append(p.resolve())
+        if p.is_file():
+            paths = visible_md.setdefault(p.name, [])
+            if p.resolve() not in paths:
+                paths.append(p.resolve())
 
     # A named file's text, folded the way a chapter's is, read once per run. None
     # when it cannot be read, which leaves its quotations unverified and says so.
@@ -895,6 +909,7 @@ def main(argv):
     # Citations of another book a declared file makes, left to that book's own
     # check: (file, book) -> count of tags, and (file, line, what) for the rest.
     other_tags, other_cites = {}, []
+    n_other_quotes = 0
     n_tags = n_unresolved = n_drift = n_shift = n_compared = 0
 
     for arg in rest[1:]:
@@ -912,6 +927,18 @@ def main(argv):
             print(f"FAIL  {f.name}: {why}; nothing in it was checked")
             fail = 1
             continue
+
+        # A fence nothing closes runs to the end of the file, as CommonMark reads
+        # it, so checks 1 to 3 see nothing after it. Said out loud, rather than
+        # left to read like a file that has nothing more to cite.
+        fence = book_model.Fence()
+        for ln in lines:
+            fence.step(ln)
+        if fence.opening is not None:
+            n_review += 1
+            n_unreadable += 1
+            print(f"REVIEW  {f.name}:{fence.opened_at}: a fence opens here and nothing closes it, "
+                  "so nothing after it was checked")
 
         # Check 1, block by block rather than line by line, because the book a
         # reference cites is read from the names in its block. Reading blocks also
@@ -1081,23 +1108,29 @@ def main(argv):
                     # wording, not where the wording sits.
                     source = next(name for at, name in named if at == last_file)
                     where = start + before.count("\n")
-                    held = [t for t in map(file_text, visible_md[source]) if t is not None]
+                    # Never the quoting file itself, which holds the quotation by
+                    # construction: a new book's OUTLINE.md quoting the old one's
+                    # would otherwise always be "found", in itself.
+                    paths = [p for p in visible_md[source] if p != f.resolve()]
+                    held = [t for t in map(file_text, paths) if t is not None]
                     if not held:
                         # Counted AND named, not merely skipped. A check that
                         # quietly stopped examining something reads exactly like
                         # a check that passed, and every other class in this
                         # report carries a file:line, so the skip does too.
-                        exempted.append((f.name, where, f"{source}, which could not be read"))
+                        why = ("could not be read" if paths else
+                               "this run can see only as the file quoting it")
+                        exempted.append((f.name, where, f"{source}, which {why}"))
                         n_elsewhere += 1
                         continue
                     nq = norm(q).strip(" .")
                     found = any(nq in t for t in held)
-                    filed.append((f.name, where, source, found, len(visible_md[source])))
+                    filed.append((f.name, where, source, found, len(paths)))
                     if found:
                         continue
                     flat = re.sub(r"\s+", " ", q)
-                    files = (f", nor in any of the {len(visible_md[source])} files with that name"
-                             if len(visible_md[source]) > 1 else "")
+                    files = (f", nor in any of the {len(paths)} files with that name"
+                             if len(paths) > 1 else "")
                     # The severity a chapter-attributed quotation gets, for the
                     # same reasons: a key row's note column evidences its answer,
                     # and prose naming a file may be quoting something else.
@@ -1116,11 +1149,16 @@ def main(argv):
                 # file's declaration (see Attribution). A lead-in's references all
                 # precede the item that inherits them.
                 prior = [r for r in src_refs if inherited or r[0].start() < qstart]
-                ref_m, whose, _ = prior[-1] if prior else src_refs[0]
+                ref_m, whose, ref_how = prior[-1] if prior else src_refs[0]
                 if whose != attr.this:
+                    n_other_quotes += 1
                     other_cites.append((f.name, start + before.count("\n"),
                                         f"a quotation of chapter {ref_m.group(1)} of {whose}"))
                     continue
+                # A book read from a name outside the reference's sentence is this
+                # script's inference, as check 1's REVIEW says, so a key row
+                # resting on it cannot fail a build either.
+                inferred = inherited or ref_how == "block"
                 n_examined += 1
                 nq = norm(q).strip(" .")
                 if nq in target:
@@ -1135,7 +1173,7 @@ def main(argv):
                     detail = f"is in chapter {holder}, not the chapter {'/'.join(map(str, cited))} cited here"
                 else:
                     detail = "is in no chapter of the book"
-                if is_row and not inherited:
+                if is_row and not inferred:
                     # A key table's note column exists to evidence the keyed
                     # answer, so a quotation there is unambiguously attributed.
                     print(f"FAIL  {f.name}:{where}: key row quotes text that {detail}")
@@ -1148,7 +1186,9 @@ def main(argv):
                     # the row did not name the chapter itself and a build must
                     # not fail on a citation this script inferred.
                     n_review += 1
-                    how = " (citing the chapter its list's lead-in names)" if inherited else ""
+                    how = (" (citing the chapter its list's lead-in names)" if inherited else
+                           " (this book read from a name outside the reference's sentence)"
+                           if inferred else "")
                     print(f"REVIEW  {f.name}:{where}: quotes text that {detail}{how}; may not be quoting the book")
                 print(f'        "{flat[:88]}{"..." if len(flat) > 88 else ""}"')
 
@@ -1251,8 +1291,8 @@ def main(argv):
         print("reference or a named file may be quoting something else entirely, a chapter")
         print("reference read as this book's from a name outside its sentence may be another")
         print("book's, a paragraph edited in place drifts without any citation into it having")
-        print("broken, and a block whose delimiters check 2 could not pair may not have been")
-        print("examined. None of these fails a run.")
+        print("broken, and a block whose delimiters check 2 could not pair, like the text after")
+        print("a fence nothing closes, may not have been examined. None of these fails a run.")
     # Counted and named either way, so a quotation read against the file it names
     # never reads like one that was skipped, and the reverse.
     if filed:
@@ -1266,7 +1306,7 @@ def main(argv):
     if n_elsewhere:
         one = n_elsewhere == 1
         print(f"note: {n_elsewhere} quotation{'' if one else 's'} "
-              f"{'was' if one else 'were'} attributed to a named file this run could not read,")
+              f"{'was' if one else 'were'} attributed to a named file this run could not check,")
         print(f"      so check 2 did not check {'it' if one else 'them'}:")
         for fname, lineno, source in exempted:
             print(f"      {fname}:{lineno}: sourced to {source}")
@@ -1289,7 +1329,7 @@ def main(argv):
     # 2026-09-10, once per exception, because the gate was not revisited when the
     # second arrived.
     if (n_examined == 0 and n_refs and not n_elsewhere and not n_unreadable
-            and not filed and not other_cites):
+            and not filed and not n_other_quotes):
         print("note: chapter references resolve by number and nothing quotes the book, so")
         print("      check 2 had nothing to examine. That is the weaker reading of check 1.")
     if check_tags and n_tags == 0 and other_tags:
@@ -1337,8 +1377,8 @@ def main(argv):
         if n_review:
             why.append(f"{n_review} REVIEW item(s) above are still unread")
         if n_elsewhere:
-            why.append(f"{n_elsewhere} quotation(s) were sourced to a file this run could "
-                       "not read, and never checked")
+            why.append(f"{n_elsewhere} quotation(s) were sourced to a named file this run "
+                       "could not check")
         print(f"OK*   nothing failed, and {', and '.join(why)}.")
         print("      This is not an all-clear until someone has been through them.")
         # Only where an exemption is what diverted an otherwise-clean run here. A

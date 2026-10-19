@@ -121,9 +121,12 @@ class Fence:
 
     def __init__(self):
         self.opening = None     # the run that opened the fence now open, e.g. "```"
+        self.line = 0           # how many lines have been read
+        self.opened_at = 0      # the line that opened the fence now open
 
     def step(self, line: str) -> bool:
         """Read the next line; True when it opens, closes or sits inside a fence."""
+        self.line += 1
         if self.opening is not None:
             run = line.strip()
             if len(run) >= len(self.opening) and not run.strip(self.opening[0]):
@@ -131,7 +134,7 @@ class Fence:
             return True
         m = FENCE_OPENING.fullmatch(line.rstrip("\r\n"))
         if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
-            self.opening = m.group(1)
+            self.opening, self.opened_at = m.group(1), self.line
             return True
         return False
 

@@ -20,3 +20,9 @@ The field book comes up again later. The install steps are in chapter 9.
 The Companion Guide's chapter 2 says "a sentence nobody in this fixture wrote anywhere at all".
 
 Chapter 2 of the Field Guide says "A quotation attributed to this chapter has to be in this chapter".
+
+The Field Guide's ch. 1 and ch. 8 both cover it.
+
+The Field Guide covers it in chapter 1, e.g. chapter 7 is a later one.
+
+| Q2 | The field book is the source. Chapter 2 says "a key row quotation chapter two never makes" |

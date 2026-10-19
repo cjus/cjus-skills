@@ -25,3 +25,7 @@ Which of these is a reason to skip an index?
 
 A source that numbers its sections the way a question bank does, starting at ten so that no
 heading here is section 1.
+
+### 20.1 Only A Subsection
+
+Section 20 is headed only by its subsections, so a citation of section 20 rests on this one.

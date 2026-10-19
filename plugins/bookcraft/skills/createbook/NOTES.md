@@ -1411,8 +1411,10 @@ D5 in the branch's `CHANGELOG.md`.
   after a blank and a full run checked 20 quotations; written with each mark under its unit,
   the recreated edition checks 246. The example now writes the mark directly under its unit.
 - **A bare-number locator matches its number exactly** (`heading_hit`). `§ 1` resolved against
-  `## 10.` by prefix after item 1 was gone. A word locator still matches by prefix, so
-  `§ Worked Reasoning #1` still resolves against `#10`; that is deferred.
+  `## 10.` by prefix after item 1 was gone. A subsection still counts as inside its section, so
+  `§ 2` resolves against `2.1` where a source heads only the subsections, as it did before. A
+  word locator still matches by prefix, so `§ Worked Reasoning #1` still resolves against
+  `#10`; that is deferred.
 - **A citation is read against the book it names** (`check-references.sh`). A file citing two
   books declares them, one `<!-- cites: ... -->` line each with one marked `(default)`, and
   `book.json` `cited_as` lists the names other files use for the book. Tags follow the default
@@ -1420,23 +1422,28 @@ D5 in the branch's `CHANGELOG.md`.
   measured: on a teaching guide's course material, nearest-name attribution misread 27 tags
   where a companion SQLite guide was named as a resource beside them, while all 8 chapter
   references in blocks naming that guide meant it, and only 3 named it in the same sentence.
-  A missing chapter named outside its reference's sentence reviews rather than fails, which
-  bounds the case the rule gets wrong: about 47 of 102 references in that material's changelog
+  A missing chapter named outside its reference's sentence reviews rather than fails, and so
+  does a key-row quotation resting on one, which bounds the case the rule gets wrong: about 47 of 102 references in that material's changelog
   notes, which no check reads, cite the book their block does not name.
 - **A quotation sourced to a named file is read against that file** (check 2). It was counted
   and named and checked against nothing. A misquote fails in a key row and reviews in prose, as
-  for a chapter; the `:NN` line is not checked, because any edit above it moves it.
+  for a chapter; the `:NN` line is not checked, because any edit above it moves it. The quoting
+  file is never one of its own candidates: a new book's `OUTLINE.md` quoting the old one's would
+  otherwise be found in itself every time.
 - **A fence is what CommonMark says it is**, in `book_model.Fence`, which every fence reader in
   both checkers now calls. `blocks()` read fences as prose, and every reader toggled on a
   backtick line alone, so a `~~~` block was prose and a ```` ``` ```` line closed a
   four-backtick fence. Check 1 now reads blocks, so it skips fences too: run against this
   plugin's own docs it stopped reporting 12 `ch. N` references, every one inside a fenced
-  example. `check-book.sh` keeps its own fence reader; that is #73.
+  example. A fence nothing closes in a referring file is reported as a REVIEW, since it hides
+  the rest of the file. `check-provenance.sh` now reads the book's tag definitions through
+  `check-references.sh`'s fence-aware reader. `check-book.sh` keeps its own fence reader; that
+  is #73.
 
 **Measured.** Each fix has a fixture that `main`'s scripts fail: `fixtures/provenance` gained
 three cases (6 failures and 3 quotations checked under `main`, 7 and 4 now), and
-`fixtures/attribution/run.sh`, check 2's first fixture, asserts nine cases, eight of which fail
-under `main` and the ninth guarding that an undeclared file reads as it did. The suite passes
+`fixtures/attribution/run.sh`, check 2's first fixture, asserts twelve cases, eleven of which
+fail under `main`, the twelfth guarding that an undeclared file reads as it did. The suite passes
 under `/usr/bin/python3` 3.9.6.
 
 **Also fixed:** `check-references.sh` used `bj` in its "tags": true error without defining it,

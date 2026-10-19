@@ -33,3 +33,6 @@ A mark may cite a heading with an item number the source defines under it.
 
 A mark may cite a numbered section by its number alone, when a heading carries exactly that number.
 <!-- src: handbook § 10 -->
+
+A mark may cite a numbered section the source heads only by its subsections.
+<!-- src: handbook § 20 -->

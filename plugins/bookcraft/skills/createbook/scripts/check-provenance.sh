@@ -292,11 +292,11 @@ SUGG = "## Suggested reading"
 # itself rather than against any declared source.
 TAG = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\]$")
 CHAPTER = re.compile(r"^ch(?:apter|\.)\s*(\d+)$", re.I)
-# Both accept an appendix's `A` half and a revision's lettered paragraph half,
-# `[A2-4]` and `[5-12a]` (reference/chapter-prose.md § Paragraph tags), and both
-# halves are kept as strings. Until 2026-09-24 neither did, so a mark citing an
-# appendix paragraph fell through to the source lookup and failed as unknown.
-TAGDEF = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\] ")
+# TAG accepts an appendix's `A` half and a revision's lettered paragraph half,
+# `[A2-4]` and `[5-12a]` (reference/chapter-prose.md § Paragraph tags), as the
+# book's own definitions, read by check-references.sh's tag_paragraphs, do.
+# Until 2026-09-24 neither did, so a mark citing an appendix paragraph fell
+# through to the source lookup and failed as unknown.
 
 # Locator grammars. Each is tried against the remainder left after the source
 # shorthand has been stripped off the front of a component.
@@ -855,12 +855,14 @@ def heading_hit(cited, headings):
         # the heading's leading number: `§ 1` matches `1.` and `1 Overview`,
         # and never `10.`. By prefix, a source heading its items `## 1.` to
         # `## 15.` kept resolving `§ 1` through `## 10.` after item 1 was
-        # removed, so a deleted or renumbered item passed (#51 § 2). Dotted
-        # numbers compare whole, so `§ 1.2` is not `1.20`. ASCII digits only,
-        # per #82's R9.
+        # removed, so a deleted or renumbered item passed (#51 § 2). A dotted
+        # number counts as inside the section it extends, so `§ 2` still
+        # resolves against `2.1` where a source heads only the subsections, as
+        # it did by prefix; `§ 1.2` is never `1.20`. ASCII digits only, per
+        # #82's R9.
         if BARE_NUMBER.fullmatch(c):
             want = c.rstrip(".")
-            return any(m is not None and m.group() == want
+            return any(m is not None and (m.group() == want or m.group().startswith(want + "."))
                        for m in map(LEADING_NUMBER.match, headings))
         # A citation may be a prefix of the real heading, because the sources
         # head sections `Worked Reasoning #1 - Why the unindexed filter is O(n)`
@@ -1778,12 +1780,11 @@ def main(argv):
     # book rather than about the chapters this run happens to be looking at.
     # Narrowing either would turn `--chapters 3` into a run that fails a correct
     # citation, which is a false FAIL invented by the scoping flag itself.
+    # Read by check-references.sh's own tag reader, so the two checkers agree
+    # on what a tag is, a `[N-M]` at the head of a line in a fence included.
     defined = set()
     for p in chapters:
-        for line in p.read_text().splitlines():
-            m = TAGDEF.match(line)
-            if m:
-                defined.add(refs.tag_key(m.group(1), m.group(2)))
+        defined.update(refs.tag_paragraphs(p.read_text()))
     n_chapters = len(chapters)
     # A `ch. N` names a chapter, never an appendix, which numbers in its own
     # sequence and never teaches. Counting every file here once let `ch. 19`
