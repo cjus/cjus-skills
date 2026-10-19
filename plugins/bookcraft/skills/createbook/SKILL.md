@@ -69,23 +69,19 @@ layers can be reused, and the chapter ends on where that fingerprint stops match
 
 [3-1] Every image you have ever pulled arrived in pieces, and the pieces are the
 reason a rebuild that changes one line finishes in two seconds...
-
 <!-- src: Dockerfile; fill (the framing) -->
 
 ## What a layer holds
 
 [3-2] ...
-
 <!-- src: docs/build.md § Caching -->
 
 [3-3] ...
-
 <!-- src: fill -->
 
 ## Where the cache stops helping
 
 [3-4] ...
-
 <!-- src: assertion 3 (the docker build output) -->
 
 ## Suggested reading
@@ -95,7 +91,7 @@ Concepts this chapter stops short of. Each is a term to search, with the reason.
 - **Content-addressable storage**: why two images that share a layer share it on disk.
 ```
 
-This is a `guide` chapter, the profile a new book gets. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
+This is a `guide` chapter, the profile a new book gets. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark, on the line directly under it. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
 
 **A list, a table, a fenced block, a figure, a provenance mark and the `## In short` section each take no tag and advance no paragraph number**, the same way a heading does not. A tag is an address other files cite, so dropping a table into the middle of a finished chapter must not renumber everything after it. `check-book.sh` counts them this way, so the rule is enforced rather than remembered.
 
@@ -436,6 +432,7 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 | Key | Add it when | Leaving it out means |
 |---|---|---|
 | `"slide_figures": "diagrams/slides"` | The book carries slide art in that folder | No slides; every image is a numbered figure |
+| `"cited_as": ["Field Guide"]` | A file that cites this book also cites another, and declares which (§ When the book supersedes one that already exists) | `check-references.sh` cannot match a declared file to this book, so it fails the file unread |
 
 **`"edition": "reading"` is in the template for a `guide` book, and left out of a `narration` one.** It is `/makebook`'s key (`makebook/SKILL.md § The reading edition`), and it only changes what a bind with no flag produces. A guide is handed to readers, and the paragraph tags and source rows are the operator's, so a guide binds the reading edition by default and the operator's copy is the one that takes a flag. A narration book leaves the key out and binds the default edition, with `--reading-edition` for the times you want the other. Where a guide's operator wants the tagged copy as the default, they drop the key.
 
@@ -818,7 +815,16 @@ So the rule is: **verify a repointed reference against what the target says, not
 ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-references.sh [--since <ref> | --no-baseline] <book-folder> <referring-file>...
 ```
 
-It runs four checks and reports them separately so a weaker one cannot stand in for a stronger. Every `ch. N` names a chapter the book has; every quotation attributed to the book appears in it; every `[N-M]` paragraph tag cited names a paragraph the book defines; and that paragraph is still the one it was at the baseline, which defaults to `HEAD`. Needs `python3`, and check 4 additionally needs the book to be in a git repository. Pass the book's own `OUTLINE.md` and `diagrams/README.md` as referring files too: tags are cited there like anywhere else, and only the chapter itself holds them as definitions.
+It runs four checks and reports them separately so a weaker one cannot stand in for a stronger. Every `ch. N` names a chapter the book has; every quotation attributed to the book appears in it; every `[N-M]` paragraph tag cited names a paragraph the book defines; and that paragraph is still the one it was at the baseline, which defaults to `HEAD`. Needs `python3`, and check 4 additionally needs the book to be in a git repository. Pass the book's own `OUTLINE.md` and `diagrams/README.md` as referring files too: tags are cited there like anywhere else, and only the chapter itself holds them as definitions. A quotation whose nearest attribution is a named markdown file is read against that file instead of the book, and fails in a key row or reviews in prose when the file does not carry it. Every file in the book's repository carrying that name is read, except the file doing the quoting, and the report says when more than one was; a `file.md:NN` line number is not checked.
+
+**A file that cites two books has to say which is which**, or every citation in it is resolved against the one book the run was given: another book's tags resolve silently against this book's paragraphs, and its chapter numbers against this book's chapters. Declare each book the file cites on a line of its own, and mark the one its bare citations cite as the default:
+
+```markdown
+<!-- cites: Field Guide (default) -->
+<!-- cites: SQLite Guide -->
+```
+
+Each book that file is checked against then lists, in its `book.json`, the names other files use for it (`"cited_as": ["Field Guide"]`); a name is matched case-insensitively, as a phrase, with a leading "the" dropped. A tag belongs to the default book whatever is written beside it. A chapter reference belongs to the book named nearest it in its own block, and to the default when the block names none; a missing chapter fails when the name shares the reference's sentence, and reviews when the name sits only elsewhere in the block, as does a key-row quotation resting on such a reference. A citation of the other book is counted, named and left to that book's own run. A declaration the run cannot read against this book fails the file and checks nothing in it: none of its names is in `cited_as`, the book has no `cited_as`, a line names no book, or two or more books carry other than one `(default)`. A file that declares nothing is read as citing only the book it is checked against, as before.
 
 **What no script here can catch is the one that matters most for a resource-first book: a claim attributed to a source that the source does not make.** The mark says where a sentence came from and nothing verifies that it came from there. That check is `reference/chapter-prose.md § Before sending`, done by reading, and it is the reason step 5 hands chapter agents paths rather than summaries.
 

@@ -292,11 +292,11 @@ SUGG = "## Suggested reading"
 # itself rather than against any declared source.
 TAG = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\]$")
 CHAPTER = re.compile(r"^ch(?:apter|\.)\s*(\d+)$", re.I)
-# Both accept an appendix's `A` half and a revision's lettered paragraph half,
-# `[A2-4]` and `[5-12a]` (reference/chapter-prose.md § Paragraph tags), and both
-# halves are kept as strings. Until 2026-09-24 neither did, so a mark citing an
-# appendix paragraph fell through to the source lookup and failed as unknown.
-TAGDEF = re.compile(r"^\[(A?\d+)-(\d+[a-z]?)\] ")
+# TAG accepts an appendix's `A` half and a revision's lettered paragraph half,
+# `[A2-4]` and `[5-12a]` (reference/chapter-prose.md § Paragraph tags), as the
+# book's own definitions, read by check-references.sh's tag_paragraphs, do.
+# Until 2026-09-24 neither did, so a mark citing an appendix paragraph fell
+# through to the source lookup and failed as unknown.
 
 # Locator grammars. Each is tried against the remainder left after the source
 # shorthand has been stripped off the front of a component.
@@ -326,6 +326,10 @@ STEP = re.compile(r"^steps?\s+(\d[\d\s,\-–]*(?:\s*(?:and|to)\s*\d+)*)", re.I)
 # requirements this way, so `step 4` and `Requirements 4` both resolve to one.
 ORDERED = re.compile(r"^\s*(\d+)\.\s", re.M)
 SECTION = re.compile(r"^§\s*(.+)$")
+# A section locator that is only a number, `§ 3` or `§ 1.2`, and the number a
+# heading opens with. See heading_hit().
+BARE_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)*\.?")
+LEADING_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)*")
 # A trailing item qualifier a heading citation may carry: "Requirements 1",
 # "Requirements, item 3", "Stub and Rubric", "first paragraph".
 QUALIFIER = re.compile(
@@ -688,32 +692,49 @@ def units_of(path):
     """Yield (line number, the unit's text, its mark's components).
 
     A unit is what check-book.sh's provenance sweep calls one: the run of lines
-    since the last blank line or the last mark. A table's rows collect together
-    because nothing blank separates them, which is right, since one mark follows
-    the whole table there.
+    since the last blank line, heading, fence or mark. A table's rows collect
+    together because nothing blank separates them, which is right, since one
+    mark follows the whole table there.
 
-    Fenced content is skipped, the way check-book.sh's own body sweeps skip it.
-    A lab stub printed in a chapter holds string literals, and reading those as
-    quotations would attribute a line of python to the syllabus.
+    **A mark after a blank line covers the unit above it** (#82's R9), which is
+    how check-book.sh's sweep already reads it. The blank closes
+    the unit without discarding it; only the next unit's first line does that.
+    Until 2026-10-18 the blank emptied the buffer, so the mark was handed an
+    empty unit and every quotation in the paragraph went unchecked under an OK,
+    in the very layout `SKILL.md § Chapter file format` showed. Measured on the
+    reference teaching guide's first edition: 523 of its 762 marks sat after a
+    blank line, and a full run checked 20 quotations. Written with each mark
+    directly under its unit, the recreated edition checks 246.
+
+    A mark is a mark only when it fills its line (R9), the test the binder
+    strips by (`book_model.MARK_LINE`). check-book.sh fails any other comment,
+    so for a book it passes the two readings agree.
+
+    Fenced content is skipped, the way check-book.sh's own body sweeps skip it,
+    and a fence is what `book_model.Fence` says one is. A lab stub printed in a
+    chapter holds string literals, and reading those as quotations would
+    attribute a line of python to the syllabus.
     """
     lines = path.read_text().splitlines()
-    buf, infence = [], False
+    fence = book_model.Fence()
+    buf, closed = [], False
     for ln, line in enumerate(lines, 1):
-        if line.strip().startswith("```"):
-            infence = not infence
-            buf = []
-            continue
-        if infence:
+        if fence.step(line):
+            buf, closed = [], False
             continue
         if line.strip() == SUGG:
             return
-        m = MARK.search(line)
+        m = MARK.search(line) if book_model.MARK_LINE.fullmatch(line) else None
         if m:
             yield ln, "\n".join(buf), split_components(m.group(1))
-            buf = []
-        elif line.strip() == "" or line.lstrip().startswith("#"):
-            buf = []
+            buf, closed = [], False
+        elif line.strip() == "":
+            closed = True
+        elif line.lstrip().startswith("#"):
+            buf, closed = [], False
         else:
+            if closed:
+                buf, closed = [], False
             buf.append(line)
 
 
@@ -830,6 +851,19 @@ def heading_hit(cited, headings):
         c = norm(re.sub(r"^\s*§\s*", "", c.strip()))
         if not c:
             return True
+        # A bare number names one numbered heading, so its number has to equal
+        # the heading's leading number: `§ 1` matches `1.` and `1 Overview`,
+        # and never `10.`. By prefix, a source heading its items `## 1.` to
+        # `## 15.` kept resolving `§ 1` through `## 10.` after item 1 was
+        # removed, so a deleted or renumbered item passed (#51 § 2). A dotted
+        # number counts as inside the section it extends, so `§ 2` still
+        # resolves against `2.1` where a source heads only the subsections, as
+        # it did by prefix; `§ 1.2` is never `1.20`. ASCII digits only, per
+        # #82's R9.
+        if BARE_NUMBER.fullmatch(c):
+            want = c.rstrip(".")
+            return any(m is not None and (m.group() == want or m.group().startswith(want + "."))
+                       for m in map(LEADING_NUMBER.match, headings))
         # A citation may be a prefix of the real heading, because the sources
         # head sections `Worked Reasoning #1 - Why the unindexed filter is O(n)`
         # and the book cites `Worked Reasoning #1`. The converse is deliberately
@@ -1746,12 +1780,11 @@ def main(argv):
     # book rather than about the chapters this run happens to be looking at.
     # Narrowing either would turn `--chapters 3` into a run that fails a correct
     # citation, which is a false FAIL invented by the scoping flag itself.
+    # Read by check-references.sh's own tag reader, so the two checkers agree
+    # on what a tag is, a `[N-M]` at the head of a line in a fence included.
     defined = set()
     for p in chapters:
-        for line in p.read_text().splitlines():
-            m = TAGDEF.match(line)
-            if m:
-                defined.add(refs.tag_key(m.group(1), m.group(2)))
+        defined.update(refs.tag_paragraphs(p.read_text()))
     n_chapters = len(chapters)
     # A `ch. N` names a chapter, never an appendix, which numbers in its own
     # sequence and never teaches. Counting every file here once let `ch. 19`

@@ -19,8 +19,8 @@ Four checks, in ascending order of what they are worth.
      where a block is a paragraph, a table row or a single list item; pooling a
      run of bullets would check each quotation against chapters only its
      neighbours cite. And a quotation whose nearest preceding attribution is a
-     named file rather than a chapter is sourced there, so the book is not
-     searched for it and the summary reports how many went that way.
+     named file rather than a chapter is sourced there, so it is read against
+     that file instead of the book, and the summary names each one.
 
   3. Tag existence. Every "[N-M]" paragraph-tag citation names a paragraph the
      book actually defines. Weak for the same reason check 1 is weak, and it is
@@ -35,6 +35,18 @@ Four checks, in ascending order of what they are worth.
      paragraph into a chapter and every citation after it still resolves, to
      real prose that is no longer the prose meant. Nothing about the citation
      looks wrong, which is precisely why nothing catches it by reading.
+
+A referring file that cites more than one book says so, one whole-line comment
+per book with one marked as the default, and book.json's "cited_as" lists the
+names other files use for this book:
+
+    <!-- cites: The Field Guide (default) -->
+    <!-- cites: The Companion Guide -->
+
+A tag then belongs to the default book, a chapter reference to the book named
+nearest it in its block, and a citation of another book is counted, named and
+left to that book's own check. A file declaring nothing cites only the book it
+is checked against. See Attribution for why tags and chapters differ.
 
 Written because check 1 was run alone and passed while 18 of 18 quotations were
 attributed to chapters that did not hold them. A chapter number resolving is not
@@ -77,7 +89,8 @@ def _book_model():
 book_model = _book_model()
 
 MIN_QUOTE = 25   # shorter runs are ordinary phrases, not attributions
-REF = re.compile(r"\bch(?:apter|\.)\s*(\d+)\b", re.I)
+# ASCII digits only, per #82's R9: `\d` also matches other scripts' digits.
+REF = re.compile(r"\bch(?:apter|\.)\s*([0-9]+)\b", re.I)
 
 # A citation anywhere in a line, and a definition at the head of one. The
 # anchored form matches check-book.sh's own tag counter, which also refuses a tag
@@ -177,9 +190,174 @@ LISTITEM = re.compile(r"^\s*(?:[-*+]|\d{1,2}[.)])\s")
 
 # A named markdown file, with or without a line number. Used only to decide what
 # a quotation is attributed TO; see main()'s quotation loop.
-FILEREF = re.compile(r"[\w./-]+\.md(?::\d+)?")
+FILEREF = re.compile(r"[\w./-]+\.md(?::[0-9]+)?")
 
 OPENING = 68     # how much of a drifted paragraph to show on each side
+
+# A referring file's declaration of one book it cites, on a line of its own.
+# See declarations().
+CITES = re.compile(r"[ \t]*<!--[ \t]*cites:[ \t]*(.*?)[ \t]*-->[ \t]*")
+DEFAULT = re.compile(r"\s*\(default\)$", re.I)
+# The end of a sentence, for asking whether a book's name and a chapter
+# reference share one. See Attribution.refs(). The abbreviations a citation
+# sentence carries are not ends: `e.g.`, `i.e.`, `cf.` and `vs.` here, and the
+# `ch.` of another chapter reference, which refs() removes before it asks.
+SENTENCE_END = re.compile(r"(?<!\be\.g)(?<!\bi\.e)(?<!\bcf)(?<!\bvs)[.!?](?=\s|$)", re.I)
+
+
+def declarations(lines):
+    """The books a referring file says it cites: [(name, is_default, line)].
+
+        <!-- cites: The Field Guide (default) -->
+        <!-- cites: The Companion Guide -->
+
+    One whole-line comment per book, anywhere outside a fence; the top of the
+    file is the place to look for them. The default is the book a bare tag or an
+    unnamed chapter reference cites, and a file declaring one book needs no mark.
+    A file declaring nothing cites the book it is checked against, which is how
+    every referring file was read before #72.
+    """
+    fence = book_model.Fence()
+    out = []
+    for i, ln in enumerate(lines, 1):
+        if fence.step(ln):
+            continue
+        m = CITES.fullmatch(ln)
+        if m:
+            d = DEFAULT.search(m.group(1))
+            name = m.group(1)[:d.start()] if d else m.group(1)
+            out.append((" ".join(name.split()), d is not None, i))
+    return out
+
+
+def name_words(name):
+    """A book's name as its words, a leading "the" dropped, because a file writes
+    both `the Field Guide` and `Field Guide` and a declaration may say either.
+    check-provenance.sh's match_source drops it for the same reason."""
+    words = name.split()
+    return words[1:] if len(words) > 1 and words[0].lower() == "the" else words
+
+
+def same_name(a, b):
+    return [w.lower() for w in name_words(a)] == [w.lower() for w in name_words(b)]
+
+
+def name_pattern(name):
+    """A book's name as a case-insensitive phrase a line break may wrap, so
+    `The SQLite Guide's` and `the companion sqlite guide` both carry
+    `SQLite Guide`."""
+    return re.compile(r"(?<!\w)" + r"\s+".join(map(re.escape, name_words(name))) + r"(?!\w)",
+                      re.I)
+
+
+class Attribution:
+    """Which book each citation in one referring file belongs to (#72's D3).
+
+    `this` is the declared name that is this book, and `default` the book a bare
+    citation cites. For a file that declares nothing both are the empty string,
+    no name is searched for, and every citation is this book's, as before
+    declarations existed. What does change for such a file comes from check 1
+    reading blocks rather than lines: a reference inside a fence is skipped, and
+    one wrapped across a line break (`chapter` at a line's end, `8` on the next)
+    is now seen.
+
+    The rule differs by kind of citation, and the difference was measured
+    before it was decided, on a teaching guide's course material citing that
+    guide and a companion SQLite guide (2026-10-18):
+
+      A paragraph tag belongs to the default book and nothing moves it. The
+      material writes about 3,000 tags with no book named beside them, and
+      where a block does name the SQLite guide beside a tag it names it as a
+      resource: nearest-name attribution read 27 teaching-guide tags on 20 lines
+      as the SQLite guide's, and a run against that guide would have reported
+      every one as broken.
+
+      A chapter reference belongs to the book named nearest it in its own block,
+      and to the default book when the block names none. Of 8 references in
+      blocks naming the SQLite guide, all 8 meant it, and only 3 named it beside
+      the reference, so the block rather than the sentence is the scope. A
+      default-book rule would have resolved all 8 against the wrong chapters.
+
+    What the chapter rule gets wrong is a block that mentions one book and
+    cites the other by number, which the same material's changelog notes do
+    about 47 times in 102. Nothing passes those notes to a check, and the
+    severity is what bounds the cost where something does: a reference whose
+    book was read from a name outside its own sentence can only ever REVIEW,
+    the rule check 2 applies to a citation this script inferred.
+    """
+
+    def __init__(self, this="", default="", names=()):
+        self.this, self.default = this, default
+        # Longest first, so a name holding a shorter one claims its own words.
+        self.patterns = [(name_pattern(n), book)
+                         for n, book in sorted(names, key=lambda nb: -len(nb[0]))]
+
+    def names_in(self, text):
+        """(start, end, book) for each book name in the text, never overlapping."""
+        taken = []
+        for pat, book in self.patterns:
+            for m in pat.finditer(text):
+                if not any(a < m.end() and m.start() < b for a, b, _ in taken):
+                    taken.append((m.start(), m.end(), book))
+        return sorted(taken)
+
+    def refs(self, text):
+        """(match, book, how) for each chapter reference in one block.
+
+        `how` is "default" when the block names no book, "sentence" when the
+        nearest name shares the reference's sentence, and "block" when it sits
+        only elsewhere in the block. A tie goes to the name before the reference.
+        """
+        spans = self.names_in(text)
+        out = []
+        for m in REF.finditer(text):
+            if not spans:
+                out.append((m, self.default, "default"))
+                continue
+            def gap(s):
+                return s[0] - m.end() if s[0] >= m.end() else max(m.start() - s[1], 0)
+            a, b, book = min(spans, key=gap)
+            between = text[b:m.start()] if b <= m.start() else text[m.end():a]
+            # Another reference in between is not a sentence end, so `The Field
+            # Guide's ch. 1 and ch. 8` keeps ch. 8 in the name's sentence.
+            between = REF.sub(" ", between)
+            out.append((m, book, "block" if SENTENCE_END.search(between) else "sentence"))
+        return out
+
+
+def attribution(lines, cited_as):
+    """The file's Attribution, or (None, why) when its declaration cannot be read
+    against this book. A declaration this run cannot match is a failure rather
+    than a reason to fall back to the undeclared reading: the file has said it
+    cites more than one book, and guessing which is this one is the silent
+    wrong-book match the declaration exists to end."""
+    decl = declarations(lines)
+    if not decl:
+        return Attribution(), None
+    names = [n for n, _, _ in decl]
+    # A declaration naming nothing would make "" a book, and every bare citation
+    # in the file its citation, so nothing would be checked under an OK.
+    blank = next((line for n, _, line in decl if not n), None)
+    if blank is not None:
+        return None, f"line {blank} declares a book with no name"
+    if not cited_as:
+        return None, (f"declares the books it cites ({', '.join(names)}), but this book's "
+                      "book.json lists no \"cited_as\" names to match one against")
+    this = next((n for n in names if any(same_name(n, c) for c in cited_as)), None)
+    if this is None:
+        return None, (f"declares the books it cites ({', '.join(names)}), and none is a "
+                      f"name this book's \"cited_as\" lists ({', '.join(cited_as)})")
+    defaults = [n for n, d, _ in decl if d]
+    if len(decl) == 1:
+        default = names[0]
+    elif len(defaults) == 1:
+        default = defaults[0]
+    else:
+        return None, (f"declares {len(decl)} books and marks {len(defaults)} of them "
+                      "(default); exactly one has to be, since it is the book a bare tag "
+                      "or an unnamed chapter reference cites")
+    pairs = [(n, n) for n in names] + [(c, this) for c in cited_as]
+    return Attribution(this, default, pairs), None
 
 
 def blocks(lines):
@@ -221,14 +399,33 @@ def blocks(lines):
     list under a lead-in sentence and an indented sub-bullet under a parent that
     names the chapter, both of which end the introducing line with a colon. What it
     does not cover is a lead-in written without one, which stays out of check 2.
+
+    **A fenced block yields nothing**, and `book_model.Fence` says what one is, as
+    it does for `tag_paragraphs` and `tag_citations`, so the three agree on a fence
+    by construction (#72's D1). Until 2026-10-18 this read a fence as prose: a
+    fenced bulleted example split into one block per line, each line checked as an
+    attribution. A fence also ends whatever a lead-in introduced, so `lead` cannot
+    reach across one: `Run this:` above a fence introduces the fence, not the list
+    after it. The cost is a list item continued past an indented fence of its own,
+    whose later siblings lose the lead-in; an inherited citation can only ever
+    REVIEW, so that costs at most a REVIEW the run no longer prints.
     """
     raw, buf, start = [], [], 1
+    fence = book_model.Fence()
 
     def close(at):
         return (at, "\n".join(buf), LISTITEM.match(buf[0]) is not None)
 
     for i, ln in enumerate(lines, 1):
-        if ln.strip().startswith("|"):
+        opening = fence.opening is None
+        if fence.step(ln):
+            if opening:
+                if buf:
+                    raw.append(close(start))
+                    buf = []
+                raw.append((i, None, False))
+            start = i + 1
+        elif ln.strip().startswith("|"):
             if buf:
                 raw.append(close(start))
                 buf = []
@@ -252,6 +449,9 @@ def blocks(lines):
 
     lead = None
     for bstart, btext, is_item in raw:
+        if btext is None:
+            lead = None
+            continue
         yield bstart, btext, lead if is_item else None
         # A heading closes whatever the colon above it was introducing. A list
         # item leaves the lead alone unless it sets a new one, so every sibling
@@ -341,15 +541,13 @@ def tag_paragraphs(text):
     updatebook/SKILL.md § 5 runs it first, so the workflow covers this; nothing
     here does.
     """
-    out, key, buf, infence = {}, None, [], False
+    out, key, buf = {}, None, []
+    fence = book_model.Fence()
     for ln in text.splitlines():
         # Fences are skipped here for the same reason tag_citations skips them,
         # so the two functions agree on what a tag is. A [N-M] at the head of a
         # line inside a fenced block is code being shown, not a paragraph.
-        if ln.lstrip().startswith("```"):
-            infence = not infence
-            continue
-        if infence:
+        if fence.step(ln):
             continue
         m = TAGDEF.match(ln)
         if m:
@@ -393,12 +591,9 @@ def tag_citations(lines):
     nothing passes them in. A false positive there costs one puzzled reader; the
     strip costs the whole feature, silently.
     """
-    infence = False
+    fence = book_model.Fence()
     for i, ln in enumerate(lines, 1):
-        if ln.lstrip().startswith("```"):
-            infence = not infence
-            continue
-        if infence:
+        if fence.step(ln):
             continue
         for m in TAG.finditer(ln):
             yield (i, *tag_key(m.group(1), m.group(2)))
@@ -533,7 +728,16 @@ def main(argv):
         print(f"error: {e}", file=sys.stderr)
         return 2
     cfg = model["config"]
+    bj = book / "book.json"
     tags_declared = bool(cfg["tags"]) if "tags" in cfg else None
+    # The names other files use for this book, which a referring file's
+    # declaration and the names in its blocks are matched against. See
+    # Attribution.
+    cited_as = cfg.get("cited_as", [])
+    if not isinstance(cited_as, list) or not all(isinstance(c, str) and c.strip()
+                                                 for c in cited_as):
+        print(f"error: {bj} \"cited_as\" must be a list of names", file=sys.stderr)
+        return 2
 
     # Chapters by number, for the chapter references and quotations of checks 1
     # and 2; and every chapter-kind file by its tag's chapter half, appendices
@@ -669,17 +873,43 @@ def main(argv):
             capture_output=True, text=True, check=True).stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
         search_root = pathlib.Path(".")
-    visible_md = {p.name for p in search_root.rglob("*.md")}
-    visible_md.update(pathlib.Path(a).name for a in rest[1:])
+    # Each basename maps to every file carrying it, because check 2 now reads the
+    # file a quotation names, and two files can share a name.
+    visible_md = {}
+    for p in [*search_root.rglob("*.md"), *(pathlib.Path(a) for a in rest[1:])]:
+        if p.is_file():
+            paths = visible_md.setdefault(p.name, [])
+            if p.resolve() not in paths:
+                paths.append(p.resolve())
+
+    # A named file's text, folded the way a chapter's is, read once per run. None
+    # when it cannot be read, which leaves its quotations unverified and says so.
+    file_texts = {}
+
+    def file_text(p):
+        if p not in file_texts:
+            try:
+                file_texts[p] = norm(p.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                file_texts[p] = None
+        return file_texts[p]
 
     fail = 0
     # n_examined, not n_quotes: it counts the quotations check 2 actually looked
-    # for in the book, and it now has two exceptions, an exemption and a block the
-    # scanner could not read. A counter named for the thing rather than for the
-    # measurement is how both exceptions reached a summary line that still assumed
-    # the old meaning.
+    # for in the book, and it has three exceptions: a quotation sourced to a named
+    # file, one attributed to another book, and a block the scanner could not
+    # read. A counter named for the thing rather than for the measurement is how
+    # the first two exceptions reached a summary line that still assumed the old
+    # meaning.
     n_refs = n_examined = n_review = n_elsewhere = n_unreadable = 0
     exempted = []
+    # Quotations read against the file they name: (file, line, source, found,
+    # how many files carry that name).
+    filed = []
+    # Citations of another book a declared file makes, left to that book's own
+    # check: (file, book) -> count of tags, and (file, line, what) for the rest.
+    other_tags, other_cites = {}, []
+    n_other_quotes = 0
     n_tags = n_unresolved = n_drift = n_shift = n_compared = 0
 
     for arg in rest[1:]:
@@ -690,18 +920,62 @@ def main(argv):
             continue
         lines = f.read_text(encoding="utf-8").splitlines()
 
-        for lineno, line in enumerate(lines, 1):
-            for m in re.finditer(REF, line):
-                n_refs += 1
+        attr, why = attribution(lines, cited_as)
+        if attr is None:
+            # Nothing in the file is read: whichever book a citation in it named,
+            # the run cannot tell which of them is this one.
+            print(f"FAIL  {f.name}: {why}; nothing in it was checked")
+            fail = 1
+            continue
+
+        # A fence nothing closes runs to the end of the file, as CommonMark reads
+        # it, so checks 1 to 3 see nothing after it. Said out loud, rather than
+        # left to read like a file that has nothing more to cite.
+        fence = book_model.Fence()
+        for ln in lines:
+            fence.step(ln)
+        if fence.opening is not None:
+            n_review += 1
+            n_unreadable += 1
+            print(f"REVIEW  {f.name}:{fence.opened_at}: a fence opens here and nothing closes it, "
+                  "so nothing after it was checked")
+
+        # Check 1, block by block rather than line by line, because the book a
+        # reference cites is read from the names in its block. Reading blocks also
+        # skips fences, as checks 2 and 3 already did.
+        for start, block, _ in blocks(lines):
+            for m, whose, how in attr.refs(block):
+                lineno = start + block[:m.start()].count("\n")
                 n = int(m.group(1))
-                if n not in chapters:
+                if whose != attr.this:
+                    other_cites.append((f.name, lineno, f"chapter {n} of {whose}"))
+                    continue
+                n_refs += 1
+                if n in chapters:
+                    continue
+                if how == "block":
+                    # The block names this book, and not in the reference's own
+                    # sentence, so the attribution is this script's inference and
+                    # cannot fail a build.
+                    n_review += 1
+                    print(f"REVIEW  {f.name}:{lineno}: cites chapter {n}, which the book does not "
+                          f"have; its block names this book, though not in the same sentence, "
+                          f"so it may be another book's chapter")
+                else:
                     print(f"FAIL  {f.name}:{lineno}: cites chapter {n}, which the book does not have")
                     fail = 1
+
+        # A declared file whose tags cite another book. A name beside a tag never
+        # moves it (see Attribution), so the whole file's tags go together.
+        if check_tags and attr.default != attr.this:
+            n_other = sum(1 for _ in tag_citations(lines))
+            if n_other:
+                other_tags[(f.name, attr.default)] = n_other
 
         # Checks 3 and 4. Both walk the same citations, and the split between
         # them is the point: existence answers a weaker question than the one a
         # reader following the citation actually asks.
-        if check_tags:
+        if check_tags and attr.default == attr.this:
             for lineno, ch, para in tag_citations(lines):
                 n_tags += 1
                 if (ch, para) not in paras:
@@ -774,7 +1048,11 @@ def main(argv):
             else:
                 continue
             is_row = block.lstrip().startswith("|")
-            cited = [int(x) for x in REF.findall(cited_src) if int(x) in text]
+            # Each reference with the book it cites. In a file that declares
+            # nothing every one is this book's, and this reads as it always did.
+            src_refs = attr.refs(cited_src)
+            cited = [int(m.group(1)) for m, whose, _ in src_refs
+                     if whose == attr.this and int(m.group(1)) in text]
             # The quotation must be in a chapter this block actually names.
             target = "\n".join(text[n] for n in cited) if cited else whole
             spans, unterminated = quoted_spans(block)
@@ -818,14 +1096,69 @@ def main(argv):
                                  if name not in chapter_files and name in visible_md),
                                 default=None)
                 if last_file is not None and (last_ch is None or last_file > last_ch):
-                    # Counted AND named, not merely skipped. A check that quietly
-                    # stopped examining something reads exactly like a check that
-                    # passed, and every other class in this report carries a
-                    # file:line, so the skip does too.
+                    # Read against the file it names, the way a quotation
+                    # attributed to a chapter is read against that chapter (#65).
+                    # Until 2026-10-18 this only counted and named the quotation,
+                    # so one could misquote the file it named and nothing noticed.
+                    #
+                    # Every file carrying the name is read, because a basename
+                    # cannot tell two of them apart, and the report says when more
+                    # than one did. A `file.md:NN` line is NOT checked: any edit
+                    # above it moves it, and what the attribution claims is the
+                    # wording, not where the wording sits.
                     source = next(name for at, name in named if at == last_file)
-                    exempted.append((f.name, start + before.count("\n"), source))
-                    n_elsewhere += 1
+                    where = start + before.count("\n")
+                    # Never the quoting file itself, which holds the quotation by
+                    # construction: a new book's OUTLINE.md quoting the old one's
+                    # would otherwise always be "found", in itself.
+                    paths = [p for p in visible_md[source] if p != f.resolve()]
+                    held = [t for t in map(file_text, paths) if t is not None]
+                    if not held:
+                        # Counted AND named, not merely skipped. A check that
+                        # quietly stopped examining something reads exactly like
+                        # a check that passed, and every other class in this
+                        # report carries a file:line, so the skip does too.
+                        why = ("could not be read" if paths else
+                               "this run can see only as the file quoting it")
+                        exempted.append((f.name, where, f"{source}, which {why}"))
+                        n_elsewhere += 1
+                        continue
+                    nq = norm(q).strip(" .")
+                    found = any(nq in t for t in held)
+                    filed.append((f.name, where, source, found, len(paths)))
+                    if found:
+                        continue
+                    flat = re.sub(r"\s+", " ", q)
+                    files = (f", nor in any of the {len(paths)} files with that name"
+                             if len(paths) > 1 else "")
+                    # The severity a chapter-attributed quotation gets, for the
+                    # same reasons: a key row's note column evidences its answer,
+                    # and prose naming a file may be quoting something else.
+                    if is_row:
+                        print(f"FAIL  {f.name}:{where}: key row quotes text that is not in "
+                              f"{source}, the file it names{files}")
+                        fail = 1
+                    else:
+                        n_review += 1
+                        print(f"REVIEW  {f.name}:{where}: quotes text that is not in {source}, "
+                              f"the file it names{files}; may not be quoting it")
+                    print(f'        "{flat[:88]}{"..." if len(flat) > 88 else ""}"')
                     continue
+                # Whose chapter is it attributed to? The reference nearest before
+                # it, or the block's first when none precedes it, read through the
+                # file's declaration (see Attribution). A lead-in's references all
+                # precede the item that inherits them.
+                prior = [r for r in src_refs if inherited or r[0].start() < qstart]
+                ref_m, whose, ref_how = prior[-1] if prior else src_refs[0]
+                if whose != attr.this:
+                    n_other_quotes += 1
+                    other_cites.append((f.name, start + before.count("\n"),
+                                        f"a quotation of chapter {ref_m.group(1)} of {whose}"))
+                    continue
+                # A book read from a name outside the reference's sentence is this
+                # script's inference, as check 1's REVIEW says, so a key row
+                # resting on it cannot fail a build either.
+                inferred = inherited or ref_how == "block"
                 n_examined += 1
                 nq = norm(q).strip(" .")
                 if nq in target:
@@ -840,7 +1173,7 @@ def main(argv):
                     detail = f"is in chapter {holder}, not the chapter {'/'.join(map(str, cited))} cited here"
                 else:
                     detail = "is in no chapter of the book"
-                if is_row and not inherited:
+                if is_row and not inferred:
                     # A key table's note column exists to evidence the keyed
                     # answer, so a quotation there is unambiguously attributed.
                     print(f"FAIL  {f.name}:{where}: key row quotes text that {detail}")
@@ -853,7 +1186,9 @@ def main(argv):
                     # the row did not name the chapter itself and a build must
                     # not fail on a citation this script inferred.
                     n_review += 1
-                    how = " (citing the chapter its list's lead-in names)" if inherited else ""
+                    how = (" (citing the chapter its list's lead-in names)" if inherited else
+                           " (this book read from a name outside the reference's sentence)"
+                           if inferred else "")
                     print(f"REVIEW  {f.name}:{where}: quotes text that {detail}{how}; may not be quoting the book")
                 print(f'        "{flat[:88]}{"..." if len(flat) > 88 else ""}"')
 
@@ -953,27 +1288,54 @@ def main(argv):
     if n_review:
         print()
         print(f"{n_review} REVIEW item(s) need a human. A quotation in prose beside a chapter")
-        print("reference may be quoting something else entirely, a paragraph edited in place")
-        print("drifts without any citation into it having broken, and a block whose delimiters")
-        print("check 2 could not pair may not have been examined. None of the three fails a run.")
+        print("reference or a named file may be quoting something else entirely, a chapter")
+        print("reference read as this book's from a name outside its sentence may be another")
+        print("book's, a paragraph edited in place drifts without any citation into it having")
+        print("broken, and a block whose delimiters check 2 could not pair, like the text after")
+        print("a fence nothing closes, may not have been examined. None of these fails a run.")
+    # Counted and named either way, so a quotation read against the file it names
+    # never reads like one that was skipped, and the reverse.
+    if filed:
+        one = len(filed) == 1
+        print(f"note: {len(filed)} quotation{'' if one else 's'} "
+              f"{'was' if one else 'were'} attributed to a named file rather than")
+        print(f"      a chapter, so check 2 read {'it' if one else 'them'} against that file:")
+        for fname, lineno, source, found, k in filed:
+            many = f" (read all {k} files with that name)" if k > 1 else ""
+            print(f"      {fname}:{lineno}: {'found in' if found else 'NOT in'} {source}{many}")
     if n_elsewhere:
         one = n_elsewhere == 1
         print(f"note: {n_elsewhere} quotation{'' if one else 's'} "
-              f"{'was' if one else 'were'} attributed to a named file rather than")
-        print("      a chapter, so check 2 did not look for "
-              f"{'it' if one else 'them'} in the book:")
+              f"{'was' if one else 'were'} attributed to a named file this run could not check,")
+        print(f"      so check 2 did not check {'it' if one else 'them'}:")
         for fname, lineno, source in exempted:
             print(f"      {fname}:{lineno}: sourced to {source}")
-    # Gated on BOTH exceptions, because n_examined counts what check 2 looked for
-    # and two things now reduce it without the text being quiet: a quotation
-    # sourced elsewhere, and a block whose delimiters the scanner could not pair.
-    # Saying "nothing quotes the book" under findings that say a quotation opened
-    # is the contradiction review found here twice on 2026-09-10, once per
-    # exception, because the gate was not revisited when the second arrived.
-    if n_examined == 0 and n_refs and not n_elsewhere and not n_unreadable:
+    # Another book's citations are that book's check to make, so they qualify no
+    # banner here. They are still counted and named, so a declared file whose
+    # citations all went elsewhere cannot read as one that cited nothing.
+    if other_tags or other_cites:
+        print("note: these citations are of another book, as the file's declaration reads them,")
+        print("      and were left to that book's own check:")
+        for (fname, whose), n in sorted(other_tags.items()):
+            print(f"      {fname}: {n} paragraph-tag citation{'' if n == 1 else 's'} of {whose}")
+        for fname, lineno, what in other_cites:
+            print(f"      {fname}:{lineno}: {what}")
+    # Gated on every exception, because n_examined counts what check 2 looked for
+    # in the book and four things reduce it without the text being quiet: a
+    # quotation read against a named file, one sourced to a file nobody could
+    # read, one of another book, and a block whose delimiters the scanner could
+    # not pair. Saying "nothing quotes the book" under findings that say a
+    # quotation opened is the contradiction review found here twice on
+    # 2026-09-10, once per exception, because the gate was not revisited when the
+    # second arrived.
+    if (n_examined == 0 and n_refs and not n_elsewhere and not n_unreadable
+            and not filed and not n_other_quotes):
         print("note: chapter references resolve by number and nothing quotes the book, so")
         print("      check 2 had nothing to examine. That is the weaker reading of check 1.")
-    if check_tags and n_tags == 0:
+    if check_tags and n_tags == 0 and other_tags:
+        print("note: every paragraph-tag citation among these files is of another book, so")
+        print(f"      checks 3 and 4 examined none of this book's {len(paras)} addresses.")
+    elif check_tags and n_tags == 0:
         print(f"note: nothing among these {len(rest) - 1} file(s) cites a paragraph tag, so")
         print(f"      checks 3 and 4 examined none of the book's {len(paras)} addresses.")
     def tag_claim(conj):
@@ -1015,8 +1377,8 @@ def main(argv):
         if n_review:
             why.append(f"{n_review} REVIEW item(s) above are still unread")
         if n_elsewhere:
-            why.append(f"{n_elsewhere} quotation(s) were sourced elsewhere and never "
-                       "checked against the book")
+            why.append(f"{n_elsewhere} quotation(s) were sourced to a named file this run "
+                       "could not check")
         print(f"OK*   nothing failed, and {', and '.join(why)}.")
         print("      This is not an all-clear until someone has been through them.")
         # Only where an exemption is what diverted an otherwise-clean run here. A
@@ -1027,6 +1389,11 @@ def main(argv):
     elif fail == 0:
         print("OK    every quotation attributed in a key row is in the chapter that row cites")
         tag_claim("and")
+    # The banner speaks for this book only, and says so wherever another book's
+    # citations were set aside, since "every" would otherwise include them.
+    if fail == 0 and (other_tags or other_cites):
+        print("      (of this book: the citations of another book noted above were left to")
+        print("       that book's own check)")
     return fail
 
 
