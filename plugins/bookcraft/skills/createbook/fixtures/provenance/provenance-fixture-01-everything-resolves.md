@@ -30,3 +30,6 @@ A mark may cite a step the source numbers.
 
 A mark may cite a heading with an item number the source defines under it.
 <!-- src: handbook § Requirements 2 -->
+
+A mark may cite a numbered section by its number alone, when a heading carries exactly that number.
+<!-- src: handbook § 10 -->

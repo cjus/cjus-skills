@@ -69,23 +69,19 @@ layers can be reused, and the chapter ends on where that fingerprint stops match
 
 [3-1] Every image you have ever pulled arrived in pieces, and the pieces are the
 reason a rebuild that changes one line finishes in two seconds...
-
 <!-- src: Dockerfile; fill (the framing) -->
 
 ## What a layer holds
 
 [3-2] ...
-
 <!-- src: docs/build.md § Caching -->
 
 [3-3] ...
-
 <!-- src: fill -->
 
 ## Where the cache stops helping
 
 [3-4] ...
-
 <!-- src: assertion 3 (the docker build output) -->
 
 ## Suggested reading
@@ -95,7 +91,7 @@ Concepts this chapter stops short of. Each is a term to search, with the reason.
 - **Content-addressable storage**: why two images that share a layer share it on disk.
 ```
 
-This is a `guide` chapter, the profile a new book gets. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
+This is a `guide` chapter, the profile a new book gets. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark, on the line directly under it. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
 
 **A list, a table, a fenced block, a figure, a provenance mark and the `## In short` section each take no tag and advance no paragraph number**, the same way a heading does not. A tag is an address other files cite, so dropping a table into the middle of a finished chapter must not renumber everything after it. `check-book.sh` counts them this way, so the rule is enforced rather than remembered.
 

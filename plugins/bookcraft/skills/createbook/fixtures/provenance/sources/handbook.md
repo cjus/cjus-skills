@@ -20,3 +20,8 @@ Which of these is a reason to skip an index?
 
 1. **Name the grain.** One sentence.
 2. **Write the fact table.** Keys and measures.
+
+## 10. Numbered From Ten
+
+A source that numbers its sections the way a question bank does, starting at ten so that no
+heading here is section 1.

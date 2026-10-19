@@ -86,7 +86,7 @@ createbook/python-unrunnable|check-book|0|structure is sound~provenance: require
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
-createbook/provenance|check-provenance|1|6 failure(s)~REVIEW provenance-fixture-02~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
+createbook/provenance|check-provenance|1|7 failure(s)~REVIEW provenance-fixture-02~handbook carries no heading matching § 1~"nothing in the handbook is set apart by a blank line"~quotations checked 4~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
 ROWS
 )
 

@@ -1,0 +1,58 @@
+# bookcraft checkers: close the provenance blind spots and scope check-references.sh's attributions
+
+Start date: 2026-10-17 14:24:16 MDT
+
+Three of bookcraft's checks pass without doing the work they report, and check 2 of
+`check-references.sh` has two more gaps. `check-provenance.sh` checks no quotation in a unit
+whose mark follows a blank line, and it matches a bare-number `§ N` locator by prefix.
+`check-references.sh` resolves another book's citations against the book it was given, never
+reads the file a file-sourced quotation names, and reads fenced examples as prose. This branch
+makes each check either do that work or say what it skipped, following the paragraph rules the
+operator settled for #82 as R9.
+
+## Changes
+
+### 2026-10-18 20:01:30 MDT: rulings D1 to D5
+
+The operator accepted these on 2026-10-18, answering the branch's five open questions. The
+measurements behind D3 were taken on the second teaching guide's course material by a session
+with access to it, and are described here without its paths.
+
+- **D1.** The book model's paragraph half stays deferred. Its fence rule lands as
+  `book_model.Fence`, which every fence reader in both checkers calls, and its whole-line mark
+  test is the existing `MARK_LINE`. #98 will call the fence tracker as well.
+- **D2.** R9's mark and digit rules apply where a fix already touches the line: `units_of()`'s
+  mark test, `heading_hit`'s number test, `REF`, and `FILEREF`'s line number. The fence rule
+  applies at every fence reader in both checkers.
+- **D3.** Attribution follows what each kind of citation needs.
+  - `book.json` `cited_as` lists the names other files use for the book, matched
+    case-insensitively as a phrase.
+  - A referring file may declare the books it cites, one whole-line comment each, one marked as
+    the default. Undeclared, a file reads exactly as before.
+  - Tags belong to the declared default book and nothing else; a name beside a tag never moves
+    it. Measured: nearest-name attribution misread 27 tags on 20 lines where the companion
+    SQLite guide was mentioned as a resource, and about 3,000 tags are written bare.
+  - Chapter references belong to the book named nearest in their block, else the default. All
+    8 references in blocks naming the SQLite guide meant it, and only 3 named it beside the
+    reference. FAIL when the name shares the reference's sentence, REVIEW when it is only
+    elsewhere in the block. In the same material's changelog notes about 47 of 102 such
+    references mean the other book; nothing checks those notes, and the fixture pins the shape
+    at REVIEW.
+  - Check 2 scopes a chapter-attributed quotation the same way.
+- **D4.** A quotation sourced to a named file is checked against it: FAIL in a key row, REVIEW
+  in prose, as for a chapter. The `:NN` line is not checked; every file carrying the name is
+  read, and the report says when more than one did.
+- **D5.** `check-book.sh`'s fences stay with #73.
+
+### 2026-10-18 20:01:30 MDT: a mark after a blank line, and a bare-number locator
+
+- **`units_of()`** (`check-provenance.sh`) closes a unit at a blank line instead of emptying
+  it, so a mark separated from its paragraph by a blank still covers it. A mark is one only
+  when it fills its line, by `MARK_LINE`, and fences come from `book_model.Fence`.
+- **`heading_hit`**: a locator that is only a number (`§ 1`, `§ 1.2`) must equal a heading's
+  leading number. Word locators keep prefix matching.
+- **`SKILL.md § Chapter file format`** writes every mark on the line under its paragraph.
+- **Fixture.** `fixtures/provenance` gains `§ 10` (resolves), `§ 1` against a handbook with
+  `## 10.` and no `## 1.` (fails), and a misquoting paragraph a blank line separates from its
+  mark (reviews). Under `main`'s script both new failing cases pass silently: 6 failures and 3
+  quotations checked, against 7 and 4 on the branch.

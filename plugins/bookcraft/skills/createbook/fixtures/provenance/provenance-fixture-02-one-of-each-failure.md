@@ -24,3 +24,12 @@ FAIL, check 2: the mark cites a step the source does not number.
 
 FAIL, check 2: the heading is real and the item number under it is not.
 <!-- src: handbook § What The Grain Is 9 -->
+
+FAIL, check 2: a bare section number has to equal a heading's number, and the handbook heads a section `10.` but none `1.`.
+<!-- src: handbook § 1 -->
+
+## The quotation a blank line used to hide
+
+REVIEW, check 3: a blank line separates this paragraph from its mark, and the mark still covers it, so "nothing in the handbook is set apart by a blank line" is checked and is in no source.
+
+<!-- src: handbook § When Not To Index -->

@@ -11,9 +11,11 @@ copies agreed, so a book could bind a file as a chapter that every checker
 graded as an appendix, and that shipped. Every tool now asks this module
 instead, so a rule about what a file is gets written once.
 
-It answers at the file level only: each `.md` file's kind, number, label, part
-and title. What sits inside a chapter (paragraph tags, provenance marks,
-fences) is still each tool's own business.
+It answers at the file level, each `.md` file's kind, number, label, part and
+title, plus two rules every reader of a line shares: what a fence is (`Fence`)
+and what a whole-line provenance mark is (`MARK_LINE`). What else sits inside a
+chapter (paragraph tags, which paragraph a mark covers) is still each tool's
+own business; #72 settled that as D1 (`changelog/72-*/CHANGELOG.md`).
 
 The rules, as settled on #82 (`changelog/82-*/CHANGELOG.md`, R1 to R10):
 
@@ -81,12 +83,57 @@ CHAPTER_KINDS = ("chapter", "appendix")
 # the same lines from the page with this same pattern.
 MARK_LINE = re.compile(r"^[ \t]*<!--[ \t]*src:.*?-->[ \t]*$\n?", re.M)
 
+# A fence opening, by CommonMark's rule as #82's R9 settled it: three or more
+# backticks or tildes. Indentation is not measured. CommonMark measures it
+# against the enclosing list item, which a line reader cannot see, and every
+# checker has always accepted an indented fence so that one inside a list item
+# counts.
+FENCE_OPENING = re.compile(r"[ \t]*(`{3,}|~{3,})(.*)")
+
 # A name or a key that holds one of these cannot travel in a --tsv row.
 UNSAFE = re.compile(r"[\t\n\r]")
 
 
 class ModelError(Exception):
     """The folder or its book.json cannot be read into a model."""
+
+
+class Fence:
+    """Which lines, fed in order, belong to a fenced code block.
+
+        fence = Fence()
+        for line in lines:
+            if fence.step(line):
+                continue    # an opening line, a closing line, or a line inside
+
+    Only a run of the opening's character at least as long as the opening, with
+    nothing else on its line, closes a fence, and a backtick opening's info
+    string may not hold a backtick, so a line reading ```x``` is inline code
+    rather than a fence. A fence nothing closes runs to the end of the file, as
+    in CommonMark, so a caller reading several files makes one per file: an
+    unclosed fence in one chapter must not swallow the next.
+
+    Every fence reader in the checkers calls this, so they agree on what a fence
+    is by construction rather than by review. Before it each toggled on a line
+    starting with three backticks: a `~~~` block was read as prose, and a
+    ```` ``` ```` line inside a four-backtick fence closed it.
+    """
+
+    def __init__(self):
+        self.opening = None     # the run that opened the fence now open, e.g. "```"
+
+    def step(self, line: str) -> bool:
+        """Read the next line; True when it opens, closes or sits inside a fence."""
+        if self.opening is not None:
+            run = line.strip()
+            if len(run) >= len(self.opening) and not run.strip(self.opening[0]):
+                self.opening = None
+            return True
+        m = FENCE_OPENING.fullmatch(line.rstrip("\r\n"))
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            self.opening = m.group(1)
+            return True
+        return False
 
 
 def load_config(folder: pathlib.Path) -> dict:
