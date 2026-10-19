@@ -142,6 +142,10 @@ whenever that half lands:
 
 Line numbers are on `fd1d571`.
 
+**Status, 2026-10-18:** every item below is done, in `a4929dc`, `0deaaca` and `a880213`, and
+the close-gate review approved the branch (`pr-review-2026-10-18-r2.md`). Step 2 resolves a
+bare number against the subsections of its section, as `main` did; see the PR summary.
+
 ### 1. A mark after a blank line covers the unit above it (#51 § 1, lands first)
 
 - [x] `units_of()` (`check-provenance.sh:687`) stops dropping the unit at the blank line
@@ -253,15 +257,18 @@ None open.
 
 ## Deferred
 
-- **The book model's paragraph half**: each paragraph's tag and its mark, read once for every
+Triaged at the close, 2026-10-18. The two pre-existing correctness defects are filed together as
+#100, the way #51 grouped its blind spots; the other two name no user-visible symptom and drop.
+
+- **DROP. The book model's paragraph half**: each paragraph's tag and its mark, read once for every
   tool. Deferred by D1 until a consumer needs the structure rather than the rules.
-- **A word locator ending in a number still matches by prefix.** `§ Worked Reasoning #1`
+- **TICKET #100. A word locator ending in a number still matches by prefix.** `§ Worked Reasoning #1`
   resolves against `### Worked Reasoning #10 - ...` after item 1 is gone, the same shape as
   #51 § 2 one step over. Step 2 fixes only the bare-number locator.
-- **A loose list's earlier items go unchecked.** `units_of()` starts a new unit at each item
+- **TICKET #100. A loose list's earlier items go unchecked.** `units_of()` starts a new unit at each item
   after a blank line, so a mark after a list with blanks between its items covers only the last
   item, while `check-book.sh`'s sweep reads the whole list as one unit. The quotations in the
   earlier items are the ones left out.
-- **The binder's `fenced_lines` still toggles on a backtick line** (`build-book.py:1022`), for
+- **DROP. The binder's `fenced_lines` still toggles on a backtick line** (`build-book.py:1022`), for
   attaching a chapter's scripts. It is the binder's last line-based fence reader; its
   markdown-it pass already reads fences by CommonMark.

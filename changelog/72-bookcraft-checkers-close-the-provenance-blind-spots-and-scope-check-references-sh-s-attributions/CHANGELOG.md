@@ -57,7 +57,7 @@ with access to it, and are described here without its paths.
   mark (reviews). Under `main`'s script both new failing cases pass silently: 6 failures and 3
   quotations checked, against 7 and 4 on the branch.
 
-### 2026-10-18 21:10:00 MDT: which book a citation cites, file-sourced quotations, and fences
+### 2026-10-18 20:17:14 MDT: which book a citation cites, file-sourced quotations, and fences
 
 - **`book_model.Fence`** is now every fence reader in `check-references.sh`: `blocks()`,
   `tag_paragraphs()` and `tag_citations()`. `blocks()` yields nothing for a fence, and a fence
@@ -88,7 +88,7 @@ with access to it, and are described here without its paths.
   read; `updatebook/SKILL.md` step 5 points at it; the plugin README's checker table and fixture
   list follow. bookcraft is 1.16.0, and `createbook/NOTES.md` records the change.
 
-### 2026-10-18 22:40:00 MDT: the review's findings, addressed
+### 2026-10-18 20:34:35 MDT: the review's findings, addressed
 
 `pr-review-2026-10-18.md` asked for changes. Every finding is addressed here, and each has a
 fixture case in `fixtures/attribution` or `fixtures/provenance`:
@@ -109,10 +109,20 @@ fixture case in `fixtures/attribution` or `fixtures/provenance`:
   the quoting one is read, and lists the declarations that fail.
 - **The review's two questions, answered conservatively.** `§ 2` resolves against a source that
   heads only `2.1` and `2.2` again, as it did on `main`, since a subsection is inside its
-  section; `§ 1` still never resolves against `10.` or `1.20`. A key-row quotation resting on a
+  section; `§ 1` still never resolves against `10.`, and `§ 1.2` never against `1.20`. A key-row quotation resting on a
   reference whose book was read from another sentence reviews rather than fails, matching
   check 1.
 - **Its deferred note, folded in**: `check-provenance.sh` read the book's tag definitions
   without skipping fences. It now reads them through `check-references.sh`'s `tag_paragraphs`,
   so the two checkers agree on what a tag is.
 - Under `main`, 11 of the 12 attribution cases fail; the undeclared guard passes on both.
+
+### 2026-10-18 20:44:36 MDT: the close-gate review approves
+
+`pr-review-2026-10-18-r2.md`: APPROVE, with every round-one fix re-probed against a scratch copy
+under Python 3.14 and 3.9. Its two minor notes are taken. A sentence in the entry above claimed
+`§ 1` never resolves against `1.20`, which the subsection rule allows; it now says `§ 1.2`. And
+the fence-aware tag definitions in `check-provenance.sh` gained their fixture case, in
+`fixtures/lettered-tags/run.sh`: a mark citing a tag only a fenced example defines fails, and
+passes under `main`. Two of this log's timestamps were written by hand rather than read from the
+clock; they are corrected to the commits they describe.

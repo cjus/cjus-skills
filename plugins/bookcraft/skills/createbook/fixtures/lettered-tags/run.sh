@@ -13,7 +13,8 @@
 #                        cutting [1-2a] and relettering [1-2b] fails check 4 as
 #                        a slide, not a rewording; and a chapter whose slug
 #                        holds "appendix" is still a chapter
-#   check-provenance.sh  marks citing [1-2a] and [A1-1a] resolve; [1-2z] fails
+#   check-provenance.sh  marks citing [1-2a] and [A1-1a] resolve; [1-2z] fails,
+#                        and so does a tag only a fenced example defines
 #
 # Usage: ./run.sh          (from anywhere; paths are resolved from the script)
 # Exits 0 when every assertion holds, 1 otherwise.
@@ -119,5 +120,14 @@ mutate badmark 's/<!-- src: \[1-2a\] -->/<!-- src: [1-2z] -->/'
 out=$("$scripts/check-provenance.sh" "$tmp/badmark" 2>&1); rc=$?
 expect "check-provenance: a mark citing an undefined lettered tag fails" "$rc" "$out" 1 \
   "the mark cites [1-2z], which the book does not define"
+
+# A tag at the head of a line inside a fence is code being shown, and defines
+# nothing, by the same reader check-references.sh uses (#72). Until then this
+# checker read definitions without skipping fences, so the mark below resolved.
+mutate fencedtag 's/<!-- src: \[1-2a\] -->/<!-- src: [1-9] -->/'
+printf '\n```text\n[1-9] A tag shown in a fence defines nothing.\n```\n' >>"$tmp/fencedtag/$ch"
+out=$("$scripts/check-provenance.sh" "$tmp/fencedtag" 2>&1); rc=$?
+expect "check-provenance: a tag shown in a fence defines nothing" "$rc" "$out" 1 \
+  "the mark cites [1-9], which the book does not define"
 
 exit "$fails"
