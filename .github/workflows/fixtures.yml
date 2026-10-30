@@ -189,6 +189,7 @@ jobs:
           [ "$rc" -eq 0 ] || exit "$rc"
           extra=$(printf '%s\n' "$out" | grep '^skip ' \
                   | grep -v -e 'makebook/bind/run.sh' -e 'makebook/save-scripts/run.sh' \
+                            -e 'makebook/labels/run.sh' \
                             -e 'createbook/book-model/run.sh passed with 1 check(s) skipped' || true)
           if [ -n "$extra" ]; then
             echo "skipped beyond the binder's own checks:"

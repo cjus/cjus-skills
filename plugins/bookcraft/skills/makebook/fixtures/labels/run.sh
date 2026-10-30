@@ -100,18 +100,35 @@ else
 fi
 
 # --- chapter openers ---------------------------------------------------------
-# Each opening page's first line is its eyebrow. The chapters open on pages 4
-# to 8: the introduction, 1, 1.1, 2, then the appendix.
+# Each opening page starts with its eyebrow. The chapters open on pages 4 to 8:
+# the introduction, 1, 1.1, 2, then the appendix. The eyebrow is letter-spaced,
+# and pdftotext splits it differently with each platform's fonts ("PA RT O N E",
+# or the part on a line of its own), so the page's first lines are compared with
+# every space and line break taken out.
+opener() {
+  pdftotext -f "$1" -l "$1" "$pdf" - 2>/dev/null | head -6 | tr -d ' \t\n'
+}
 eyebrows=""
-for p in 4 5 6 7 8; do
-  eyebrows+="$(pdftotext -f "$p" -l "$p" "$pdf" - 2>/dev/null | head -1)"$'\n'
-done
-want_eyebrows=$'PART ONE\nCHAPTER 1 · PART ONE\nCHAPTER 1.1 · PART ONE\nCHAPTER 2 · PART TWO\nAPPENDIX 1\n'
-if [ "$eyebrows" = "$want_eyebrows" ]; then
+openers_ok=1
+check_opener() {  # page, regex the page must start with, part it must name
+  local t
+  t=$(opener "$1")
+  eyebrows+="p$1: ${t:0:40}"$'\n'
+  [[ $t =~ ^$2 ]] || openers_ok=0
+  [ -z "$3" ] || [[ $t == *"$3"* ]] || openers_ok=0
+}
+check_opener 4 'PARTONE' ''
+check_opener 5 'CHAPTER1([^.0-9]|$)' 'PARTONE'
+check_opener 6 'CHAPTER1\.1' 'PARTONE'
+check_opener 7 'CHAPTER2' 'PARTTWO'
+check_opener 8 'APPENDIX1' ''
+# The introduction has no label, so no "Chapter" at all on its opener.
+[[ $(opener 4) != *CHAPTER* ]] || openers_ok=0
+if [ "$openers_ok" = 1 ]; then
   report 0 "openers: labels print, and the introduction opens on its part alone"
 else
-  report 1 "openers: the eyebrows differ (< expected, > got)"
-  diff <(printf '%s' "$want_eyebrows") <(printf '%s' "$eyebrows") | sed 's/^/      | /'
+  report 1 "openers: should read PART ONE, CHAPTER 1 · PART ONE, CHAPTER 1.1 · PART ONE, CHAPTER 2 · PART TWO, APPENDIX 1"
+  printf '%s' "$eyebrows" | sed 's/^/      | /'
 fi
 
 # --- outline -----------------------------------------------------------------
