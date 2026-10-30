@@ -148,7 +148,7 @@ The PDF carries an outline, the bookmarks a viewer lists beside the page. On a K
 ```
 
 - **Every page in the table above is a top-level entry**, and each one opens its page. About this book is listed here, although the contents page leaves it out.
-- **A chapter or appendix expands to its sections**, its `##` headings, and no further. Its label matches its opening page, `Chapter 3: Title` or `Appendix 1: Title`. A title that already starts with its label prints it only once.
+- **A chapter or appendix expands to its sections**, its `##` headings, and no further. Its label matches its opening page, `Chapter 3: Title` or `Appendix 1: Title`, or the label `book.json` gives it (`Chapter 6.1: Title`, or the bare title for an empty label; see **Optional `book.json`**). A title that already starts with its label prints it only once.
 - **Chapters start collapsed**, so the outline opens as a list of chapters.
 - **`sections` in `book.json` nests chapters under their parts**, the same grouping the contents page and the EPUB's nav use. A part has no page of its own, so its entry opens on its first chapter. Parts start expanded.
 - **An H1 inside a chapter's body** (any H1 after the title) is filed under that chapter as one of its sections. That holds even when its text matches the next chapter's title, because an entry counts only if it also opens the page the binder found that chapter on.
@@ -314,7 +314,10 @@ Drop it in the same folder. Every field is optional.
   "sections": [
     { "title": "Part One", "chapters": [1, 2, 3] },
     { "title": "Part Two", "chapters": [4, 5] }
-  ]
+  ],
+  "labels": ["", "1", "1.1", "2", "3"],
+  "code_wrap": true,
+  "code_pt": 8
 }
 ```
 
@@ -322,6 +325,9 @@ Drop it in the same folder. Every field is optional.
 - `sections` groups chapters by their chapter number, which in a folder of plain names is their 1-based position in sort order (see **Appendices**). An appendix is never in a part, whatever a range spans. The section title also prints on each chapter's opening page, and becomes a nested entry in the EPUB's navigation. Omit it for a flat contents page.
 - `exclude` drops files from the chapter list. The glossary file, the front matter file, the `description_file` and `OUTLINE.md` are always excluded, by name, since a forgotten `exclude` line would bind any of them as a chapter.
 - `glossary` declares that this book is meant to carry one, so a missing file errors rather than binding silently without it. `glossary_file` renames it from the default `glossary.md`. See **The glossary**.
+- `labels` gives each chapter the number the book itself uses, for a book whose chapters carry their own numbering, such as sub-chapters 6.1 and 14.2 between the whole numbers, and whose text cross-references those numbers. One string per chapter, in reading order; **appendices are not counted** and keep "Appendix N". A label replaces the sequential number wherever a chapter's number prints: its contents row, its opening page ("Chapter 6.1"), its PDF outline entry ("Chapter 6.1: Title"), its EPUB opener, its figure numbers (Figure 6.1.2), the EPUB index's links to it, a glossary entry's `(ch. N)`, and the binder's own messages. **An empty string prints no number at all**, for an introduction or a preface bound as a chapter: its contents row has no number, its opening page shows only its part, and its outline entry is the bare title. Its figures fall back to the chapter's place in the book (Figure 1.1 for the first chapter), which can coincide with another chapter's label, so give a chapter with figures a label. The contents page widens its number column to fit the longest label, and the Figures page widens its own to fit a label plus ".N". `sections` and a glossary's `(ch. N)` still name a chapter by its place among the chapters, as before, so in the example above `"chapters": [1, 2, 3]` is the unnumbered chapter, chapter 1 and chapter 1.1. A list of the wrong length, or an entry that is not a string, stops the bind with the reason. The checkers do not read `labels`: a label is how a chapter prints, not what it is.
+- `code_wrap: true` wraps a fenced line wider than the measure onto the next line instead of clipping it at the margin, so no character is lost from the page or from the text layer. The long-line warning (**Type size**) becomes a count of the lines that wrap. Leave it off for code whose line breaks carry meaning on the page; turn it on for a book that quotes source formatted wider than the measure, where the alternative is losing the tail of every long line. PDF only: the EPUB always wraps, since it reflows.
+- `code_pt` sets fenced code in the PDF at a fixed size, from 6 to 12.75pt, instead of the size scaled from the body. It is rounded to the quarter pixel like every other code size, and the long-line threshold is measured at it: 8pt fits about 86 characters. Use it with `code_wrap` to keep a comfortable body size in a book of wide code. PDF only, for the reason above.
 - `cover_image` is **EPUB only**, and optional: the file becomes the book's cover art in a library or on a device. Around 1600×2560 JPEG suits a Kindle Scribe. The PDF ignores it and keeps its typeset cover page. **Omit it and the EPUB still gets cover art**: the builder rasterises the PDF's own cover page at 1600px wide and uses that, so a library shows the book's title rather than a blank tile. It keeps the printed page's 7.1:9.1 proportions, so a device letterboxes it rather than cropping a page that was designed. Generated art is a picture of the cover page, so the EPUB leaves the text cover page out and opens on the art alone rather than on the same page twice. Name a `cover_image` when you want art of your own; the generated one is never used then. Supplied art is used as it is and does not carry the creation stamp, so the text cover page stays in the book behind it and still does.
 
 ## The glossary
@@ -580,6 +586,11 @@ layout squeezed a column below its word anyway, it writes explicit column widths
 and rebinds. Only a table that genuinely needs more than the 6.0in measure
 reaches the warning, and the remedy is then editorial: shorten the cell text,
 split the table, move the widest column into a list, or bind smaller.
+
+`book.json`'s `code_pt` and `code_wrap` change the second row. `code_pt` sets
+the size the threshold is measured at, whatever the body, and `code_wrap` makes
+a line past it wrap rather than cut, so the build counts those lines instead of
+warning about them (**Optional `book.json`**).
 
 A book with long commands in it is a book to bind smaller, or to rewrap. The
 reference book clears all three at every size. It needed four tables narrowed

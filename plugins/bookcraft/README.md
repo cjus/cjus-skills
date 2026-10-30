@@ -226,6 +226,8 @@ What it produces: a cover, a contents page, one chapter per file in filename ord
 
 **Path-like source keys print as their display names** in the header's `Draws on` and `Fills in` rows, in either edition and so in the reading edition's endnotes, wherever `book.json` gives the source a `display` name. A key that already reads as a name, such as `syllabus`, is left as written. And the invisible markers the build uses to find page numbers are hidden in the finished PDF, so a screen reader or a copy no longer picks up strings like `ZQCH001QZ`.
 
+**A book can number its own chapters**, with `"labels"` in `book.json`: one string per chapter, such as `""`, `"1"`, `"1.1"`, `"2"`, which replaces the sequential number on the contents page, the opening pages, the outline, the figure numbers and the EPUB. An empty label prints no number, for an introduction bound as a chapter. **Wide code can wrap**: `"code_wrap": true` wraps a fenced line past the margin instead of cutting it off, and `"code_pt"` sets fenced code at a fixed size. See `makebook/SKILL.md` § Optional `book.json`.
+
 ### Type size
 
 | `--type-size` | Characters/line | Use |
@@ -381,6 +383,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ../makebook/fixtures/display-names/run.sh                 # exits 0, the binder swaps only the source rows
 ../makebook/fixtures/bind/run.sh                          # exits 0, binds three books, the guide twice; skips without install.sh's venv
 ../makebook/fixtures/save-scripts/run.sh                  # exits 0, attaches seven scripts and warns about two saves it cannot cover
+../makebook/fixtures/labels/run.sh                        # exits 0, the book's own chapter labels print everywhere, and wide code wraps
 ```
 
 Chapter 1 of the provenance fixture holds only passing marks, so a run reporting anything against it is a regression. Chapter 2 holds one of each failing shape, named in the line above it.

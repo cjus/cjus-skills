@@ -1,0 +1,10 @@
+{
+  "subtitle": "A book that numbers its own chapters and quotes wide code",
+  "labels": ["", "1", "1.1", "2"],
+  "code_wrap": true,
+  "code_pt": 8,
+  "sections": [
+    { "title": "Part One", "chapters": [1, 2, 3] },
+    { "title": "Part Two", "chapters": [4] }
+  ]
+}

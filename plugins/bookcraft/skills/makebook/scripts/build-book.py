@@ -301,8 +301,9 @@ h1.section-title {
    around the spans would take their flex sizing. Either moves the page. */
 .toc-link { position: absolute; inset: 0; }
 .toc-num {
-  flex: 0 0 1.9em; color: #6b6b6b; font-variant-numeric: tabular-nums;
+  flex: 0 0 ${tocnum}em; color: #6b6b6b; font-variant-numeric: tabular-nums;
 }
+.toc-num.fig-num { flex-basis: ${fignum}em; }
 /* Capped so a wrapped title still leaves room for the dotted leader. */
 .toc-title { flex: 0 1 auto; max-width: 82%; }
 .toc-dots {
@@ -384,7 +385,7 @@ h1.section-title {
 .chapter pre {
   background: #f6f6f6; border: 1px solid #e6e6e6; border-radius: 4px;
   padding: 0.6em 0.8em; font-size: round(nearest, ${pre}pt, 0.25px); line-height: 1.42;
-  overflow-x: auto; break-inside: avoid;
+  ${preflow} break-inside: avoid;
 }
 .chapter pre code { background: none; padding: 0; font-size: inherit; }
 /* The note under a block the book asks to be saved (script_notes). Set like a
@@ -661,8 +662,42 @@ def scaled(pt: float, body_pt: float) -> str:
     return f"{scaled_pt(pt, body_pt):g}"
 
 
-def build_css(body_pt: float = BASELINE_BODY_PT) -> str:
+# book.json's `code_pt` range. The floor is where monospace stops reading as
+# text on paper; the ceiling is fenced code's own size at MAX_BODY_PT, so a fixed
+# size can shrink code below what the body would give it but never outgrow the
+# large-print binding.
+MIN_CODE_PT = 6.0
+MAX_CODE_PT = 12.75
+
+# The contents page's number column, in em, as hand-written. Wide enough for
+# "A12"; a book whose `labels` run longer gets a wider column (toc_num_em).
+TOC_NUM_EM = 1.9
+
+# `.chapter pre`'s overflow, as hand-written and with `code_wrap`. Clipping keeps
+# a line on one line, which is right for anything whose line breaks mean
+# something; wrapping keeps every character, which is right when the
+# alternative is losing the tail of a long line altogether.
+PRE_CLIP = "overflow-x: auto;"
+PRE_WRAP = "white-space: pre-wrap; overflow-wrap: anywhere;"
+
+
+def toc_num_em(labels: list[str], extra: int = 0) -> float:
+    """The number column wide enough for the longest label, never narrower than
+    the hand-written one. About 0.55em a character in the contents face, plus
+    the gap before the title: "14.2" needs 2.6em, which was measured. `extra`
+    adds characters, for the Figures page, whose numbers are a label and ".N"."""
+    longest = max((len(lab.strip()) for lab in labels), default=0) + extra
+    return max(TOC_NUM_EM, round(0.55 * longest + 0.4, 2))
+
+
+def build_css(body_pt: float = BASELINE_BODY_PT, code_size: float | None = None,
+              code_wrap: bool = False, toc_em: float = TOC_NUM_EM,
+              fig_em: float = TOC_NUM_EM) -> str:
     """The stylesheet with every reading size scaled to `body_pt`.
+
+    `code_size`, `code_wrap`, `toc_em` and `fig_em` carry book.json's
+    `code_pt`, `code_wrap` and `labels` (layout_options). Their defaults are the
+    hand-written values, so the no-argument equality below still holds.
 
     The parameter defaults to BASELINE_BODY_PT and not to DEFAULT_BODY_PT, which
     looks wrong and is the point: a bare build_css() means "the stylesheet as it
@@ -678,7 +713,72 @@ def build_css(body_pt: float = BASELINE_BODY_PT) -> str:
     # art in a large-print binding, which is the opposite of what that reader
     # needs -- their text wants more of the line, not less.
     sizes["slideshare"] = f"{SLIDE_WIDTH_SHARE * 100:.0f}"
+    if code_size is not None:
+        sizes["pre"] = f"{code_size:g}"
+    sizes["preflow"] = PRE_WRAP if code_wrap else PRE_CLIP
+    sizes["tocnum"] = f"{toc_em:g}"
+    sizes["fignum"] = f"{fig_em:g}"
     return Template(CSS_TEMPLATE).substitute(sizes)
+
+
+def layout_options(cfg: dict, labels: list[str] | None) -> dict:
+    """book.json's `code_pt` and `code_wrap`, checked, and the contents column
+    `labels` needs, as build_css's keyword arguments. Raises ValueError with the
+    reason for a value the binder will not guess about."""
+    wrap = cfg.get("code_wrap", False)
+    if not isinstance(wrap, bool):
+        raise ValueError(f'book.json "code_wrap" must be true or false, not: {wrap!r}')
+    size = cfg.get("code_pt")
+    if size is not None:
+        if isinstance(size, bool) or not isinstance(size, (int, float)):
+            raise ValueError(f'book.json "code_pt" must be a number, not: {size!r}')
+        if not MIN_CODE_PT <= size <= MAX_CODE_PT:
+            raise ValueError(f'book.json "code_pt" takes {MIN_CODE_PT:g} to '
+                             f'{MAX_CODE_PT:g}pt; {size:g} is outside that')
+    return {"code_size": float(size) if size is not None else None,
+            "code_wrap": wrap,
+            "toc_em": toc_num_em(labels) if labels else TOC_NUM_EM,
+            # Room for ".NN" after the longest label, a figure's own number.
+            "fig_em": toc_num_em(labels, 3) if labels else TOC_NUM_EM}
+
+
+def apply_labels(chapters: list[dict], cfg: dict) -> list[str] | None:
+    """Put book.json's `labels` on the chapters, in place, and return them.
+
+    One string per chapter in reading order, appendices not counted: an
+    appendix keeps "Appendix N", since its number is its own and is never the
+    one a book's own numbering overrides. A label replaces the sequential
+    number wherever it prints, so `label` becomes "Chapter <label>" and `unit`
+    becomes the label itself. An empty label prints no number: `label` and
+    `unit` are both empty, and `fig_unit` falls back to the sequential number
+    so a figure there is still numbered. The book model is left alone: the
+    checkers key chapters by its `unit`, and a label is how a chapter prints,
+    not what it is. Returns None when book.json has no labels. Raises
+    ValueError with the reason for a list the binder will not guess about.
+    """
+    labels = cfg.get("labels")
+    if labels is None:
+        return None
+    if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
+        raise ValueError('book.json "labels" must be a list of strings, one per chapter')
+    plain = [ch for ch in chapters if not ch["appendix"]]
+    if len(labels) != len(plain):
+        raise ValueError(f'book.json "labels" has {len(labels)} entries for '
+                         f'{len(plain)} chapters; give one per chapter in reading '
+                         f'order, "" for a chapter that prints no number')
+    for ch, lab in zip(plain, labels):
+        lab = lab.strip()
+        if "\t" in lab or "\n" in lab:
+            raise ValueError(f'book.json "labels": {lab!r} holds a tab or a line break')
+        ch["label"] = f"Chapter {lab}" if lab else ""
+        ch["unit"] = lab
+        ch["fig_unit"] = lab or str(ch["label_num"])
+    return labels
+
+
+def chapter_name(ch: dict) -> str:
+    """How a message names a chapter: its label, or its title when it has none."""
+    return ch["label"] or ch["title"]
 
 
 EMPTY_HEADER = '<div style="display:none"></div>'
@@ -942,6 +1042,10 @@ def load_chapters(src: Path, book: dict, reading: bool = False,
             "label_num": rec["number"],
             "label": rec["label"],
             "unit": rec["unit"],
+            # The figure prefix: the unit, until book.json's labels override it
+            # (apply_labels). Kept apart because an empty label empties `unit`
+            # and a figure still needs a number.
+            "fig_unit": rec["unit"],
             "part": rec["part"],
             "num": len(chapters) + 1,
             "path": path,
@@ -2261,9 +2365,14 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
     out = []
     for ch in chapters:
         grp = ch["part"]
-        tail = f" &nbsp;&middot;&nbsp; {html_mod.escape(grp)}" if grp else ""
+        # An empty label (book.json "labels") prints no number, so the part
+        # opens the eyebrow on its own rather than after a separator.
+        sep = " &nbsp;&middot;&nbsp; " if ch["label"] else ""
+        tail = f"{sep}{html_mod.escape(grp)}" if grp else ""
+        number = (f'<span class="chapter-number">{ch["label"]}</span>'
+                  if ch["label"] else "")
         body = figurize(ch["body_html"], ch["num"], counter, figures, src,
-                        slide_dir_of(cfg), slides, fig_prefix=ch["unit"])
+                        slide_dir_of(cfg), slides, fig_prefix=ch["fig_unit"])
         body = inject_colgroups(body, ch["num"], col_plan or {})
         body = script_notes(body, ch)
         out.append(
@@ -2271,9 +2380,7 @@ def build_chapters(chapters, cfg, figures: list[dict], src: Path,
             f'data-ch="{ch["num"]}">'
             '<div class="chapter-head">'
             '<div class="chapter-eyebrow">'
-            f'<span class="chapter-number">'
-            f'{ch["label"]}</span>'
-            f'{tail}{probe(f"CH{ch["num"]:03d}")}</div>'
+            f'{number}{tail}{probe(f"CH{ch["num"]:03d}")}</div>'
             f'<h1 class="chapter-title">{html_mod.escape(ch["title"])}</h1>'
             '<div class="rule"></div></div>'
             f"{body}</section>"
@@ -2287,7 +2394,7 @@ def build_figure_list(figures, fig_pages) -> str:
         pg = str(fig_pages[fig["id"]]) if fig_pages else "&nbsp;"
         rows.append(
             '<div class="toc-row">'
-            f'<span class="toc-num">{fig["number"]}</span>'
+            f'<span class="toc-num fig-num">{fig["number"]}</span>'
             f'<span class="toc-title">{html_mod.escape(fig["caption"])}</span>'
             '<span class="toc-dots"></span>'
             f'<span class="toc-page">{pg}</span>'
@@ -2331,7 +2438,15 @@ def build_front_matter(path: Path) -> tuple[str, str]:
     )
 
 
-def build_glossary(entries) -> str:
+def glossary_ref(chapters, n: int) -> str:
+    """How a glossary entry's `(ch. N)` prints: N is the chapter's place among
+    the chapters, as the glossary is written, and it prints as that chapter's
+    label when book.json gives one."""
+    ch = next((c for c in chapters if not c["appendix"] and c["label_num"] == n), None)
+    return (ch["unit"] or ch["title"]) if ch else str(n)
+
+
+def build_glossary(entries, chapters) -> str:
     blocks, current = [], None
     for term, ch, body in entries:
         # The letter comes off the stripped term for the reason the sort does:
@@ -2342,7 +2457,8 @@ def build_glossary(entries) -> str:
         if letter != current:
             blocks.append(f'<div class="index-letter">{letter}</div>')
             current = letter
-        ref = f' <span class="gloss-ch">ch. {ch}</span>' if ch else ""
+        ref = (f' <span class="gloss-ch">ch. {glossary_ref(chapters, ch)}</span>'
+               if ch else "")
         blocks.append(
             '<div class="gloss-entry">'
             f'<span class="gloss-term">{inline_code_html(term)}</span>{ref} '
@@ -2427,7 +2543,7 @@ def assemble(title, cfg, chapters, src, state, want_index, css: str,
     # Glossary before index. The glossary is read; the index is looked things up
     # in, so it belongs last where a thumb finds it.
     if glossary:
-        parts.append(build_glossary(glossary))
+        parts.append(build_glossary(glossary, chapters))
     if want_index:
         parts.append(build_index(state.get("entries") or []))
     parts.append("</body></html>")
@@ -2965,7 +3081,7 @@ def attach_scripts(pdf: Path, chapters) -> dict[tuple[int, int], int]:
             ef[NameObject("/Params")] = DictionaryObject(
                 {NameObject("/Size"): NumberObject(len(data))})
             name = Path(sc["name"]).name
-            label = ch["label"]
+            label = chapter_name(ch)
             # pypdf's only way to make an object indirect, which a stream has
             # to be. It is underscored and has been stable across releases.
             ef_ref = writer._add_object(ef)
@@ -3674,7 +3790,7 @@ def epub_glossary_body(entries, chapters) -> str:
             target = by_number[ch]
             ref = (f' <a href="{epub_chapter_href(target["num"])}" title="'
                    f'{html_mod.escape(target["title"], quote=True)}">'
-                   f'ch. {ch}</a>')
+                   f'ch. {glossary_ref(chapters, ch)}</a>')
         blocks.append(
             f'<p class="entry"><strong>{inline_code_html(term)}</strong>{ref} '
             f'{inline_code_html(body)}</p>'
@@ -3689,7 +3805,7 @@ def epub_glossary_body(entries, chapters) -> str:
 
 def epub_index_body(entries, chapters) -> str:
     titles = {ch["num"]: ch["title"] for ch in chapters}
-    units = {ch["num"]: ch["unit"] for ch in chapters}
+    units = {ch["num"]: ch["unit"] or html_mod.escape(ch["title"]) for ch in chapters}
     blocks, current = [], None
     for display, nums in entries:
         letter = display[0].upper() if display[0].isalpha() else "#"
@@ -3790,13 +3906,13 @@ def build_epub(title, cfg, chapters, src, out_path, terms, want_index,
     for ch in chapters:
         body = figurize_epub(SCRIPT_ATTR_RE.sub("", ch["body_html"]),
                              ch["num"], counter, figures, src,
-                             slide_dir_of(cfg), fig_prefix=ch["unit"])
+                             slide_dir_of(cfg), fig_prefix=ch["fig_unit"])
         body = collect_images(body, src, assets, lost_images)
         heading = html_mod.escape(ch["title"])
         section = ch["part"]
-        eyebrow = (f'<p class="lead">{ch["label"]}'
-                   f'{" &#183; " + html_mod.escape(section) if section else ""}'
-                   "</p>")
+        lead = " &#183; ".join(
+            x for x in (ch["label"], html_mod.escape(section) if section else "") if x)
+        eyebrow = f'<p class="lead">{lead}</p>' if lead else ""
         body = xhtmlify(f"{eyebrow}<h1>{heading}</h1>{body}", str(ch["path"]))
         chapter_items.append(
             page(f"chap{ch['num']:03d}", epub_chapter_href(ch["num"]),
@@ -4015,6 +4131,15 @@ def main(argv: list[str]) -> int:
     if not chapters:
         print(f"error: no markdown files in {src}", file=sys.stderr)
         return 1
+    # book.json's labels, code_pt and code_wrap. The stylesheet is built again
+    # with them, since the size check above ran before book.json was read.
+    try:
+        labels = apply_labels(chapters, cfg)
+        layout = layout_options(cfg, labels)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    css = build_css(body_pt, **layout)
 
     out = (args.out.expanduser().resolve() if args.out
            else src / f"{slugify(args.title)}.pdf")
@@ -4244,17 +4369,24 @@ def main(argv: list[str]) -> int:
     # gone from the text layer as well, so a reader cannot recover it by
     # selecting the line. A documentation note does not reach the person binding
     # a book full of long commands; this does.
-    pre_pt = code_pt(scaled_pt(TYPE_SCALE["pre"], body_pt))
+    pre_pt = code_pt(layout["code_size"] if layout["code_size"] is not None
+                     else scaled_pt(TYPE_SCALE["pre"], body_pt))
     code_fits = int(CODE_CHARS_PER_PT / pre_pt)
     over = [(len(ln), ch, ln) for ch in chapters for ln in ch["fenced"]
             if len(ln) > code_fits]
-    if over:
+    # With book.json's code_wrap the same lines wrap instead, and lose nothing,
+    # so they are counted rather than warned about.
+    if over and layout["code_wrap"]:
+        print(f"code: {len(over)} fenced line(s) run past the {code_fits} "
+              f"characters that fit at {pre_pt:g}pt and wrap onto a second "
+              f"line (code_wrap); nothing is cut")
+    elif over:
         over.sort(key=lambda t: -t[0])
         print(f"  warning: {len(over)} fenced line(s) run past the "
               f"{code_fits} characters that fit the measure at {pre_pt:g}pt, "
               f"so they will print cut short:")
         for n, ch, ln in over[:8]:
-            print(f"    ch {ch['num']} ({n} chars): {ln[:code_fits]}")
+            print(f"    {chapter_name(ch)} ({n} chars): {ln[:code_fits]}")
         if len(over) > 8:
             print(f"    ...and {len(over) - 8} more")
         print(f"  The cut text is absent from the PDF's text layer too, so it "
@@ -4312,7 +4444,8 @@ def main(argv: list[str]) -> int:
             short, i = worst_column(t)
             # The printed label, so an appendix's table is reported as
             # Appendix 3 rather than by the sequential number it is keyed on.
-            ch = t.get("label") or "front matter"
+            ch = t.get("label") or next(
+                (c["title"] for c in chapters if c["num"] == t.get("ch")), "front matter")
             shown = ", ".join(t["broken"][:4])
             more = f", +{len(t['broken']) - 4} more" if len(t["broken"]) > 4 else ""
             name = ""
