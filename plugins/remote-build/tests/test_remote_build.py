@@ -6,6 +6,7 @@ import io
 import json
 import os
 import shutil
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -242,6 +243,7 @@ class Worker(unittest.TestCase):
         self.bootstrap = 'SOURCE=' + repr(self.source) + ';exec(compile(SOURCE,"worker","exec"))'
         self.session = 'a' * 36; self.job = 'b' * 36
         self.extra_env = {}
+        self.unset_env = []
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w') as tar:
             member = tarfile.TarInfo('example.txt'); content = b'fixture'; member.size = len(content)
@@ -252,7 +254,8 @@ class Worker(unittest.TestCase):
         payload = dict(session=self.session, job=self.job, **values)
         result = subprocess.run([sys.executable, '-c', self.bootstrap], input=json.dumps(payload).encode(),
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                env=dict(dict(os.environ, HOME=str(self.home)), **self.extra_env), timeout=5)
+                                env={k: v for k, v in dict(dict(os.environ, HOME=str(self.home)), **self.extra_env).items()
+                                     if k not in self.unset_env}, timeout=5)
         return result.returncode, json.loads(result.stdout)
 
     def test_durable_exit_and_log_after_client_disconnect(self):
@@ -320,16 +323,22 @@ class Worker(unittest.TestCase):
         (rusthome / 'toolchains/fixture').symlink_to(toolchain, target_is_directory=True)
         (rusthome / 'settings.toml').write_text('version = "12"\ndefault_toolchain = "fixture"\n')
         binaries = self.home / 'bin'; binaries.mkdir()
-        for name in ('rustup', 'rustc', 'cargo'):
-            (binaries / name).symlink_to(rustup)
+        (binaries / 'rustup').symlink_to(rustup)
+        for name in ('rustc', 'cargo'):
+            proxy = binaries / name
+            proxy.write_text('#!/bin/sh\nexec ' + shlex.quote(rustup) +
+                             ' run fixture ' + name + ' \"$@\"\n')
+            proxy.chmod(0o755)
         self.extra_env = {'PATH': str(binaries)+os.pathsep+os.environ['PATH'],
                           'RUSTUP_HOME': str(rusthome), 'RUSTUP_TOOLCHAIN': 'fixture',
                           'RUSTUP_AUTO_INSTALL': '0'}
         files = {'Cargo.toml': '[package]\nname="warm_fixture"\nversion="0.1.0"\nedition="2021"\n',
                  'Cargo.lock': 'version = 3\n[[package]]\nname="warm_fixture"\nversion="0.1.0"\n',
                  'src/main.rs': 'fn main() { println!("first"); }'}
+        self.unset_env = ['RUSTUP_HOME']  # first build exercises the worker's default home
         first = self.submit_wait(self.archive_files(files), ['cargo', 'build', '--offline', '--locked', '-v'])
         self.assertEqual(first['exit_code'], 0, first.get('log'))
+        self.unset_env = []  # subsequent build uses explicit RUSTUP_HOME
         second = self.submit_wait(self.archive_files(files), ['cargo', 'build', '--offline', '--locked', '-v'])
         self.assertEqual(second['exit_code'], 0, second.get('log'))
         self.assertTrue(second['cache_reused'])
