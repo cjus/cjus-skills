@@ -104,9 +104,24 @@ default-VPC subnet whose zone offers every type, and says what apply would build
    of your first listed type.
 
 If you gave `--alert-email`, confirm the subscription email AWS sends, or the alarms reach no one.
+The summary's `alerts` reads `pending` until you do; a later apply shows `confirmed`.
 
-**Check:** apply ends with a JSON summary whose `janitor_test` is `passed` and whose `setup`
-shows every check `ok` except `repository`. Then commit each repository's selection
+apply ends with a JSON summary of what it did and the state it left. (`plan` says what apply would
+do instead: `image` is `bake` or `reuse`, `remove_profiles` lists what would go, and a new stack
+`will be created`.)
+
+| Field | Says |
+|---|---|
+| `stack` | The stack's CloudFormation status after the last deploy, for example `CREATE_COMPLETE` or `UPDATE_COMPLETE` |
+| `launch_profiles.<name>.image` | `built <ami>` when this run made the image, `reused <ami>` when it kept one |
+| `launch_profiles.<name>.launch_version` | The launch template version the private config now pins |
+| `removed_profiles`, `retired_images` | Profiles dropped and images deleted by this run (replaced or dropped) |
+| `alerts` | `confirmed`, `pending` (confirm the email), `none` (no `--alert-email`) or `unknown` (the subscription could not be read) |
+| `janitor_test` | `passed`, `already passed`, `skipped`, `failed` or `login failed` |
+| `setup` | Each `setup` check's status |
+
+**Check:** `janitor_test` is `passed` and `setup` shows every check `ok` except `repository`.
+Then commit each repository's selection
 ([step 11](#step-11-repository-selection)) and run the first smoke test ([step 12](#step-12-first-smoke-test)).
 
 ### Running apply again
