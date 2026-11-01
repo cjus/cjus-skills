@@ -35,6 +35,12 @@
       "description": "A GitHub-issue-backed PR lifecycle: file a ticket, start a branch, close it with a verified issue link, and keep the queue honest",
       "category": "productivity",
       "source": "./plugins/pr"
+    },
+    {
+      "name": "remote-build",
+      "description": "Run durable build and test jobs on an approved ephemeral Linux worker, with exact source snapshots and ownership-checked cleanup",
+      "category": "development",
+      "source": "./plugins/remote-build"
     }
   ]
 }
