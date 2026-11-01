@@ -43,6 +43,7 @@ class Lifecycle(unittest.TestCase):
         self.c = r.selection(self.g, self.repo)
         self.items = []; self.launches = 0; self.terminations = 0; self.fail_launch = False
         self.account = 'fixture-account'
+        self.image_toolchains = None  # the image's remote-build:toolchains tag, when it has one
         self.mock = patch.object(r, 'aws', side_effect=self.aws).start()
         self.addCleanup(patch.stopall)
 
@@ -51,7 +52,11 @@ class Lifecycle(unittest.TestCase):
         if op == 'describe-launch-template-versions':
             return {'LaunchTemplateVersions': [{'LaunchTemplateData': {'ImageId': 'ami-fixture'}}]}
         if op == 'describe-images':
-            return {'Images': [{'BlockDeviceMappings': [{'DeviceName': '/dev/root', 'Ebs': {'DeleteOnTermination': True}}]}]}
+            image = {'BlockDeviceMappings': [{'DeviceName': '/dev/root', 'Ebs': {'DeleteOnTermination': True}}]}
+            if self.image_toolchains is not None:
+                image['Tags'] = [{'Key': 'remote-build:bake', 'Value': 'fixture'},
+                                 {'Key': r.TOOLCHAIN_TAG, 'Value': self.image_toolchains}]
+            return {'Images': [image]}
         if op == 'describe-instances': return {'Reservations': [{'Instances': self.items}]}
         if op == 'run-instances':
             self.launches += 1
@@ -341,6 +346,60 @@ class Lifecycle(unittest.TestCase):
         with patch.object(r, 'aws', side_effect=retained):
             with self.assertRaises(r.Refused): r.up(self.c, self.state, True)
         self.assertEqual(self.launches, 0)
+
+    def test_pinned_toolchain_reads_the_files_rustup_reads(self):
+        repo = self.repo
+        def pin(legacy=None, toml=None):
+            for name, text in (('rust-toolchain', legacy), ('rust-toolchain.toml', toml)):
+                if (repo / name).exists():
+                    (repo / name).unlink()
+                if text is not None:
+                    (repo / name).write_text(text)
+            return r.pinned_toolchain(repo)
+        self.assertIsNone(pin())
+        self.assertEqual(pin(toml='[toolchain]\nchannel = "1.97.0"\ncomponents = ["rustfmt", "clippy"]\n'),
+                         ('rust-toolchain.toml', '1.97.0'))
+        self.assertEqual(pin(toml="# pinned\n[toolchain]\n  channel='nightly-2026-10-01'  # dated\n"),
+                         ('rust-toolchain.toml', 'nightly-2026-10-01'))
+        self.assertEqual(pin(toml='[toolchain]\nchannel = "stable-x86_64-unknown-linux-gnu"\n'),
+                         ('rust-toolchain.toml', 'stable'))
+        self.assertIsNone(pin(toml='[toolchain]\npath = "/opt/my-rust"\n'))
+        self.assertIsNone(pin(toml='[toolchain]\ncomponents = ["clippy"]\n'))
+        self.assertIsNone(pin(toml='[other]\nchannel = "1.97.0"\n'))
+        self.assertEqual(pin(legacy='1.85.0\n'), ('rust-toolchain', '1.85.0'))
+        self.assertEqual(pin(legacy='[toolchain]\nchannel = "beta"\n'), ('rust-toolchain', 'beta'))
+        # rustup uses the legacy file when both exist.
+        self.assertEqual(pin(legacy='1.85.0\n', toml='[toolchain]\nchannel = "1.97.0"\n'),
+                         ('rust-toolchain', '1.85.0'))
+        self.assertEqual(r.toolchain_name('1.97.0-aarch64-unknown-linux-gnu'), '1.97.0')
+        self.assertEqual(r.toolchain_name('nightly-2026-10-01'), 'nightly-2026-10-01')
+
+    def test_up_refuses_a_pinned_toolchain_the_image_lacks_before_launching(self):
+        (self.repo / 'rust-toolchain.toml').write_text('[toolchain]\nchannel = "1.97.0"\n')
+        self.image_toolchains = 'stable 1.96.0'
+        with self.assertRaises(r.Refused) as refused:
+            r.up(self.c, self.state, True, self.repo)
+        message = str(refused.exception)
+        self.assertIn('the x86 image lacks toolchain 1.97.0, which rust-toolchain.toml pins', message)
+        self.assertIn('bootstrap.py apply --admin-profile <admin-profile> --owner fixture --rebake '
+                      '--rust-toolchain 1.96.0 --rust-toolchain 1.97.0', message)
+        self.assertEqual(self.launches, 0)
+        self.assertFalse((self.state / 'session.json').exists())
+
+    def test_up_launches_when_the_image_has_the_toolchain_or_cannot_say(self):
+        (self.repo / 'rust-toolchain.toml').write_text('[toolchain]\nchannel = "1.97.0"\n')
+        for name, tag in [('has it', 'stable 1.97.0'), ('untagged image', None)]:
+            with self.subTest(name):
+                self.image_toolchains = tag
+                state = self.root / ('state-' + name.replace(' ', '-')); state.mkdir()
+                self.items = []
+                self.assertEqual(r.up(self.c, state, True, self.repo)['state'], 'running')
+        (self.repo / 'rust-toolchain.toml').write_text('[toolchain]\nchannel = "stable"\n')
+        self.image_toolchains = 'stable'
+        self.items = []
+        state = self.root / 'state-stable'; state.mkdir()
+        self.assertEqual(r.up(self.c, state, True, self.repo)['state'], 'running')
+        self.assertEqual(self.launches, 3)
 
     def test_missing_and_broken_dependency_stop_setup(self):
         with patch.object(r.shutil, 'which', return_value=None):
@@ -693,6 +752,32 @@ class CLI(unittest.TestCase):
         self.config.chmod(0o644)
         _, checks = self.setup_checks(invoke, self.repo, 2)
         self.assertEqual(checks['config-permissions']['status'], 'fail')
+
+    def test_setup_and_up_refuse_a_pinned_toolchain_the_image_lacks(self):
+        invoke = self.tools(FAKE_IMAGE_TOOLCHAINS='stable')
+        (self.repo / 'rust-toolchain.toml').write_text('[toolchain]\nchannel = "1.97.0"\n')
+        result, checks = self.setup_checks(invoke, self.repo, 2)
+        self.assertEqual(checks['repository']['status'], 'fail')
+        self.assertIn('x86 / small; the x86 image lacks toolchain 1.97.0, which rust-toolchain.toml pins',
+                      checks['repository']['detail'])
+        self.assertEqual(checks['repository']['next'], 'Rebuild the image: bootstrap.py apply --admin-profile '
+                         '<admin-profile> --owner fixture --rebake --rust-toolchain 1.97.0')
+        self.assertTrue(checks['repository']['guide'].endswith('#quick-start-bootstrap'))
+        self.assertTrue(result['next'].startswith('repository: Rebuild the image'))
+        self.assertIn('Not launching', invoke(self.repo, 'up', '--approve-cost', code=2)['error'])
+        aws_state = self.root / 'aws.json'
+        self.assertFalse(aws_state.exists() and json.loads(aws_state.read_text()))
+
+    def test_setup_says_whether_the_pinned_toolchain_was_checked(self):
+        (self.repo / 'rust-toolchain.toml').write_text('[toolchain]\nchannel = "1.97.0"\n')
+        for tag, expected in [('stable 1.97.0', 'x86 / small; the image has toolchain 1.97.0 (rust-toolchain.toml)'),
+                              (None, 'x86 / small; toolchain 1.97.0 (rust-toolchain.toml) not checked: '
+                                     'the image has no remote-build:toolchains tag')]:
+            with self.subTest(tag):
+                invoke = self.tools(**({'FAKE_IMAGE_TOOLCHAINS': tag} if tag else {}))
+                result, checks = self.setup_checks(invoke, self.repo, 0)
+                self.assertTrue(result['ready'])
+                self.assertEqual(checks['repository']['detail'], expected)
 
     def test_setup_blocks_templates_when_authentication_fails(self):
         invoke = self.tools(FAKE_AWS_FAIL='get-caller-identity')

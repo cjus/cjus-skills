@@ -88,7 +88,9 @@ default-VPC subnet whose zone offers every type, and says what apply would build
 3. Builds one image per launch profile: a build machine from Ubuntu 24.04, its host key read
    through `get-console-output`, [`scripts/aws/provision.sh`](../scripts/aws/provision.sh) run over
    SSH, checks that `builder` has Python and no sudo and that `ubuntu` can no longer log in,
-   then the image. The build machine and its temporary key pair are deleted, also on failure.
+   then the image, tagged `remote-build:toolchains` with the toolchains `builder` has (`setup` and
+   `up` read the tag; see [step 11](#step-11-repository-selection)). The build machine and its
+   temporary key pair are deleted, also on failure.
 4. Updates the stack with a launch template per profile and the operator role, whose policy is
    the one in [step 8](#step-8-iam-permissions).
 5. Writes the daily profile to `~/.aws/config`: it assumes the operator role, using your admin
@@ -115,6 +117,8 @@ do instead: `image` is `bake` or `reuse`, `remove_profiles` lists what would go,
 | `stack` | The stack's CloudFormation status after the last deploy, for example `CREATE_COMPLETE` or `UPDATE_COMPLETE` |
 | `launch_profiles.<name>.image` | `built <ami>` when this run made the image, `reused <ami>` when it kept one |
 | `launch_profiles.<name>.launch_version` | The launch template version the private config now pins |
+| `launch_profiles.<name>.toolchains` | What `builder` has on that image, as its `remote-build:toolchains` tag records, or `unknown` for an image made before images were tagged |
+| `bake_toolchains` | What a bake installs: `stable` plus the remembered `--rust-toolchain` list |
 | `removed_profiles`, `retired_images` | Profiles dropped and images deleted by this run (replaced or dropped) |
 | `alerts` | `confirmed`, `pending` (confirm the email), `none` (no `--alert-email`) or `unknown` (the subscription could not be read) |
 | `janitor_test` | `passed`, `already passed`, `skipped`, `failed` or `login failed` |
@@ -137,7 +141,7 @@ only changes what you asked for. Re-runs need only `--admin-profile` and `--owne
 | Add an architecture | the existing `--image` values plus the new one | Only the new one |
 | Drop a profile | `--image` without it (its image is deleted) | No |
 | Update the toolchain or OS packages | `--rebake` | Yes |
-| Preinstall a pinned Rust toolchain | `--rebake --rust-toolchain 1.85.0` | Yes |
+| Preinstall a pinned Rust toolchain | `--rebake --rust-toolchain 1.85.0` (name every extra toolchain to keep: the list replaces the last one) | Yes |
 | Use your own provisioning script | `--rebake --provision-script ./my-provision.sh` | Yes |
 | Retry a janitor test that failed | `--retest-janitor` | No |
 | Debug a failed image build | `--keep-on-failure`, then SSH in as `ubuntu`; the next apply removes it | Yes |
@@ -385,7 +389,8 @@ the unprivileged `builder` user, installs Rust with rustfmt, clippy, cargo-deny 
 non-interactive SSH `PATH`, and prepares the image for how the client launches workers. Copy and
 change it for another toolchain (see [Make it yours](#make-it-yours)); keep its last two sections.
 Set `RUST_TOOLCHAINS` to preinstall the toolchains your projects pin in `rust-toolchain.toml`:
-workers never download toolchains.
+workers never download toolchains. Then tag the image with what `builder` has (below), so `setup`
+and `up` can refuse a repository whose pinned toolchain the image lacks.
 
 Run it on the build machine, then check the result as `builder`:
 
@@ -402,14 +407,19 @@ Compiling cargo-deny and mdbook takes several minutes on a small machine.
 
 **Check:** the five versions print, and the last line says `builder has no sudo: good`.
 
-Then stop the machine, turn it into an image, and clean up:
+Then record `builder`'s toolchains (host triples dropped, for example `1.85.0 stable`), stop the
+machine, turn it into an image tagged with them, and clean up:
 
 ```sh
+TOOLCHAINS=$(rbssh builder@"$BUILD_IP" 'rustup toolchain list' | awk '{print $1}' \
+  | sed -E 's/-(x86_64|aarch64)-unknown-linux-gnu$//' | sort | tr '\n' ' ' | sed 's/ $//')
 aws ec2 stop-instances --instance-ids "$BUILD" --profile "$ADMIN" --region "$REGION"
 aws ec2 wait instance-stopped --instance-ids "$BUILD" --profile "$ADMIN" --region "$REGION"
 AMI=$(aws ec2 create-image --instance-id "$BUILD" --name "remote-build-$ARCH-$(date +%Y%m%d)" \
   --query ImageId --output text --profile "$ADMIN" --region "$REGION")
 aws ec2 wait image-available --image-ids "$AMI" --profile "$ADMIN" --region "$REGION"   # repeat if it times out
+aws ec2 create-tags --resources "$AMI" --profile "$ADMIN" --region "$REGION" \
+  --tags "[{\"Key\": \"remote-build:toolchains\", \"Value\": \"$TOOLCHAINS\"}]"
 aws ec2 terminate-instances --instance-ids "$BUILD" --profile "$ADMIN" --region "$REGION"
 aws ec2 delete-key-pair --key-name remote-build-image-build --profile "$ADMIN" --region "$REGION"
 echo "AMI=$AMI"
@@ -710,6 +720,16 @@ one of its approved types:
 printf '%s\n' '{ "version": 1, "launch_profile": "x86", "instance_type": "<approved-type>" }' > .remote-build.json
 git add .remote-build.json
 ```
+
+If the repository pins a toolchain (`rust-toolchain` or `rust-toolchain.toml` at its Git root),
+`setup` compares it with the image's `remote-build:toolchains` tag, and `up` refuses to launch
+when the image lacks it: workers never download a toolchain, so every `cargo` call would fail.
+The `repository` check then names the rebuild, for example
+`bootstrap.py apply --admin-profile <admin-profile> --owner <owner> --rebake --rust-toolchain 1.97.0`,
+keeping the image's other extra toolchains. A `stable` pin matches any image. An image without the
+tag (made before bootstrap tagged images, or by hand without the tag) is not checked; `setup`
+says so, and a `--rebake` or the tag from step 6 enables the check. Only the Git root's file is
+read, and only its channel: components and targets beyond the image's are not checked.
 
 **Check:** `setup` from that repository reports `"ready": true`.
 

@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 import tempfile
 import types
@@ -50,6 +51,8 @@ class FakeCloud:
         self.console_reads = 0
         self.subscriptions = {}  # topic: [subscription]; email ones stay pending until confirmed
         self.sns_readable = True
+        self.toolchains = {}  # host: the extra toolchains its provisioning installed
+        self.no_rustup = False
 
     def next_id(self, prefix):
         self.counter += 1
@@ -119,7 +122,15 @@ class FakeCloud:
             if self.fail_provision:
                 return 1, b'apt output\n', b'E: provisioning broke\n'
             self.provisioned.add(host)
+            extra = next(t for t in shlex.split(command) if t.startswith('RUST_TOOLCHAINS='))[len('RUST_TOOLCHAINS='):]
+            self.toolchains[host] = extra.split()
             return 0, b'provisioned\n', b''
+        if command == 'rustup toolchain list':
+            if not done or user != 'builder' or self.no_rustup:
+                return 127, b'', b'bash: rustup: command not found\n'
+            lines = ['stable-x86_64-unknown-linux-gnu (default)'] + [
+                t + '-x86_64-unknown-linux-gnu' for t in self.toolchains[host]]
+            return 0, ('\n'.join(lines) + '\n').encode(), b''
         if command == 'python3 --version':  # a worker booted from the image
             return (0, b'Python 3.12.3\n', b'') if done and user == 'builder' else (255, b'', b'denied')
         if command.startswith('python3 -c'):
@@ -233,18 +244,20 @@ class FakeCloud:
         return {'KeyPairs': [{'KeyName': k} for k in sorted(self.key_pairs) if k.startswith(prefix)]}
 
     def op_describe_images(self, args, profile):
+        def shown(image):  # tags as AWS returns them
+            return dict(image, Tags=[{'Key': k, 'Value': v} for k, v in image['Tags'].items()])
         if '--image-ids' in args:
             ami = self.arg(args, '--image-ids')
             if ami.startswith('ami-base'):
                 return {'Images': [{'ImageId': ami, 'RootDeviceName': '/dev/sda1'}]}
-            return {'Images': [self.images[ami]]} if ami in self.images else fail('InvalidAMIID.NotFound')
+            return {'Images': [shown(self.images[ami])]} if ami in self.images else fail('InvalidAMIID.NotFound')
         f = self.filters(args)
         found = list(self.images.values())
         if 'image-id' in f:
             found = [i for i in found if i['ImageId'] in f['image-id']]
         if 'tag:remote-build:bake' in f:
             found = [i for i in found if i['Tags'].get('remote-build:bake') in f['tag:remote-build:bake']]
-        return {'Images': found}
+        return {'Images': [shown(i) for i in found]}
 
     def op_create_image(self, args, profile):
         ami = self.next_id('ami')
@@ -555,6 +568,30 @@ class Bootstrap(unittest.TestCase):
     def test_without_an_alert_email_the_summary_says_so_and_reads_no_subscription(self):
         self.assertTrue(self.apply()['alerts'].startswith('none: pass --alert-email'))
         self.assertNotIn('list-subscriptions-by-topic', {op for _, _, op in self.cloud.ops})
+
+    def test_images_are_tagged_with_the_toolchains_builder_has(self):
+        result = self.apply('--rust-toolchain', '1.97.0')
+        amis = self.state_amis()
+        for name in ('arm', 'x86'):
+            self.assertEqual(self.cloud.images[amis[name]]['Tags']['remote-build:toolchains'], '1.97.0 stable')
+            self.assertEqual(result['launch_profiles'][name]['toolchains'], ['1.97.0', 'stable'])
+        self.assertEqual(result['bake_toolchains'], ['stable', '1.97.0'])
+        # The client reads the tag back the way setup and up do.
+        config = rb.parse_config(self.config)
+        self.assertEqual(rb.template(dict(config, **config['launch_profiles']['arm']))['toolchains'], ['1.97.0', 'stable'])
+        # A plain re-run remembers the list; a new one replaces it, so 1.97.0 can be dropped.
+        self.assertEqual(self.main('plan')['bake_toolchains'], ['stable', '1.97.0'])
+        self.assertEqual(self.main('plan', '--rust-toolchain', '1.98.0')['bake_toolchains'], ['stable', '1.98.0'])
+        result = self.apply('--rebake', '--rust-toolchain', '1.98.0')
+        self.assertEqual(result['launch_profiles']['arm']['toolchains'], ['1.98.0', 'stable'])
+        self.assertEqual(self.cloud.images[self.state_amis()['arm']]['Tags']['remote-build:toolchains'], '1.98.0 stable')
+
+    def test_an_image_without_rustup_is_not_tagged(self):
+        self.cloud.no_rustup = True
+        result = self.apply()
+        self.assertTrue(all('remote-build:toolchains' not in i['Tags'] for i in self.cloud.images.values()))
+        self.assertTrue(result['launch_profiles']['arm']['toolchains'].startswith('unknown: the image has no'))
+        self.assertEqual(result['janitor_test'], 'passed')
 
     def test_rerun_reuses_images_and_follows_a_new_address(self):
         self.apply()

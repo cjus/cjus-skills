@@ -192,7 +192,63 @@ def template(c):
     for b in mappings.values():
         require('Ebs' not in b or b['Ebs'].get('DeleteOnTermination') is True,
                 'Every EBS volume must explicitly delete on termination')
-    return {'image': t['ImageId'], 'storage': 'delete-on-termination'}
+    tags = {x.get('Key'): x.get('Value') for x in images[0].get('Tags', [])}
+    listed = tags.get(TOOLCHAIN_TAG)
+    return {'image': t['ImageId'], 'storage': 'delete-on-termination',
+            'toolchains': None if listed is None else [toolchain_name(n) for n in listed.split()]}
+
+
+# Workers never download a toolchain (worker.py sets RUSTUP_AUTO_INSTALL=0), so a repository that
+# pins one needs it on the image. bootstrap tags each image it bakes with what `builder` has; an
+# image without the tag (older or hand-built) is not checked.
+TOOLCHAIN_TAG = 'remote-build:toolchains'
+TOOLCHAIN_FILES = ('rust-toolchain', 'rust-toolchain.toml')  # rustup prefers the first if both exist
+HOST_SUFFIX = re.compile(r'-(?:x86_64|aarch64|i686|armv7)-[a-z0-9_]+-[a-z0-9_]+(?:-[a-z0-9_]+)?$')
+
+
+def toolchain_name(name):
+    """A toolchain as rustup lists it or a toolchain file names it, without the host triple:
+    1.97.0-x86_64-unknown-linux-gnu and 1.97.0 are the same toolchain to compare."""
+    return HOST_SUFFIX.sub('', name.strip())
+
+
+def pinned_toolchain(root):
+    """The channel the Git root's toolchain file pins, as (file, channel), or None when there is
+    no file, it names a custom toolchain by path, or it names no channel (rustup's default)."""
+    for name in TOOLCHAIN_FILES:
+        path = root / name
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 65536:
+            continue
+        text = path.read_text(errors='replace')
+        if name == 'rust-toolchain' and '[toolchain]' not in text:
+            # The legacy form: the whole file is the channel.
+            lines = [l.strip() for l in text.splitlines() if l.strip() and not l.lstrip().startswith('#')]
+            return (name, toolchain_name(lines[0])) if len(lines) == 1 and named(lines[0]) else None
+        table, channel = False, None
+        for line in text.splitlines():
+            line = line.split('#', 1)[0].strip()
+            if line.startswith('['):
+                table = line == '[toolchain]'
+            elif table and re.match(r'path\s*=', line):
+                return None
+            elif table:
+                found = re.fullmatch(r'channel\s*=\s*(["\'])([^"\']+)\1', line)
+                channel = found.group(2) if found else channel
+        return (name, toolchain_name(channel)) if channel and named(channel) else None
+    return None
+
+
+def missing_toolchain(profile, owner, info, root):
+    """(problem, fix) when a worker from this image can't build this repository's pinned
+    toolchain; None when it can, nothing is pinned, or the image's toolchains are unknown. The fix
+    rebuilds the image and keeps the extra toolchains it already has."""
+    pin = pinned_toolchain(root) if root is not None else None
+    if pin is None or not info or info.get('toolchains') is None or pin[1] in info['toolchains']:
+        return None
+    keep = [t for t in info['toolchains'] if t not in ('stable', pin[1])] + [pin[1]]
+    return ('the %s image lacks toolchain %s, which %s pins, and workers never download one' % (profile, pin[1], pin[0]),
+            'bootstrap.py apply --admin-profile <admin-profile> --owner %s --rebake %s'
+            % (owner, ' '.join('--rust-toolchain ' + t for t in keep)))
 
 
 def owned(c, s):
@@ -213,7 +269,7 @@ CHANGED = ('Configuration changed during a session: restore ' + PROJECT_FILE +
            ' and this launch profile to recover or tear down')
 
 
-def up(c, state, approve):
+def up(c, state, approve, root=None):
     path = state / 'session.json'
     if path.exists():
         s = load(path)
@@ -225,7 +281,8 @@ def up(c, state, approve):
                 'launch_profile': c['launch_profile'], 'instance_type': c['instance_type']}
     require(approve, 'Paid launch requires --approve-cost after explicit user authorization')
     account = identity(c)
-    template(c)
+    gap = missing_toolchain(c['launch_profile'], c['owner'], template(c), root)
+    require(gap is None, gap and 'Not launching: %s. Rebuild the image first: %s' % gap)
     active = instances(c, 'Name=tag:remote-build:owner,Values=' + c['owner'],
                        'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
     projects = [{t['Key']: t['Value'] for t in i.get('Tags', [])}.get('remote-build:project') for i in active]
@@ -537,6 +594,7 @@ def setup_report(config_path, state, project):
             add('aws-auth', 'fail', 'Profile ' + c['profile'] + ' could not authenticate in ' + c['region'],
                 'Log in with your usual flow (for example aws sso login --profile ' + c['profile'] +
                 '), then check: aws sts get-caller-identity --profile ' + c['profile'], 'step-1-aws-cli-profile')
+        images = {}
         for name in sorted(c['launch_profiles']):
             check = 'launch-profile:' + name
             if not authenticated:
@@ -544,6 +602,7 @@ def setup_report(config_path, state, project):
                 continue
             try:
                 info = template(dict(c, **c['launch_profiles'][name]))
+                images[name] = info
                 add(check, 'ok', 'Pinned template version; AMI ' + info['image'] + '; storage deletes on termination')
             except Refused as e:
                 add(check, 'fail', str(e), 'Check the template, its pinned version and its AMI in ' + c['region'],
@@ -586,7 +645,20 @@ def setup_report(config_path, state, project):
         else:
             try:
                 chosen = selection(c, project)
-                add('repository', 'ok', chosen['launch_profile'] + ' / ' + chosen['instance_type'])
+                choice = chosen['launch_profile'] + ' / ' + chosen['instance_type']
+                info = images.get(chosen['launch_profile'])
+                gap = missing_toolchain(chosen['launch_profile'], c['owner'], info, project)
+                pin = pinned_toolchain(project)
+                if gap:
+                    add('repository', 'fail', choice + '; ' + gap[0], 'Rebuild the image: ' + gap[1],
+                        'quick-start-bootstrap')
+                elif pin and info and info['toolchains'] is None:
+                    add('repository', 'ok', choice + '; toolchain %s (%s) not checked: the image has no %s tag'
+                        % (pin[1], pin[0], TOOLCHAIN_TAG))
+                elif pin and info:
+                    add('repository', 'ok', choice + '; the image has toolchain %s (%s)' % (pin[1], pin[0]))
+                else:
+                    add('repository', 'ok', choice)
             except Refused as e:
                 add('repository', 'fail', str(e), 'Choose a defined profile and one of its types (' + choices + ')',
                     'step-11-repository-selection')
@@ -664,7 +736,7 @@ def main():
                 # the per-project and max_workers discovery checks must not race each other.
                 with open(a.state / 'launch.lock', 'a') as launch:
                     fcntl.flock(launch, fcntl.LOCK_EX)
-                    result = up(e, state, a.approve_cost)
+                    result = up(e, state, a.approve_cost, root)
             elif a.action == 'snapshot': result = snapshot(root, state, e['max_snapshot_bytes'])
             elif a.action == 'run': result = run(e, state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload)
             elif a.action == 'status': result = status(e, state, a.job)
