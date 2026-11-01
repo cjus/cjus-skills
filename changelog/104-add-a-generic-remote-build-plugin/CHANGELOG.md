@@ -26,3 +26,10 @@ Issue: https://github.com/cjus/cjus-skills/issues/104
   retain immutable per-job source/results and remove stale source before execution.
 - Add race, real offline Rust cache reuse/invalidation, concurrent-job isolation and
   failed-then-successful same-instance regressions. Builds never terminate the worker.
+
+2026-11-01 UTC — close review
+
+- Independent delta review approved the source-boundary and Rust-session repairs.
+- Make the real Rust fixture portable to hosted rustup launchers; cover default and explicit
+  RUSTUP_HOME without installing or downloading a toolchain.
+- Refresh plan status and close summary; retain both review outcomes as evidence.

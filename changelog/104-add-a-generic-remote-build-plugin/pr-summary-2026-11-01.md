@@ -89,3 +89,21 @@ Rust fixture builds offline, proves a second build is Fresh, recompiles changed 
 checks toolchain-identity cache invalidation. Session serialization prevents concurrent cache
 writes and stale files are removed. A failed build followed by a successful job leaves the
 same instance running until an explicit down command. PR close/merge does not trigger teardown.
+
+## Close gate record
+
+- Summary refreshed; merge conflict gate reports MERGEABLE against origin/main.
+- Migration drift is not applicable; lint/typecheck/test/build commands are unconfigured.
+  The plugin's local regression suites, strict manifest validation and citation checks passed.
+- Initial review REQUEST_CHANGES halted close; the repaired delta review is APPROVE in
+  pr-review-2026-11-01-r2.md. No GitHub approving review was submitted.
+- PLAN status and CHANGELOG timestamps were refreshed. PR title and sole resolved issue link
+  were verified against the exact open implementation ticket. COMMITMSG covers housekeeping.
+- Continuity entries and assertions auditing are disabled by explicit repository configuration.
+- Deferred triage: four optional product extensions (retained EBS caches, binary artifact
+  downloads, other providers and MCP) are DROP, not scheduled follow-up issues. No specific
+  implementation occasion was requested. Independent janitor provisioning and live smoke
+  validation are documented operator setup prerequisites, outside this no-live-cloud task;
+  neither is an undisclosed code defect or an additional ticket. Review deferred block: none.
+- Final pushed-commit CI will be verified before reporting the close complete; no stale result
+  from an earlier commit substitutes for that gate. No merge or release tag is performed.

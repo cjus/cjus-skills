@@ -16,10 +16,12 @@ The objective is fixed for this branch; live cloud provisioning is outside autho
 - [x] Add offline tests and CI.
 - [x] Complete local validation and privacy review.
 - [x] Publish draft PR #105 and inspect initial CI.
-- [ ] Verify CI after pinning an available Python 3.9 runner.
+- [x] Verify CI after pinning an available Python 3.9 runner.
+- [x] Repair internal review findings and verify warm agent-owned Rust sessions.
+- [x] Complete independent delta review (APPROVE).
 
-## Deferred
+## Deferred triage
 
-Retained EBS caches, binary artifact download, additional providers and MCP are outside v1.
-Independent janitor deployment and a separately approved live smoke test belong to operator
-setup; no live infrastructure changes are made by this implementation.
+No scheduled follow-up work. Optional extensions were dropped from this branch, with rationale
+recorded in the PR summary. Operator infrastructure and separately authorized live validation
+remain documented setup prerequisites; no live infrastructure changes were made.
