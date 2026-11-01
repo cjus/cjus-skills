@@ -347,7 +347,23 @@ def deploy(admin, paths, name, template, owner):
                              '--capabilities', 'CAPABILITY_NAMED_IAM', '--no-fail-on-empty-changeset',
                              '--tags', 'remote-build:bootstrap=' + owner, timeout=3600)
     require(code == 0, 'Stack deploy failed: ' + (failure_reasons(admin, name) or tail(err)))
-    return stack_status(admin, name)[1]
+    return stack_status(admin, name)
+
+
+def alert_state(admin, topic, email):
+    """Whether janitor alarms reach anyone. AWS keeps an email subscription pending until its
+    owner follows the link in the confirmation email, and sends nothing to it until then."""
+    if not email:
+        return 'none: pass --alert-email to be told when the janitor fails or stops'
+    code, out, _ = admin.raw('sns', 'list-subscriptions-by-topic', '--topic-arn', topic)
+    if code != 0:
+        return 'unknown: could not read the subscription; check that %s confirmed the email AWS sent' % email
+    mine = [s for s in json.loads(out).get('Subscriptions', [])
+            if s.get('Protocol') == 'email' and s.get('Endpoint', '').lower() == email.lower()]
+    # A pending subscription's ARN is the literal PendingConfirmation; a confirmed one is a real ARN.
+    if any(s.get('SubscriptionArn', '').startswith('arn:') for s in mine):
+        return 'confirmed: alarms reach ' + email
+    return 'pending: confirm the subscription email AWS sent to ' + email
 
 
 # ---------------------------------------------------------------- the worker image
@@ -745,14 +761,29 @@ def prepare(a):
             'janitor_test': 'already passed' if tested else ('skipped' if a.skip_janitor_test else 'will run')}
 
 
+def network_of(p):
+    return {'vpc': p['vpc'], 'subnet': p['subnet'], 'ssh_from': p['cidr'], 'address': 'public' if p['public'] else 'private'}
+
+
 def summary_of(p):
+    """What apply would do, from the read-only plan."""
     return {'region': p['region'], 'stack': p['stack'] + ' (' + (p['stack_status'] or 'will be created') + ')',
-            'network': {'vpc': p['vpc'], 'subnet': p['subnet'], 'ssh_from': p['cidr'],
-                        'address': 'public' if p['public'] else 'private'},
+            'network': network_of(p),
             'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
                                             'image': 'bake' if x['name'] in p['bake'] else 'reuse'}
                                 for x in p['profiles']},
             'remove_profiles': p['remove'], 'active_workers': p['active_workers'], 'janitor_test': p['janitor_test']}
+
+
+def applied(p, status, state, built, retired):
+    """What apply did and the state it left, unlike summary_of, which is the plan made before."""
+    return {'region': p['region'], 'stack': '%s (%s)' % (p['stack'], status), 'network': network_of(p),
+            'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
+                                            'image': ('built ' if x['name'] in p['bake'] else 'reused ') +
+                                            state['profiles'][x['name']]['ami'],
+                                            'launch_version': built[x['name']]['launch_version']}
+                                for x in p['profiles']},
+            'removed_profiles': p['remove'], 'retired_images': retired, 'active_workers': p['active_workers']}
 
 
 def plan(a):
@@ -827,7 +858,7 @@ def apply(a):
                     if x['name'] in state['profiles'] and x['name'] not in missing else x for x in p['profiles']]
         return render(owner, p['cidr'], p['vpc'], p['subnet'], profiles, state['alert_email'], p['public'])
 
-    outputs = deploy(admin, paths, p['stack'], stack_template(), owner)
+    status, outputs = deploy(admin, paths, p['stack'], stack_template(), owner)
     retired = [state['profiles'].pop(name)['ami'] for name in p['remove']]
     opts = {'public': p['public'], 'disk_gb': a.disk_gb, 'toolchains': state['toolchains'],
             'provision': provision, 'keep_on_failure': a.keep_on_failure}
@@ -845,7 +876,7 @@ def apply(a):
         state['profiles'][x['name']]['types'] = x['types']
     save_state(paths, state)
     if p['bake']:
-        outputs = deploy(admin, paths, p['stack'], stack_template(), owner)
+        status, outputs = deploy(admin, paths, p['stack'], stack_template(), owner)
     for ami in retired:
         say('Removing the replaced image ' + ami)
         retire_image(admin, ami)
@@ -876,11 +907,10 @@ def apply(a):
         if passed:
             write_config(dict(p, previous=load_json(paths['config'])), a, built, True)
     report = rb.setup_report(paths['config'], paths['state_root'], None)
-    result = summary_of(p)
+    result = applied(p, status, state, built, retired)
     result.update(janitor_test=janitor, policy_checks=checks, config=rb.shown(paths['config']),
                   daily_profile=a.daily_profile,
-                  alerts=('confirm the subscription email AWS sent to ' + state['alert_email']) if state['alert_email']
-                  else 'no alert email: pass --alert-email to be told when the janitor fails or stops',
+                  alerts=alert_state(admin, outputs['AlertTopicArn'], state['alert_email']),
                   setup={e['check']: e['status'] for e in report['checks']},
                   next='In each repository, commit .remote-build.json naming a launch profile and one of its types, '
                        'for example {"version": 1, "launch_profile": "%s", "instance_type": "%s"}'

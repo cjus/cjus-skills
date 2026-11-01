@@ -48,6 +48,8 @@ class FakeCloud:
         self.termination_reason = 'Client.UserInitiatedShutdown'
         self.snapshot_busy = set()
         self.console_reads = 0
+        self.subscriptions = {}  # topic: [subscription]; email ones stay pending until confirmed
+        self.sns_readable = True
 
     def next_id(self, prefix):
         self.counter += 1
@@ -187,8 +189,26 @@ class FakeCloud:
                 self.lt_versions.pop(self.lt_ids.pop(lid))
         if 'OperatorRole' in template['Resources']:
             outputs['OperatorRoleArn'] = 'arn:aws:iam::111122223333:role/remote-build-operator'
-        self.stacks[name] = {'status': 'UPDATE_COMPLETE', 'outputs': outputs, 'template': template}
+        topic = outputs['AlertTopicArn']
+        email = template['Resources'].get('AlertEmail', {}).get('Properties', {}).get('Endpoint')
+        kept = [s for s in self.subscriptions.get(topic, []) if s['Endpoint'] == email]
+        self.subscriptions[topic] = kept or ([{'Protocol': 'email', 'Endpoint': email,
+                                               'SubscriptionArn': 'PendingConfirmation'}] if email else [])
+        new = name not in self.stacks or self.stacks[name]['status'] == 'REVIEW_IN_PROGRESS'
+        self.stacks[name] = {'status': 'CREATE_COMPLETE' if new else 'UPDATE_COMPLETE', 'outputs': outputs,
+                             'template': template}
         return 0, b'Successfully created/updated stack\n', b''
+
+    def confirm_alert_email(self):
+        for subs in self.subscriptions.values():
+            for s in subs:
+                s['SubscriptionArn'] = 'arn:aws:sns:us-test-1:111122223333:alerts:0b1c'
+
+    # -- SNS
+    def op_list_subscriptions_by_topic(self, args, profile):
+        if not self.sns_readable:
+            return fail('An error occurred (AuthorizationError): not authorized to perform SNS:ListSubscriptionsByTopic')
+        return {'Subscriptions': self.subscriptions.get(self.arg(args, '--topic-arn'), [])}
 
     def op_delete_stack(self, args, profile):
         self.stacks.pop(self.arg(args, '--stack-name'))
@@ -491,6 +511,50 @@ class Bootstrap(unittest.TestCase):
         expected['repository'] = 'blocked'
         self.assertEqual(result['setup'], expected)
         self.assertIn('"launch_profile": "arm"', result['next'])
+
+    def state_amis(self):
+        state = json.loads((self.root / 'state' / 'bootstrap' / 'fixture-builds.json').read_text())
+        return {name: p['ami'] for name, p in state['profiles'].items()}
+
+    def test_the_summary_reports_what_apply_did_not_the_plan(self):
+        result = self.apply('--alert-email', 'ops@example.com')
+        amis = self.state_amis()
+        self.assertEqual(result['stack'], 'remote-build-fixture-builds (UPDATE_COMPLETE)')
+        self.assertEqual({n: p['image'] for n, p in result['launch_profiles'].items()},
+                         {n: 'built ' + amis[n] for n in ('arm', 'x86')})
+        self.assertEqual(result['launch_profiles']['arm']['launch_version'], '1')
+        self.assertEqual((result['removed_profiles'], result['retired_images']), ([], []))
+        self.assertNotIn('remove_profiles', result)
+        self.assertEqual(result['alerts'], 'pending: confirm the subscription email AWS sent to ops@example.com')
+
+        self.cloud.confirm_alert_email()
+        result = self.apply()
+        self.assertEqual({n: p['image'] for n, p in result['launch_profiles'].items()},
+                         {n: 'reused ' + amis[n] for n in ('arm', 'x86')})
+        self.assertEqual(result['alerts'], 'confirmed: alarms reach ops@example.com')
+
+        result = self.apply('--rebake')
+        rebuilt = self.state_amis()
+        self.assertEqual({n: p['image'] for n, p in result['launch_profiles'].items()},
+                         {n: 'built ' + rebuilt[n] for n in ('arm', 'x86')})
+        self.assertEqual(sorted(result['retired_images']), sorted(amis.values()))
+        self.assertEqual(result['launch_profiles']['x86']['launch_version'], '2')
+
+        result = self.main('apply', '--image', 'arm64:c7g.xlarge,c7g.2xlarge')
+        self.assertEqual(result['removed_profiles'], ['x86'])
+        self.assertEqual(result['retired_images'], [rebuilt['x86']])
+        self.assertEqual(list(result['launch_profiles']), ['arm'])
+
+    def test_a_subscription_that_cannot_be_read_is_reported_as_unknown(self):
+        self.cloud.sns_readable = False
+        result = self.apply('--alert-email', 'ops@example.com')
+        self.assertTrue(result['alerts'].startswith(
+            'unknown: could not read the subscription; check that ops@example.com confirmed'), result['alerts'])
+        self.assertEqual(result['janitor_test'], 'passed')
+
+    def test_without_an_alert_email_the_summary_says_so_and_reads_no_subscription(self):
+        self.assertTrue(self.apply()['alerts'].startswith('none: pass --alert-email'))
+        self.assertNotIn('list-subscriptions-by-topic', {op for _, _, op in self.cloud.ops})
 
     def test_rerun_reuses_images_and_follows_a_new_address(self):
         self.apply()
