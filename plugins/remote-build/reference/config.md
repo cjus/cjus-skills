@@ -7,6 +7,9 @@ Configuration has two parts:
 - **Repository selection** (one per repository): `.remote-build.json` at the Git root, naming
   a launch profile and an instance type. Committed with the project.
 
+The [operator guide](operator-guide.md) builds the AWS and SSH pieces this config refers to, and
+its step 10 writes the file.
+
 ## Private operator config
 
 Put `config.json` in `$XDG_CONFIG_HOME/remote-build/`, otherwise

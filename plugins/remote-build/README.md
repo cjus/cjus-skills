@@ -6,6 +6,7 @@ provider.
 
 ## Usage guides
 
+- [Operator guide](reference/operator-guide.md): **start here.** Step-by-step commands to build every AWS and SSH prerequisite, each with a check; `setup` links to its sections.
 - [Complete PR session walkthrough](reference/walkthrough.md): prerequisites, first safe preflight, approved launch, repeated builds, reconnect/results and explicit teardown.
 - [Configuration and complete example](reference/config.md): every field and private storage locations.
 - [AWS prerequisites](reference/aws.md): infrastructure the operator supplies outside the plugin.
@@ -30,8 +31,8 @@ validated. Actual EC2/SSH integration has not yet been validated on live infrast
 The Linux image needs Python 3.9+, the build toolchain on PATH, and trusted SSH access.
 Build tools must already be installed; this plugin does not install them.
 
-Read [configuration](reference/config.md) and [AWS prerequisites](reference/aws.md) before
-setup. An operator supplies pinned launch templates (named launch profiles), network access,
+Run `/remote-build:setup` first: it checks every prerequisite, says what is missing and links
+each gap to the [operator guide](reference/operator-guide.md) step that fixes it. An operator supplies pinned launch templates (named launch profiles), network access,
 SSH identity, verified host keys, and independent expiry cleanup. Setup probes existing auth; it does not grant
 launch authorization. Credentials remain on the local client.
 

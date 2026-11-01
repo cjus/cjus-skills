@@ -2,6 +2,8 @@
 
 The operator provisions the infrastructure separately. This plugin does not create IAM
 credentials, keys, security groups, network rules, launch templates, images or a janitor.
+The [operator guide](operator-guide.md) gives the commands to build each of them; this page
+states the requirements they must meet.
 Use an existing AWS CLI profile with scoped permissions for STS identity, EC2 description,
 RunInstances, launch-time tagging and TerminateInstances. Restrict template, region, instance
 types and owner tags through IAM as appropriate; local config is not an IAM boundary.

@@ -3,6 +3,9 @@
 Treat an unknown outcome as unknown. Do not clear state, switch owner names, weaken SSH
 verification or launch replacements merely to make a command succeed.
 
+For setup problems, run `setup`: every failing check names its next step and links the
+[operator guide](operator-guide.md) section that fixes it.
+
 | Symptom | Meaning and next action |
 |---|---|
 | Missing/broken executable | Install or repair the operator-managed dependency, then rerun setup. The plugin installs nothing. |
