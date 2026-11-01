@@ -4,8 +4,8 @@ Issue: https://github.com/cjus/cjus-skills/issues/104
 
 Local agents can now prepare an immutable source snapshot, submit a durable Linux build/test
 job to an explicitly approved AWS worker, reconnect for its result, and tear down only a
-verified owned instance. The five skills share one Python CLI and contract v1; Codex uses
-that CLI through an explicit plugin path.
+verified owned instance. The five Claude Code skills share one Python CLI and contract v1, resolving bundled resources
+through the installed plugin root.
 
 ## Validation
 
@@ -46,9 +46,9 @@ write(path, s)
 The public interface submits a reviewed archive rather than resynchronizing a changing tree:
 
 ```sh
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" snapshot .
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" status --job <job-id>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot .
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job <job-id>
 ```
 
 `plugins/remote-build/scripts/worker.py` launches a detached supervisor, preserves each job's source/result identity while serializing a warm session workspace and Cargo cache and records bounded output plus command status. The five `skills/`

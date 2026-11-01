@@ -12,7 +12,7 @@ The objective is fixed for this branch; live cloud provisioning is outside autho
 
 - [x] Inspect repository plugin, marketplace and PR conventions.
 - [x] Implement versioned lifecycle, immutable snapshots and durable worker jobs.
-- [x] Document config, security, AWS prerequisites and Codex adapter.
+- [x] Document config, security, AWS prerequisites and Claude Code workflow.
 - [x] Add offline tests and CI.
 - [x] Complete local validation and privacy review.
 - [x] Publish draft PR #105 and inspect initial CI.

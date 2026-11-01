@@ -1,8 +1,8 @@
 # remote-build
 
 Build and test an exact source snapshot on an ephemeral Linux worker while an agent edits
-locally. Five Claude Code skills guide a shared Python CLI; Codex and other agents can use
-the same CLI directly. AWS EC2 On-Demand is the first provider.
+locally. Five Claude Code skills guide a shared Python CLI. AWS EC2 On-Demand is the first
+provider.
 
 ## Install and requirements
 
@@ -29,20 +29,19 @@ launch authorization. Credentials remain on the local client.
 
 ## Workflow
 
-Resolve the installed plugin root once. In Claude Code it is `CLAUDE_PLUGIN_ROOT`; outside
-Claude Code, point `REMOTE_BUILD_ROOT` at the trusted checkout or installed plugin directory.
-The CLI never depends on the consumer project's working directory.
+Claude Code supplies `CLAUDE_PLUGIN_ROOT` for the installed plugin. All five skills resolve
+the shared CLI through that path, independently of the consumer project's working directory.
 
 ```sh
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" setup
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" setup
 # Only after the user approves this paid worker and its lifetime:
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" up --approve-cost
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" snapshot .
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" up --approve-cost
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot .
 # Review the manifest and eligible source, then use its exact fingerprint:
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" status
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" status --job <job-id>
-python3 "$REMOTE_BUILD_ROOT/scripts/remote_build.py" down
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job <job-id>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" down
 ```
 
 `up` returns while the worker may still be pending. Use `status`; provision trusted host keys
@@ -95,15 +94,6 @@ EBS cache is supported yet. Each job retains its immutable source/result directo
 and Cargo caches remain until teardown. Disk consumption is bounded by the operator's pre-sized volumes, not a
 per-job filesystem quota. Logs are capped at 1 MiB and source archives at 32 MiB. Local
 snapshots and results persist until the operator removes private state after review.
-
-## Codex adapter
-
-Read [contract v1](reference/contract-v1.md), then use the shared script through an explicit
-plugin root. A local Codex skill may wrap the same setup/up/run/status/down commands and
-approval boundaries. Resolve resources relative to that skill's known plugin location;
-do not assume Codex provides `CLAUDE_PLUGIN_ROOT` or that a Claude marketplace installation
-automatically registers Codex skills. No host instructions or settings are installed by this
-plugin. The five skill files provide the workflow text for such an adapter.
 
 ## Verification and limits
 
