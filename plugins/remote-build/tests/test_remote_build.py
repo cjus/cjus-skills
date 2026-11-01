@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import shlex
 from pathlib import Path
@@ -36,7 +37,8 @@ class Lifecycle(unittest.TestCase):
                       ssh_user='builder', known_hosts=str(self.root / 'hosts'),
                       identity_file=str(self.root / 'key'), address_field='PrivateIpAddress',
                       max_snapshot_bytes=1048576, max_jobs=2, cache_retention='session')
-        (self.root / 'hosts').touch(); (self.root / 'key').touch()
+        (self.root / 'hosts').write_text('* ssh-ed25519 AAAAfixture\n'); (self.root / 'key').touch()
+        (self.root / 'key').chmod(0o600)
         self.repo = self.repository('repo', 'x86', 'small')
         self.c = r.selection(self.g, self.repo)
         self.items = []; self.launches = 0; self.terminations = 0; self.fail_launch = False
@@ -547,7 +549,8 @@ class CLI(unittest.TestCase):
         for name in ('aws', 'ssh'):
             tool = binaries / name
             tool.write_text('#!' + sys.executable + '\n' + fixture); tool.chmod(0o755)
-        config = self.root / 'config.json'; config.write_text(json.dumps(self.g))
+        config = self.root / 'config.json'; config.write_text(json.dumps(self.g)); config.chmod(0o600)
+        self.config = config
         home = self.root / 'worker'; home.mkdir(exist_ok=True)
         env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ['PATH'],
                    FAKE_WORKER_HOME=str(home), FAKE_AWS_STATE=str(self.root / 'aws.json'), **extra)
@@ -572,7 +575,9 @@ class CLI(unittest.TestCase):
         (arm / 'main.rs').write_text('fn main() {}')
         (self.repo / 'main.rs').write_text('fn main() {}')
         self.assertEqual(invoke(self.repo, 'setup')['repository'], {'launch_profile': 'x86', 'instance_type': 'small'})
-        self.assertEqual(sorted(invoke(self.root, 'setup')['launch_profiles']), ['arm', 'x86'])
+        outside = {e['check']: e['status'] for e in invoke(self.root, 'setup', code=2)['checks']}
+        self.assertEqual((outside['launch-profile:arm'], outside['launch-profile:x86'], outside['repository']),
+                         ('ok', 'ok', 'blocked'))
         self.assertEqual(invoke(self.repo, 'up', '--approve-cost')['instance_type'], 'small')
         self.assertEqual(invoke(arm, 'up', '--approve-cost')['instance_type'], 'graviton')
         third = self.repository('third', 'x86', 'medium')
@@ -638,6 +643,73 @@ class CLI(unittest.TestCase):
         job = invoke(project, 'run', *command)['job']
         self.assertEqual(self.wait(invoke, project, job)['exit_code'], 0)
         self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
+
+    def setup_checks(self, invoke, project, code):
+        result = invoke(project, 'setup', code=code)
+        return result, {e['check']: e for e in result['checks']}
+
+    def test_setup_without_config_explains_and_links_the_guide(self):
+        invoke = self.tools()
+        self.config.unlink()
+        result, checks = self.setup_checks(invoke, self.repo, 2)
+        self.assertFalse(result['ready'])
+        self.assertEqual(checks['tools']['status'], 'ok')
+        self.assertEqual(checks['config']['status'], 'fail')
+        self.assertIn('No private config at', checks['config']['detail'])
+        self.assertTrue(checks['config']['guide'].endswith('/plugins/remote-build/reference/operator-guide.md#overview'))
+        self.assertTrue(checks['config']['guide'].startswith('https://github.com/cjus/cjus-skills/blob/main/'))
+        for name in ('aws-auth', 'launch-profiles', 'ssh-identity', 'known-hosts', 'janitor', 'repository'):
+            self.assertEqual(checks[name]['status'], 'blocked', name)
+        self.assertTrue(result['next'].startswith('config: Start the operator guide'))
+        self.assertTrue(Path(result['guide']['installed']).is_file())
+        self.assertIn('run setup', invoke(self.repo, 'status', code=2)['error'])
+
+    def test_setup_ready_when_every_prerequisite_passes(self):
+        invoke = self.tools()
+        result, checks = self.setup_checks(invoke, self.repo, 0)
+        self.assertTrue(result['ready'])
+        self.assertEqual({e['status'] for e in result['checks']}, {'ok'})
+        self.assertNotIn('next', result)
+        self.assertEqual(result['repository'], {'launch_profile': 'x86', 'instance_type': 'small'})
+        self.assertEqual(sorted(k for k in checks if k.startswith('launch-profile:')),
+                         ['launch-profile:arm', 'launch-profile:x86'])
+        text = json.dumps(result)
+        self.assertNotIn('fixture-account', text)
+        self.assertNotIn(str(self.root / 'key'), text)
+
+    def test_setup_reports_each_gap_separately(self):
+        invoke = self.tools()
+        (self.root / 'key').chmod(0o644)
+        (self.root / 'hosts').write_text('# no entries yet\n')
+        g = dict(self.g, janitor_confirmed=False)
+        self.config.write_text(json.dumps(g))
+        (self.repo / r.PROJECT_FILE).unlink()
+        result, checks = self.setup_checks(invoke, self.repo, 2)
+        failing = sorted(k for k, e in checks.items() if e['status'] == 'fail')
+        self.assertEqual(failing, ['janitor', 'known-hosts', 'repository', 'ssh-identity'])
+        self.assertIn('arm: graviton; x86: small, medium', checks['repository']['next'])
+        self.assertTrue(checks['janitor']['guide'].endswith('#step-9-expiry-janitor'))
+        self.assertTrue(result['next'].startswith('ssh-identity: '))
+        self.config.chmod(0o644)
+        _, checks = self.setup_checks(invoke, self.repo, 2)
+        self.assertEqual(checks['config-permissions']['status'], 'fail')
+
+    def test_setup_blocks_templates_when_authentication_fails(self):
+        invoke = self.tools(FAKE_AWS_FAIL='get-caller-identity')
+        _, checks = self.setup_checks(invoke, self.repo, 2)
+        self.assertEqual(checks['aws-auth']['status'], 'fail')
+        self.assertIn('aws sso login --profile test', checks['aws-auth']['next'])
+        self.assertEqual(checks['launch-profile:x86']['status'], 'blocked')
+        self.assertEqual(checks['repository']['status'], 'ok')
+
+    def test_setup_guide_anchors_exist(self):
+        guide = (SCRIPTS.parent / 'reference' / 'operator-guide.md').read_text()
+        # GitHub's heading anchors: lowercase, punctuation dropped, spaces to hyphens.
+        anchors = {re.sub(r'[^a-z0-9 -]', '', line.lstrip('#').strip().lower()).replace(' ', '-')
+                   for line in guide.splitlines() if line.startswith('## ')}
+        used = set(re.findall(r"'(overview|step-[0-9]+-[a-z-]+)'", (SCRIPTS / 'remote_build.py').read_text()))
+        self.assertTrue(used)
+        self.assertEqual(used - anchors, set())
 
 if __name__ == '__main__':
     unittest.main()

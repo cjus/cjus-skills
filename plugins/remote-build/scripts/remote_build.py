@@ -69,8 +69,11 @@ def named(value):
     return isinstance(value, str) and re.fullmatch(NAME, value)
 
 
-def configuration(path):
-    """Private operator config (v2): shared settings plus named launch profiles."""
+def parse_config(path):
+    """Private operator config (v2) fields: shared settings plus named launch profiles.
+
+    Leaves the janitor declaration and SSH file checks to configuration(), so setup can
+    report each prerequisite separately."""
     c = load(path)
     require(isinstance(c, dict) and c.get('version') == 2,
             'Config version 2 is required; move the template and types into launch_profiles (reference/config.md)')
@@ -96,9 +99,18 @@ def configuration(path):
     for key, upper in [('ttl_minutes', 480), ('max_snapshot_bytes', 33554432), ('max_jobs', 20),
                        ('max_workers', 10)]:
         require(type(c[key]) is int and 1 <= c[key] <= upper, 'Out-of-bounds ' + key)
-    require(c['janitor_confirmed'] is True, 'Independent expiry janitor must be confirmed by operator')
+    require(type(c['janitor_confirmed']) is bool, 'janitor_confirmed must be true or false')
     require(c['cache_retention'] == 'session', 'Only session-scoped cache retention is supported')
     require(c['address_field'] in ('PublicIpAddress', 'PrivateIpAddress'), 'Unsupported address field')
+    for key in ('known_hosts', 'identity_file'):
+        require(isinstance(c[key], str) and c[key], 'Provide ' + key)
+    return c
+
+
+def configuration(path):
+    """Validated operator config for commands that act: fields, janitor declaration, SSH files."""
+    c = parse_config(path)
+    require(c['janitor_confirmed'] is True, 'Independent expiry janitor must be confirmed by operator')
     for key in ('known_hosts', 'identity_file'):
         p = Path(c[key]).expanduser()
         require(p.is_absolute() and p.is_file() and not p.is_symlink(), 'Provide an existing absolute ' + key)
@@ -429,6 +441,174 @@ def down(c, state):
     return {'state': name, 'session': s['token']}
 
 
+GUIDE = 'reference/operator-guide.md'
+
+
+def guide_links():
+    """Where the operator guide lives: the installed copy, and the repository page."""
+    plugin = Path(__file__).resolve().parent.parent
+    homepage = json.loads((plugin / '.claude-plugin' / 'plugin.json').read_text())['homepage']
+    return plugin / GUIDE, homepage.rstrip('/') + '/blob/main/plugins/' + plugin.name + '/' + GUIDE
+
+
+def shown(path):
+    """A config path for display, with the home directory abbreviated."""
+    try:
+        return '~/' + str(path.resolve().relative_to(Path.home().resolve()))
+    except ValueError:
+        return str(path)
+
+
+def setup_report(config_path, state, project):
+    """Check every prerequisite without changing anything, and say what to do next.
+
+    Never stops at the first problem: each check is ok, fail or blocked (waiting on an earlier
+    one), with a next step and a guide section. Prints no account identity or key paths."""
+    local, web = guide_links()
+    checks = []
+    chosen = None
+
+    def add(name, status, detail, step=None, anchor=None):
+        entry = {'check': name, 'status': status, 'detail': detail}
+        if status != 'ok':
+            entry['next'] = step
+            entry['guide'] = web + '#' + anchor
+        checks.append(entry)
+
+    def blocked(name, anchor, waiting_on):
+        add(name, 'blocked', 'Not checked until ' + waiting_on + ' passes', 'Fix ' + waiting_on + ' first', anchor)
+
+    missing = []
+    for binary, arg in [('aws', '--version'), ('ssh', '-V'), ('git', '--version')]:
+        try:
+            require(shutil.which(binary), 'missing')
+            call([binary, arg])
+        except Refused:
+            missing.append(binary)
+    if missing:
+        add('tools', 'fail', 'Missing or broken: ' + ', '.join(missing),
+            'Install them with your usual package manager (the plugin installs nothing)', 'step-0-local-tools')
+    else:
+        add('tools', 'ok', 'aws, ssh and git run')
+
+    c = None
+    if not config_path.exists():
+        add('config', 'fail', 'No private config at ' + shown(config_path),
+            'Start the operator guide at the beginning: steps 1-9 build the AWS pieces, step 10 writes this file',
+            'overview')
+    else:
+        try:
+            c = parse_config(config_path)
+            add('config', 'ok', 'Fields valid in ' + shown(config_path))
+        except Refused as e:
+            add('config', 'fail', str(e), 'Correct the private config against the template', 'step-10-private-config')
+        except (OSError, ValueError, KeyError, TypeError):
+            add('config', 'fail', 'Not readable as JSON (contents not shown)',
+                'Check the file is valid JSON matching the template', 'step-10-private-config')
+        if config_path.stat().st_mode & 0o077:
+            add('config-permissions', 'fail', 'Readable or writable by other users',
+                'chmod 600 ' + shown(config_path), 'step-10-private-config')
+        else:
+            add('config-permissions', 'ok', 'Private (0600)')
+    plugin = Path(__file__).resolve().parent.parent
+    misplaced = [p for p in (config_path.resolve(), state.resolve()) if p == plugin or plugin in p.parents]
+    if project and project in config_path.resolve().parents:
+        misplaced.append(project)
+    if misplaced:
+        add('config-location', 'fail', 'Config or state lives inside the plugin or a project',
+            'Keep both in the default private locations outside every repository', 'step-10-private-config')
+    else:
+        add('config-location', 'ok', 'Config and state live outside the plugin and project')
+
+    if c is None:
+        for name, anchor in [('aws-auth', 'step-1-aws-cli-profile'), ('launch-profiles', 'step-7-launch-template'),
+                             ('ssh-identity', 'step-2-ssh-identity'), ('known-hosts', 'step-5-host-keys'),
+                             ('janitor', 'step-9-expiry-janitor'), ('repository', 'step-11-repository-selection')]:
+            blocked(name, anchor, 'config')
+    else:
+        authenticated = False
+        try:
+            require(not missing, 'tools missing')
+            identity(c)
+            authenticated = True
+            add('aws-auth', 'ok', 'Profile ' + c['profile'] + ' authenticates in ' + c['region'])
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            add('aws-auth', 'fail', 'Profile ' + c['profile'] + ' could not authenticate in ' + c['region'],
+                'Log in with your usual flow (for example aws sso login --profile ' + c['profile'] +
+                '), then check: aws sts get-caller-identity --profile ' + c['profile'], 'step-1-aws-cli-profile')
+        for name in sorted(c['launch_profiles']):
+            check = 'launch-profile:' + name
+            if not authenticated:
+                blocked(check, 'step-7-launch-template', 'aws-auth')
+                continue
+            try:
+                info = template(dict(c, **c['launch_profiles'][name]))
+                add(check, 'ok', 'Pinned template version; AMI ' + info['image'] + '; storage deletes on termination')
+            except Refused as e:
+                add(check, 'fail', str(e), 'Check the template, its pinned version and its AMI in ' + c['region'],
+                    'step-7-launch-template')
+            except (OSError, ValueError, KeyError, TypeError):
+                add(check, 'fail', 'Unexpected template data (not shown)',
+                    'Inspect the template version privately', 'step-7-launch-template')
+        key = Path(c['identity_file']).expanduser()
+        if not (key.is_absolute() and key.is_file() and not key.is_symlink()):
+            add('ssh-identity', 'fail', 'identity_file is not an existing absolute regular file',
+                'Create the key as described, or fix the path in the private config', 'step-2-ssh-identity')
+        elif key.stat().st_mode & 0o077:
+            add('ssh-identity', 'fail', 'identity_file is readable by other users; ssh will refuse it',
+                'chmod 600 the identity file', 'step-2-ssh-identity')
+        else:
+            add('ssh-identity', 'ok', 'Private identity file present')
+        hosts = Path(c['known_hosts']).expanduser()
+        entries = []
+        if hosts.is_absolute() and hosts.is_file() and not hosts.is_symlink():
+            entries = [l for l in hosts.read_text(errors='replace').splitlines() if l.strip() and not l.startswith('#')]
+        if entries:
+            add('known-hosts', 'ok', '%d host key entr%s' % (len(entries), 'y' if len(entries) == 1 else 'ies'))
+        else:
+            add('known-hosts', 'fail', 'known_hosts is missing or has no entries',
+                'Add the worker image host key read through the AWS console-output channel', 'step-5-host-keys')
+        if c['janitor_confirmed'] is True:
+            add('janitor', 'ok', 'Declared by the operator; the CLI cannot verify it')
+        else:
+            add('janitor', 'fail', 'janitor_confirmed is false',
+                'Deploy and test the expiry janitor, then set janitor_confirmed to true', 'step-9-expiry-janitor')
+        choices = '; '.join(n + ': ' + ', '.join(lp['instance_types']) for n, lp in sorted(c['launch_profiles'].items()))
+        if project is None:
+            add('repository', 'blocked', 'Not inside a Git checkout',
+                'Run setup from the repository, or pass --project', 'step-11-repository-selection')
+        elif not (project / PROJECT_FILE).exists():
+            add('repository', 'fail', 'No ' + PROJECT_FILE + ' at the Git root',
+                'Commit one choosing a launch profile and one of its types (' + choices + ')',
+                'step-11-repository-selection')
+        else:
+            try:
+                chosen = selection(c, project)
+                add('repository', 'ok', chosen['launch_profile'] + ' / ' + chosen['instance_type'])
+            except Refused as e:
+                add('repository', 'fail', str(e), 'Choose a defined profile and one of its types (' + choices + ')',
+                    'step-11-repository-selection')
+            except (OSError, ValueError, KeyError, TypeError):
+                add('repository', 'fail', PROJECT_FILE + ' is not valid JSON',
+                    'Rewrite it as {"version": 1, "launch_profile": ..., "instance_type": ...}',
+                    'step-11-repository-selection')
+
+    ready = all(entry['status'] == 'ok' for entry in checks)
+    result = {'version': 2, 'provider': 'aws', 'ready': ready, 'checks': checks,
+              'guide': {'web': web, 'installed': str(local)},
+              'expiry': 'operator-attested independent janitor; not verified by CLI',
+              'storage': 'session-only: worker disks and caches are deleted on termination'}
+    if c is not None:
+        result['limits'] = {k: c[k] for k in ('ttl_minutes', 'max_jobs', 'max_workers', 'max_snapshot_bytes', 'cache_retention')}
+    if chosen is not None:
+        result['repository'] = {k: chosen[k] for k in ('launch_profile', 'instance_type')}
+    if not ready:
+        # Point at the first failure; a blocked check only waits on one.
+        first = next((e for e in checks if e['status'] == 'fail'), None) or next(e for e in checks if e['status'] != 'ok')
+        result['next'] = first['check'] + ': ' + first['next'] + ' (' + first['guide'] + ')'
+    return result
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--config', type=Path, default=Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'remote-build/config.json')
@@ -444,7 +624,20 @@ def main():
     sub.add_parser('down')
     a = p.parse_args()
     os.umask(0o077)
+    if a.action == 'setup':
+        try:
+            root = project_root(a.project)
+        except Refused:
+            root = None
+        try:
+            result = setup_report(a.config, a.state, root)
+        except (Refused, OSError, ValueError, KeyError, TypeError):
+            print(json.dumps({'error': 'Setup could not complete its checks; inspect privately'}), file=sys.stderr)
+            return 2
+        print(json.dumps(result, sort_keys=True))
+        return 0 if result['ready'] else 2
     try:
+        require(a.config.exists(), 'No private config at ' + shown(a.config) + '; run setup for a guided checklist')
         c = configuration(a.config)
         plugin = Path(__file__).resolve().parent.parent
         for path in (a.state.resolve(), a.config.resolve()):
@@ -452,21 +645,8 @@ def main():
         try:
             root = project_root(getattr(a, 'checkout', None) or a.project)
         except Refused:
-            require(a.action == 'setup', 'Run inside a Git checkout or pass --project')
-            root = None
-        require(root is None or root not in a.config.resolve().parents, 'Config must live outside the source project')
-        if a.action == 'setup':
-            prerequisites()
-            identity(c)
-            chosen = selection(c, root) if root and (root / PROJECT_FILE).exists() else None
-            names = [chosen['launch_profile']] if chosen else sorted(c['launch_profiles'])
-            result = {'version': 2, 'provider': 'aws',
-                      'launch_profiles': {n: template(dict(c, **c['launch_profiles'][n])) for n in names},
-                      'repository': chosen and {k: chosen[k] for k in ('launch_profile', 'instance_type')},
-                      'limits': {k: c[k] for k in ('ttl_minutes', 'max_jobs', 'max_workers', 'max_snapshot_bytes', 'cache_retention')},
-                      'expiry': 'operator-attested independent janitor; not verified by CLI'}
-            print(json.dumps(result, sort_keys=True))
-            return 0
+            raise Refused('Run inside a Git checkout or pass --project')
+        require(root not in a.config.resolve().parents, 'Config must live outside the source project')
         e = selection(c, root)
         # One session, lock and snapshot store per checkout, so repositories never block each other.
         state = a.state / 'projects' / e['project']

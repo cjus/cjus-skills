@@ -31,7 +31,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" --help
 AWS CLI v2 is required. A present-but-broken executable is a failure, not a reason to skip its
 check. Installation of these dependencies is outside the plugin; setup does not install them.
 
-Before proceeding, an operator must supply:
+Before proceeding, an operator must supply the following. The [operator guide](operator-guide.md)
+builds each piece step by step, and `setup` reports which are still missing:
 
 - An existing authenticated AWS profile and region.
 - One or more launch profiles: each a pinned Linux AMI/launch template with Python, the build toolchain, an unprivileged SSH

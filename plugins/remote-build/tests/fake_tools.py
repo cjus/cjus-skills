@@ -28,6 +28,8 @@ state = Path(os.environ['FAKE_AWS_STATE'])
 items = json.loads(state.read_text()) if state.exists() else []
 service = args[args.index('--no-cli-pager') + 1]
 op = args[args.index('--no-cli-pager') + 2]
+if os.environ.get('FAKE_AWS_FAIL') == op:
+    sys.exit(254)
 if op == 'get-caller-identity':
     result = {'Account': 'fixture-account'}
 elif op == 'describe-launch-template-versions':
