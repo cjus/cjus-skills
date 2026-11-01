@@ -7,8 +7,10 @@ Configuration has two parts:
 - **Repository selection** (one per repository): `.remote-build.json` at the Git root, naming
   a launch profile and an instance type. Committed with the project.
 
-The [operator guide](operator-guide.md) builds the AWS and SSH pieces this config refers to, and
-its step 10 writes the file.
+`scripts/bootstrap.py apply` builds the AWS and SSH pieces this config refers to and writes the
+file, keeping your edits to `max_workers`, `ttl_minutes`, `max_jobs` and `max_snapshot_bytes` when
+it runs again ([quick start](operator-guide.md#quick-start-bootstrap)). Done by hand, the operator
+guide's step 10 writes it.
 
 ## Private operator config
 

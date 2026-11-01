@@ -26,6 +26,16 @@ are redacted rather than echoing provider stderr. Logs, command arguments, manif
 identity and SSH paths may exist in private state; do not commit them, attach them to a PR,
 or include them in examples. This repository's tests use synthetic fixtures only.
 
+Bootstrap is an operator tool. It runs with an admin profile, so the setup skill lets Claude run
+only its read-only `plan` and `template`; the operator runs `apply` and `teardown`. The daily
+profile it writes assumes a role whose trust policy names the account, so it works from any
+admin principal (IAM user or Identity Center) without an access key; the role's own policy is
+the narrow one. The daily profile limits what remote-build's commands can do. It is not a
+sandbox against an agent that can read the admin profile on the same machine, which no local
+profile arrangement is. Bootstrap reads build-machine host keys only through
+`get-console-output`, connects with strict checking against them, and fails rather than trust a
+first connection.
+
 The independent janitor, IAM restrictions, verified host identity and trusted image are
 operator responsibilities. Losing state, using a second client, disabling the janitor or
 changing owner names can defeat local bounds, including `max_workers`. Restore/reconcile original state rather than

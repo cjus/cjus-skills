@@ -31,8 +31,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" --help
 AWS CLI v2 is required. A present-but-broken executable is a failure, not a reason to skip its
 check. Installation of these dependencies is outside the plugin; setup does not install them.
 
-Before proceeding, an operator must supply the following. The [operator guide](operator-guide.md)
-builds each piece step by step, and `setup` reports which are still missing:
+Before proceeding, an operator must supply the following. The operator guide's
+[bootstrap](operator-guide.md#quick-start-bootstrap) builds all of it in one command (or its
+manual steps build each piece by hand), and `setup` reports which are still missing:
 
 - An existing authenticated AWS profile and region.
 - One or more launch profiles: each a pinned Linux AMI/launch template with Python, the build toolchain, an unprivileged SSH
@@ -45,8 +46,9 @@ builds each piece step by step, and `setup` reports which are still missing:
 
 See [type selection](config.md#selecting-or-changing-the-ec2-type) for explicit instance type,
 allowlist, CPU/RAM/architecture, region and between-session change requirements. See
-[AWS prerequisites](aws.md) for the precise restrictions. The plugin does not create any
-of that infrastructure, issue credentials, open network ports, or install the janitor.
+[AWS prerequisites](aws.md) for the precise restrictions. The plugin's session commands do not
+create any of that infrastructure, issue credentials, open network ports, or install the janitor;
+only the operator does, by running bootstrap or the manual steps.
 
 ## 2. Configure, inspect, and prepare a safe plan
 

@@ -495,8 +495,8 @@ def setup_report(config_path, state, project):
     c = None
     if not config_path.exists():
         add('config', 'fail', 'No private config at ' + shown(config_path),
-            'Start the operator guide at the beginning: steps 1-9 build the AWS pieces, step 10 writes this file',
-            'overview')
+            'Run scripts/bootstrap.py apply with an admin AWS profile: it builds every AWS piece and writes this '
+            'file (or follow the manual steps 1-10)', 'quick-start-bootstrap')
     else:
         try:
             c = parse_config(config_path)
@@ -573,7 +573,8 @@ def setup_report(config_path, state, project):
             add('janitor', 'ok', 'Declared by the operator; the CLI cannot verify it')
         else:
             add('janitor', 'fail', 'janitor_confirmed is false',
-                'Deploy and test the expiry janitor, then set janitor_confirmed to true', 'step-9-expiry-janitor')
+                'Re-run bootstrap.py apply (it tests the janitor and sets this), or deploy and test the janitor '
+            'yourself, then set janitor_confirmed to true', 'step-9-expiry-janitor')
         choices = '; '.join(n + ': ' + ', '.join(lp['instance_types']) for n, lp in sorted(c['launch_profiles'].items()))
         if project is None:
             add('repository', 'blocked', 'Not inside a Git checkout',

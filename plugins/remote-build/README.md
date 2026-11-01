@@ -6,10 +6,10 @@ provider.
 
 ## Usage guides
 
-- [Operator guide](reference/operator-guide.md): **start here.** Step-by-step commands to build every AWS and SSH prerequisite, each with a check; `setup` links to its sections.
+- [Operator guide](reference/operator-guide.md): **start here.** One bootstrap command that builds and tests every AWS and SSH prerequisite, the same steps by hand, and how to adapt the plugin; `setup` links to its sections.
 - [Complete PR session walkthrough](reference/walkthrough.md): prerequisites, first safe preflight, approved launch, repeated builds, reconnect/results and explicit teardown.
 - [Configuration and complete example](reference/config.md): every field and private storage locations.
-- [AWS prerequisites](reference/aws.md): infrastructure the operator supplies outside the plugin.
+- [AWS prerequisites](reference/aws.md): what the infrastructure must provide, however it was built.
 - [Troubleshooting and validation boundaries](reference/troubleshooting.md): exact failure/recovery behavior, costs and mocked versus live coverage.
 - [Contract v2](reference/contract-v2.md) and [security](reference/security.md): source identity, session ownership and trust boundaries.
 
@@ -32,9 +32,39 @@ The Linux image needs Python 3.9+, the build toolchain on PATH, and trusted SSH 
 Build tools must already be installed; this plugin does not install them.
 
 Run `/remote-build:setup` first: it checks every prerequisite, says what is missing and links
-each gap to the [operator guide](reference/operator-guide.md) step that fixes it. An operator supplies pinned launch templates (named launch profiles), network access,
-SSH identity, verified host keys, and independent expiry cleanup. Setup probes existing auth; it does not grant
-launch authorization. Credentials remain on the local client.
+each gap to the [operator guide](reference/operator-guide.md) section that fixes it. Setup probes
+existing auth; it does not grant launch authorization. Credentials remain on the local client.
+
+## Set up AWS in one command
+
+An operator whose AWS profile can create EC2, IAM, Lambda and CloudFormation resources runs
+bootstrap once (in Claude Code, prefix it with `!`):
+
+```sh
+python3 "<plugin>/scripts/bootstrap.py" plan  --admin-profile <admin> --owner <you>-builds --image arm64:c7g.xlarge,c7g.2xlarge
+python3 "<plugin>/scripts/bootstrap.py" apply --admin-profile <admin> --owner <you>-builds --image arm64:c7g.xlarge,c7g.2xlarge --alert-email <you@example.com>
+```
+
+`apply` deploys one CloudFormation stack (security group, launch templates, a narrow operator
+role the daily profile assumes, the expiry janitor and its alarms), bakes a worker image per
+architecture with a verified host key, writes the daily profile, known-hosts file and private
+config, proves the policy with dry runs, and tests the janitor before declaring it. It takes
+20-40 minutes, is safe to re-run, and `teardown` removes everything it made. Claude runs only
+the read-only `plan`; the operator runs `apply` and `teardown`. The
+[quick start](reference/operator-guide.md#quick-start-bootstrap) has the details; the manual
+steps remain for anyone who wants to build each piece by hand.
+
+## Make it yours
+
+This plugin is a starting point. Its defaults suit one operator building Rust on public-address
+Ubuntu workers, and you will probably want to change some of it. Most needs are a bootstrap flag
+or a config field: your own provisioning script for other toolchains, bigger disks, private
+networking, other instance types, different limits. When you want the plugin itself to behave
+differently (say, let Claude run bootstrap, use another OS, keep caches, or change what each
+skill allows), make a custom version: fork this marketplace or copy the plugin into your own,
+give it a new name, and install that. Don't edit the installed copy, because updates replace it.
+The operator guide's [Make it yours](reference/operator-guide.md#make-it-yours) says where each
+behaviour lives and which guarantees the client relies on.
 
 ## Per-repository selection
 
@@ -123,9 +153,12 @@ snapshots and results persist until the operator removes private state after rev
 
 ```sh
 python3 plugins/remote-build/tests/test_remote_build.py -v
+python3 plugins/remote-build/tests/test_bootstrap.py -v
 ```
 
-Tests use fake AWS/SSH tools and run the worker locally in temporary directories. A dependency-free
+Bootstrap's tests drive apply, re-runs, rebakes, failure cleanup and teardown against a simulated
+cloud that evaluates the deployed operator policy and runs the janitor between polls.
+The client's tests use fake AWS/SSH tools and run the worker locally in temporary directories. A dependency-free
 Rust fixture uses an already installed toolchain to verify warm builds without downloads; CI
 requires that toolchain and local runs explicitly skip the Rust test if none exists. No AWS
 credentials, paid instances, or real SSH connections are used. CI runs Python 3.9 and a

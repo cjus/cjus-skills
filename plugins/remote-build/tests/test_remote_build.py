@@ -656,11 +656,11 @@ class CLI(unittest.TestCase):
         self.assertEqual(checks['tools']['status'], 'ok')
         self.assertEqual(checks['config']['status'], 'fail')
         self.assertIn('No private config at', checks['config']['detail'])
-        self.assertTrue(checks['config']['guide'].endswith('/plugins/remote-build/reference/operator-guide.md#overview'))
+        self.assertTrue(checks['config']['guide'].endswith('/plugins/remote-build/reference/operator-guide.md#quick-start-bootstrap'))
         self.assertTrue(checks['config']['guide'].startswith('https://github.com/cjus/cjus-skills/blob/main/'))
         for name in ('aws-auth', 'launch-profiles', 'ssh-identity', 'known-hosts', 'janitor', 'repository'):
             self.assertEqual(checks[name]['status'], 'blocked', name)
-        self.assertTrue(result['next'].startswith('config: Start the operator guide'))
+        self.assertTrue(result['next'].startswith('config: Run scripts/bootstrap.py apply'))
         self.assertTrue(Path(result['guide']['installed']).is_file())
         self.assertIn('run setup', invoke(self.repo, 'status', code=2)['error'])
 
@@ -720,7 +720,7 @@ class CLI(unittest.TestCase):
         # GitHub's heading anchors: lowercase, punctuation dropped, spaces to hyphens.
         anchors = {re.sub(r'[^a-z0-9 -]', '', line.lstrip('#').strip().lower()).replace(' ', '-')
                    for line in guide.splitlines() if line.startswith('## ')}
-        used = set(re.findall(r"'(overview|step-[0-9]+-[a-z-]+)'", (SCRIPTS / 'remote_build.py').read_text()))
+        used = set(re.findall(r"'(overview|quick-start-bootstrap|step-[0-9]+-[a-z-]+)'", (SCRIPTS / 'remote_build.py').read_text()))
         self.assertTrue(used)
         self.assertEqual(used - anchors, set())
 

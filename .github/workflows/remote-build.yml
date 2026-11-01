@@ -38,3 +38,4 @@ jobs:
             py=$(command -v python)
           fi
           "$py" plugins/remote-build/tests/test_remote_build.py -v
+          "$py" plugins/remote-build/tests/test_bootstrap.py -v
