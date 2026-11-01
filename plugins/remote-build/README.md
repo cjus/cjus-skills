@@ -57,15 +57,28 @@ Commands are argv arrays: shell operators such as `&&` are literal arguments. Ru
 jobs, or deliberately invoke a trusted script already in the snapshot. Logs and result
 metadata are retrieved; arbitrary binary artifact download is outside v1.
 
-For Rust, use a baked Linux image with `cargo` and `rustc` on PATH, and a pinned
-`rust-toolchain.toml` plus `Cargo.lock`. The image must expose actual toolchain executables
-independently of a user home; rustup shims that depend on a preexisting home will not work
-with the isolated job home. Start with `cargo test --locked` or
-`cargo build --locked`. A fresh job has its own Cargo home and target directory. Private
-registries/dependencies requiring credentials are unsupported. Public dependency downloads
-require preconfigured outbound access. This runs whole remote Cargo jobs, not sccache's
-distributed compiler protocol. macOS frameworks, signing, packaging, final native builds,
-and UI validation still run locally.
+For Rust, use a baked Linux image with `cargo`, `rustc` and optionally rustup on PATH.
+Preinstall the toolchains named by `rust-toolchain.toml` or a worker-side `RUSTUP_TOOLCHAIN`;
+automatic rustup installation is disabled. The worker preserves its installed `RUSTUP_HOME`
+while using a fresh session Cargo home that contains no operator registry credentials.
+Start with `cargo test --locked` or `cargo build --locked`. Private registries/dependencies
+requiring credentials are unsupported; public dependency downloads need preconfigured outbound
+access. This runs whole remote Cargo jobs, not sccache's distributed compiler protocol.
+macOS frameworks, signing, packaging, final native builds and UI validation still run locally.
+
+**The local PR agent owns the session across builds.** Call `up` once, then repeat snapshot,
+run and status while editing. Neither a successful nor a failed job terminates the instance.
+Only an explicit `down` action releases it; closing or merging a PR does not call `down`.
+The agent should collect results and explicitly release its worker when finished. Independent
+maximum-lifetime cleanup is a safety backstop for abandoned sessions, not per-build teardown.
+
+Jobs retain separate immutable source archives/results, but execute one at a time under a
+session lock against a stable working directory. Unchanged source files keep their mtimes;
+changed and deleted files are synchronized before execution. Cargo home and target directories
+are reused only while that lock is held. A toolchain identity change resets both caches.
+Result metadata reports `cache_key` and `cache_reused`; Cargo still decides which crates need
+rebuilding. Build scripts must declare their inputs correctly; use an explicit `cargo clean`
+job when an opaque external input changes. Caches never cross session termination.
 
 ## Cost and retention
 
@@ -78,8 +91,8 @@ workers, even when the laptop is offline. CLI setup validates the operator's dec
 not the janitor's installation or effectiveness.
 
 V1 uses **session-only retention**: all EBS volumes must delete on termination; no retained
-EBS cache is supported yet. Each job has isolated source and build directories, retained
-until teardown. Disk consumption is bounded by the operator's pre-sized volumes, not a
+EBS cache is supported yet. Each job retains its immutable source/result directory, and the serialized build workspace
+and Cargo caches remain until teardown. Disk consumption is bounded by the operator's pre-sized volumes, not a
 per-job filesystem quota. Logs are capped at 1 MiB and source archives at 32 MiB. Local
 snapshots and results persist until the operator removes private state after review.
 
@@ -98,7 +111,9 @@ plugin. The five skill files provide the workflow text for such an adapter.
 python3 plugins/remote-build/tests/test_remote_build.py -v
 ```
 
-Tests use a fake AWS boundary and run the worker locally in temporary directories; no AWS
+Tests use fake AWS/SSH tools and run the worker locally in temporary directories. A dependency-free
+Rust fixture uses an already installed toolchain to verify warm builds without downloads; CI
+requires that toolchain and local runs explicitly skip the Rust test if none exists. No AWS
 credentials, paid instances, or real SSH connections are used. CI runs Python 3.9 and a
 current version on macOS and Linux. See [security](reference/security.md) and
 [contract v1](reference/contract-v1.md) for recovery and trust boundaries. A first live smoke

@@ -6,6 +6,10 @@ Use an existing AWS CLI profile with scoped permissions for STS identity, EC2 de
 RunInstances, launch-time tagging and TerminateInstances. Restrict template, region, instance
 types and owner tags through IAM as appropriate; local config is not an IAM boundary.
 
+Rustup images are supported when their required toolchains are preinstalled; the worker keeps
+the original RUSTUP_HOME and disables auto-install. Its session Cargo home does not inherit
+credentials. See [rustup environment variables](https://rust-lang.github.io/rustup/environment-variables.html).
+
 Use a pinned Linux AMI and numeric launch-template version with an unprivileged SSH user,
 Python and the build toolchain. The client rejects template user data, instance profiles,
 Spot options, instance requirements, hibernation and termination protection. It disables

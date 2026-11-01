@@ -16,3 +16,13 @@ Issue: https://github.com/cjus/cjus-skills/issues/104
 - Add offline lifecycle/worker tests and a macOS/Linux Python 3.9/3.14 CI matrix.
 - Pin the Linux Python 3.9 leg to Ubuntu 22.04 after the latest image lacked that interpreter;
   use the asserted macOS system Python 3.9 floor, matching existing CI conventions.
+
+2026-11-01 UTC — pre-merge review repairs
+
+- Close halted on the internal review's source-read race and rustup compatibility finding.
+- Read source through held directory descriptors with no-follow opens and descriptor checks.
+- Preserve preinstalled rustup context without inheriting Cargo credentials or installing tools.
+- Serialize jobs over a stable workspace and toolchain-bound warm session Cargo caches;
+  retain immutable per-job source/results and remove stale source before execution.
+- Add race, real offline Rust cache reuse/invalidation, concurrent-job isolation and
+  failed-then-successful same-instance regressions. Builds never terminate the worker.

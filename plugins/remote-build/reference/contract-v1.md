@@ -26,7 +26,8 @@ extended only with an explicit contract version change.
 Git root only. Dirty tracked content and nonignored untracked files are included; tracked
 deletions disappear. Ignore rules do not override the mandatory exclusions in
 `remote_build.py:excluded`. Symlinks, hard links, submodules, special files and control-character
-paths are rejected. The snapshot is sorted, has normalized tar metadata and preserves only
+paths are rejected. Reads hold directory descriptors and use no-follow opens for every path
+component, so a replacement symlink cannot redirect a read outside the project. The snapshot is sorted, has normalized tar metadata and preserves only
 executable/nonexecutable mode. Its fingerprint hashes the bytes actually transferred; changes
 after snapshot creation require a new snapshot. This is a snapshot of each file as read,
 not a filesystem-wide atomic transaction: pause concurrent edits when consistency matters.
@@ -35,6 +36,14 @@ Review eligible files before passing `--approve-upload`; exclusions and secret-p
 screening cannot detect arbitrary embedded credentials. The approved object is the saved
 archive, not the current working tree. Each job extracts into a new directory, so deleted
 files cannot survive from a previous run. Worker extraction rejects links and traversal.
+
+## Session ownership
+
+`up` and `down` are separate operations. The local agent working on a PR keeps the same worker
+through repeated edits and tests, including after a failed command. Neither job completion nor
+PR close/merge triggers teardown. The agent explicitly collects results and calls `down` when
+finished. The independent maximum-lifetime janitor remains an abandoned-instance safety
+backstop; an expired session cannot accept more work. A queued job can expire before execution.
 
 ## Recovery
 
@@ -64,7 +73,14 @@ machines. Owner-tag discovery is a check, not an atomic distributed lease. Use a
 and account-side constraints for a hard global count/cost ceiling. Worker processes enforce
 job expiry while alive; neither that timeout nor a tag is independent compute cleanup.
 
-Every job has a separate Cargo home/target directory; no concurrently writable shared cache.
+Every job retains a separate immutable source snapshot and result. Execution is serialized by
+a session lock covering source sync, compiler processes and result recording. The stable
+workspace preserves unchanged file mtimes and removes deleted files; only the locked job may
+write the shared session Cargo home/target. The installed worker Rust toolchain remains
+available through RUSTUP_HOME; auto-install is disabled and Cargo credentials are not inherited.
+Compiler/Cargo version output, explicit toolchain selection and toolchain-file contents bind
+the cache identity. A changed identity clears the cache. Cargo's own fingerprints handle
+source, lockfile, dependency and feature changes; scripts must declare build inputs correctly.
 No cross-session cache or binary-artifact download ships in v1. Results are private JSON files
 under `results/<job-id>.json`, containing at most 1 MiB of log. Remote logs are untrusted data
 and may contain private source; never commit or paste them without review.

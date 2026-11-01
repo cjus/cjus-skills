@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -146,6 +147,38 @@ class Lifecycle(unittest.TestCase):
         (project / 'main.rs').write_text('safe')
         with self.assertRaises(r.Refused): r.snapshot(project, self.state, 1)
 
+    def test_snapshot_rejects_file_swap_at_open(self):
+        project = self.project()
+        outside = self.root / 'outside'; outside.write_text('external data')
+        original = os.open
+        swapped = []
+        def swap(path, flags, *args, **kwargs):
+            if path == 'main.rs' and not swapped:
+                swapped.append(True)
+                (project / 'main.rs').unlink()
+                (project / 'main.rs').symlink_to(outside)
+            return original(path, flags, *args, **kwargs)
+        with patch.object(r.os, 'open', side_effect=swap):
+            with self.assertRaises(r.Refused): r.snapshot(project, self.state, 1048576)
+        self.assertTrue(swapped)
+        self.assertFalse((self.state / 'snapshots').exists())
+
+    def test_snapshot_rejects_directory_swap_at_open(self):
+        project = self.project(); (project / 'src').mkdir()
+        (project / 'src/lib.rs').write_text('safe')
+        outside = self.root / 'outside'; outside.mkdir(); (outside / 'lib.rs').write_text('external')
+        original = os.open
+        swapped = []
+        def swap(path, flags, *args, **kwargs):
+            if path == 'src' and not swapped:
+                swapped.append(True)
+                (project / 'src').rename(project / 'old-src')
+                (project / 'src').symlink_to(outside, target_is_directory=True)
+            return original(path, flags, *args, **kwargs)
+        with patch.object(r.os, 'open', side_effect=swap):
+            with self.assertRaises(r.Refused): r.snapshot(project, self.state, 1048576)
+        self.assertTrue(swapped)
+
     def test_run_persists_job_before_disconnect_and_checks_source(self):
         project = self.project(); snap = r.snapshot(project, self.state, 1048576)['snapshot']
         r.up(self.c, self.state, True)
@@ -208,6 +241,7 @@ class Worker(unittest.TestCase):
         self.source = (SCRIPTS / 'worker.py').read_text()
         self.bootstrap = 'SOURCE=' + repr(self.source) + ';exec(compile(SOURCE,"worker","exec"))'
         self.session = 'a' * 36; self.job = 'b' * 36
+        self.extra_env = {}
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w') as tar:
             member = tarfile.TarInfo('example.txt'); content = b'fixture'; member.size = len(content)
@@ -218,7 +252,7 @@ class Worker(unittest.TestCase):
         payload = dict(session=self.session, job=self.job, **values)
         result = subprocess.run([sys.executable, '-c', self.bootstrap], input=json.dumps(payload).encode(),
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                env=dict(os.environ, HOME=str(self.home)), timeout=5)
+                                env=dict(dict(os.environ, HOME=str(self.home)), **self.extra_env), timeout=5)
         return result.returncode, json.loads(result.stdout)
 
     def test_durable_exit_and_log_after_client_disconnect(self):
@@ -236,6 +270,7 @@ class Worker(unittest.TestCase):
         self.assertEqual(result['snapshot'], r.digest(self.archive))
 
     def test_worker_caps_log_and_stops_at_expiry(self):
+        self.extra_env = {'PATH': ''}  # isolate timeout from optional toolchain probes
         code, _ = self.request(action='run', snapshot=r.digest(self.archive),
             archive=base64.b64encode(self.archive).decode(),
             argv=[sys.executable, '-c', 'import sys,time;sys.stdout.write("x"*1100000);sys.stdout.flush();time.sleep(10)'],
@@ -249,6 +284,86 @@ class Worker(unittest.TestCase):
         self.assertTrue(result['log_truncated'])
         self.assertEqual(len(result['log']), 1048576)
         self.assertNotEqual(result['exit_code'], 0)
+
+    def archive_files(self, files):
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode='w') as tar:
+            for name, text in files.items():
+                data = text.encode(); member = tarfile.TarInfo(name); member.size = len(data)
+                tar.addfile(member, io.BytesIO(data))
+        return archive.getvalue()
+
+    def submit_wait(self, archive, argv):
+        self.job = str(r.uuid.uuid4())
+        code, _ = self.request(action='run', snapshot=r.digest(archive),
+                              archive=base64.b64encode(archive).decode(), argv=argv,
+                              expires=time.time()+30, max_jobs=10)
+        self.assertEqual(code, 0)
+        for _ in range(200):
+            _, result = self.request(action='status')
+            if result['state'] in ('finished', 'failed', 'expired'): return result
+            time.sleep(.05)
+        self.fail('worker did not finish')
+
+    def test_real_rustup_warm_build_and_source_change(self):
+        rustup = shutil.which('rustup')
+        if not rustup:
+            if os.environ.get('CI'): self.fail('CI requires a preinstalled rustup toolchain')
+            self.skipTest('no preinstalled rustup available; no installation attempted')
+        probe = subprocess.run([rustup, 'which', 'rustc'], stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, timeout=10)
+        if probe.returncode:
+            if os.environ.get('CI'): self.fail('CI requires an installed default Rust toolchain')
+            self.skipTest('no installed Rust toolchain; no installation attempted')
+        toolchain = Path(probe.stdout.decode().strip()).parent.parent
+        rusthome = self.home / '.rustup'; (rusthome / 'toolchains').mkdir(parents=True)
+        (rusthome / 'toolchains/fixture').symlink_to(toolchain, target_is_directory=True)
+        (rusthome / 'settings.toml').write_text('version = "12"\ndefault_toolchain = "fixture"\n')
+        binaries = self.home / 'bin'; binaries.mkdir()
+        for name in ('rustup', 'rustc', 'cargo'):
+            (binaries / name).symlink_to(rustup)
+        self.extra_env = {'PATH': str(binaries)+os.pathsep+os.environ['PATH'],
+                          'RUSTUP_HOME': str(rusthome), 'RUSTUP_TOOLCHAIN': 'fixture',
+                          'RUSTUP_AUTO_INSTALL': '0'}
+        files = {'Cargo.toml': '[package]\nname="warm_fixture"\nversion="0.1.0"\nedition="2021"\n',
+                 'Cargo.lock': 'version = 3\n[[package]]\nname="warm_fixture"\nversion="0.1.0"\n',
+                 'src/main.rs': 'fn main() { println!("first"); }'}
+        first = self.submit_wait(self.archive_files(files), ['cargo', 'build', '--offline', '--locked', '-v'])
+        self.assertEqual(first['exit_code'], 0, first.get('log'))
+        second = self.submit_wait(self.archive_files(files), ['cargo', 'build', '--offline', '--locked', '-v'])
+        self.assertEqual(second['exit_code'], 0, second.get('log'))
+        self.assertTrue(second['cache_reused'])
+        self.assertIn('Fresh warm_fixture', second['log'])
+        files['src/main.rs'] = 'fn main() { println!("changed"); }'
+        third = self.submit_wait(self.archive_files(files), ['cargo', 'run', '--offline', '--locked'])
+        self.assertEqual(third['exit_code'], 0, third.get('log'))
+        self.assertIn('changed', third['log'])
+        self.assertTrue(third['cache_reused'])
+        files['rust-toolchain.toml'] = '[toolchain]\nchannel="fixture"\n'
+        fourth = self.submit_wait(self.archive_files(files), ['cargo', 'build', '--offline', '--locked', '-v'])
+        self.assertEqual(fourth['exit_code'], 0, fourth.get('log'))
+        self.assertFalse(fourth['cache_reused'])
+        self.assertNotEqual(third['cache_key'], fourth['cache_key'])
+
+    def test_shared_cache_jobs_are_serialized_and_stale_source_removed(self):
+        script = ('import os,time;from pathlib import Path;'
+                  'p=Path(os.environ["CARGO_TARGET_DIR"]);p.mkdir(exist_ok=True);'
+                  'lock=p/"exclusive";f=lock.open("x");time.sleep(.4);f.close();lock.unlink();'
+                  'print(Path("example.txt").read_text())')
+        first = self.job
+        code, _ = self.request(action='run', snapshot=r.digest(self.archive),
+            archive=base64.b64encode(self.archive).decode(), argv=[sys.executable, '-c', script],
+            expires=time.time()+15, max_jobs=5)
+        self.assertEqual(code, 0)
+        second = self.submit_wait(self.archive, [sys.executable, '-c', script])
+        self.assertEqual(second['exit_code'], 0)
+        self.job = first
+        _, result = self.request(action='status'); self.assertEqual(result['exit_code'], 0)
+        changed = self.archive_files({'other.txt': 'new'})
+        third = self.submit_wait(changed, [sys.executable, '-c',
+            'from pathlib import Path;assert not Path("example.txt").exists();print(Path("other.txt").read_text())'])
+        self.assertEqual(third['exit_code'], 0)
+        self.assertEqual(third['log'], 'new\n')
 
     def test_rejects_mismatch_and_archive_traversal(self):
         code, _ = self.request(action='run', snapshot='wrong', archive=base64.b64encode(self.archive).decode(),
@@ -296,6 +411,17 @@ class CLI(unittest.TestCase):
         self.assertEqual(result['exit_code'], 3)
         self.assertEqual(result['snapshot'], snap)
         self.assertIn('offline integration', r.load(self.state / 'results' / (job + '.json'))['log'])
+        self.assertEqual(invoke('status')['state'], 'running')
+        retry = invoke('run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
+                       '-c', 'print("next build")')['job']
+        for _ in range(30):
+            result = invoke('status', '--job', retry)
+            if result['state'] == 'finished': break
+            time.sleep(.05)
+        self.assertEqual(result['exit_code'], 0)
+        self.assertEqual(invoke('status')['state'], 'running')
+        self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
+
         self.assertEqual(invoke('down')['state'], 'termination-requested')
         self.assertEqual(invoke('down')['state'], 'terminated')
         self.assertEqual(invoke('down')['state'], 'absent')

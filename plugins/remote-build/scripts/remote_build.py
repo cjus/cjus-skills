@@ -185,6 +185,48 @@ def excluded(name):
                or p.lower() in ('credentials', 'credentials.json', 'secrets.json') for p in Path(name).parts)
 
 
+def source_file(root_fd, name, limit):
+    """Read relative to held directory descriptors; never follow replacement symlinks."""
+    directory = os.dup(root_fd)
+    try:
+        parts = Path(name).parts
+        for component in parts[:-1]:
+            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, 'rb') as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1,
+                    'Submodules, special files and hard links are unsupported')
+            require(before.st_size <= limit, 'Snapshot exceeds configured byte limit')
+            data = stream.read(limit + 1)
+            after = os.fstat(stream.fileno())
+            fields = ('st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink', 'st_mode')
+            require(all(getattr(before, k) == getattr(after, k) for k in fields) and len(data) == before.st_size,
+                    'Source changed while snapshotting; retry')
+            return data, before.st_mode
+    except FileNotFoundError:
+        return None  # intended deletion, or concurrent deletion; no bytes were uploaded
+    except OSError:
+        raise Refused('Unsafe or unreadable source path; symlinks are unsupported')
+    finally:
+        os.close(directory)
+
+
+def source_root(project):
+    directory = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in project.parts[1:]:
+            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        return directory
+    except BaseException:
+        os.close(directory)
+        raise
+
+
 def snapshot(project, state, limit):
     project = project.resolve()
     require(state.resolve() != project and project not in state.resolve().parents,
@@ -192,9 +234,16 @@ def snapshot(project, state, limit):
     require(call(['git', '-C', str(project), 'rev-parse', '--show-toplevel']).decode().strip() == str(project),
             'Project must be a Git root')
     names = call(['git', '-C', str(project), 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).split(b'\0')
-    entries = []
-    total = 0
     archive = io.BytesIO()
+    root_fd = source_root(project)
+    try:
+        return make_snapshot(names, root_fd, state, limit, archive)
+    finally:
+        os.close(root_fd)
+
+
+def make_snapshot(names, root_fd, state, limit, archive):
+    entries, total = [], 0
     with tarfile.open(fileobj=archive, mode='w') as tar:
         for raw in sorted(set(names) - {b''}):
             name = raw.decode('utf-8')
@@ -202,19 +251,13 @@ def snapshot(project, state, limit):
                     all(ord(x) >= 32 for x in name), 'Unsupported source filename')
             if excluded(name):
                 continue
-            p = project / name
-            require(not any(q.is_symlink() for q in [p] + list(p.parents) if q != project.parent),
-                    'Symlinks are unsupported in snapshots')
-            if not p.exists():  # intended tracked deletion
+            content = source_file(root_fd, name, limit - total)
+            if content is None:
                 continue
-            info = p.stat()
-            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'Submodules, special files and hard links are unsupported')
-            total += info.st_size
-            require(total <= limit, 'Snapshot exceeds configured byte limit')
-            data = p.read_bytes()
-            require(len(data) == info.st_size, 'Source changed while snapshotting; retry')
+            data, file_mode = content
+            total += len(data)
             require(not SECRET.search(data), 'Potential secret in source; review locally and exclude it')
-            mode = 0o755 if info.st_mode & 0o111 else 0o644
+            mode = 0o755 if file_mode & 0o111 else 0o644
             entries.append({'path': name, 'sha256': digest(data), 'mode': mode})
             ti = tarfile.TarInfo(name)
             ti.size, ti.mode = len(data), mode
