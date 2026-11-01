@@ -514,6 +514,12 @@ class Worker(unittest.TestCase):
                                     archive=base64.b64encode(self.archive).decode(), argv=['true'],
                                     expires=time.time()+5, max_jobs=1)
         self.assertEqual((code, result['state']), (0, 'submitted'))
+        # Let the detached job finish before the temporary home is removed.
+        for _ in range(100):
+            _, result = self.request(action='status')
+            if result['state'] == 'finished': break
+            time.sleep(.05)
+        self.assertEqual(result['exit_code'], 0)
 
     def test_rejects_mismatch_and_archive_traversal(self):
         code, _ = self.request(action='run', snapshot='wrong', archive=base64.b64encode(self.archive).decode(),
