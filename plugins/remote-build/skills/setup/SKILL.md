@@ -14,7 +14,11 @@ without exposing credentials or identifiers in committed files. Run:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" setup
 ```
 
-Report missing/broken dependencies and infrastructure requirements. Do not install tools,
+Run it from the repository. If the repository has no `.remote-build.json`, setup checks every
+launch profile; help the user pick a profile and type from the private config and commit
+`{"version": 1, "launch_profile": ..., "instance_type": ...}` at the Git root. Never add a type to
+a profile on the repository's behalf. Report missing/broken dependencies and infrastructure
+requirements. Do not install tools,
 change IAM/network settings or create cloud resources as an implicit repair. A detected
 profile does not authorize spending. Explain that the janitor is operator-attested and
 session-only storage is deleted on termination.

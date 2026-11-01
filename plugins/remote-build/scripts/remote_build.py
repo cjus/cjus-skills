@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""remote-build contract v1. Standard library; never invokes a local shell."""
+"""remote-build contract v2. Standard library; never invokes a local shell."""
 import argparse
 import base64
 import fcntl
@@ -61,22 +61,40 @@ def load(path):
     return json.loads(path.read_text())
 
 
+NAME = r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}'
+PROJECT_FILE = '.remote-build.json'
+
+
+def named(value):
+    return isinstance(value, str) and re.fullmatch(NAME, value)
+
+
 def configuration(path):
+    """Private operator config (v2): shared settings plus named launch profiles."""
     c = load(path)
-    required = {'version', 'provider', 'profile', 'region', 'owner', 'launch_template',
-                'launch_version', 'instance_type', 'allowed_instance_types', 'ttl_minutes',
-                'janitor_confirmed', 'ssh_user', 'known_hosts', 'identity_file',
-                'address_field', 'max_snapshot_bytes', 'max_jobs', 'cache_retention'}
+    require(isinstance(c, dict) and c.get('version') == 2,
+            'Config version 2 is required; move the template and types into launch_profiles (reference/config.md)')
+    required = {'version', 'provider', 'profile', 'region', 'owner', 'launch_profiles',
+                'max_workers', 'ttl_minutes', 'janitor_confirmed', 'ssh_user', 'known_hosts',
+                'identity_file', 'address_field', 'max_snapshot_bytes', 'max_jobs', 'cache_retention'}
     require(set(c) == required, 'Config fields must match reference/config.md exactly')
-    require(c['version'] == 1 and c['provider'] == 'aws', 'Only contract v1 / AWS is supported')
-    for key in ('profile', 'region', 'owner', 'instance_type', 'ssh_user'):
-        require(isinstance(c[key], str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}', c[key]), 'Invalid ' + key)
-    require(re.fullmatch(r'lt-[a-f0-9]+', c['launch_template']), 'Invalid launch template')
-    require(re.fullmatch(r'[1-9][0-9]*', c['launch_version']), 'Pin a numeric launch template version')
-    require(isinstance(c['allowed_instance_types'], list) and c['allowed_instance_types'] and
-            all(isinstance(t, str) for t in c['allowed_instance_types']), 'Provide an instance-type list')
-    require(c['instance_type'] in c['allowed_instance_types'], 'Instance type not approved in config')
-    for key, upper in [('ttl_minutes', 480), ('max_snapshot_bytes', 33554432), ('max_jobs', 20)]:
+    require(c['provider'] == 'aws', 'Only the AWS provider is supported')
+    for key in ('profile', 'region', 'owner', 'ssh_user'):
+        require(named(c[key]), 'Invalid ' + key)
+    profiles = c['launch_profiles']
+    require(isinstance(profiles, dict) and profiles, 'Provide at least one launch profile')
+    for name, lp in profiles.items():
+        require(named(name), 'Invalid launch profile name')
+        require(isinstance(lp, dict) and set(lp) == {'launch_template', 'launch_version', 'instance_types'},
+                'Launch profile fields must match reference/config.md exactly')
+        require(isinstance(lp['launch_template'], str) and re.fullmatch(r'lt-[a-f0-9]+', lp['launch_template']),
+                'Invalid launch template in profile ' + name)
+        require(isinstance(lp['launch_version'], str) and re.fullmatch(r'[1-9][0-9]*', lp['launch_version']),
+                'Pin a numeric launch template version in profile ' + name)
+        require(isinstance(lp['instance_types'], list) and lp['instance_types'] and
+                all(named(t) for t in lp['instance_types']), 'Provide an instance-type list in profile ' + name)
+    for key, upper in [('ttl_minutes', 480), ('max_snapshot_bytes', 33554432), ('max_jobs', 20),
+                       ('max_workers', 10)]:
         require(type(c[key]) is int and 1 <= c[key] <= upper, 'Out-of-bounds ' + key)
     require(c['janitor_confirmed'] is True, 'Independent expiry janitor must be confirmed by operator')
     require(c['cache_retention'] == 'session', 'Only session-scoped cache retention is supported')
@@ -86,6 +104,42 @@ def configuration(path):
         require(p.is_absolute() and p.is_file() and not p.is_symlink(), 'Provide an existing absolute ' + key)
         c[key] = str(p)
     return c
+
+
+def project_root(path):
+    return Path(call(['git', '-C', str(path), 'rev-parse', '--show-toplevel']).decode().strip()).resolve()
+
+
+def project_key(root):
+    """Stable per-checkout identity: state directory name and the remote-build:project tag."""
+    return digest(str(root).encode())[:16]
+
+
+def selection(c, root):
+    """Merge the repository's committed choice into the operator config.
+
+    The repository file only selects among operator-approved launch profiles and instance
+    types; it never authorizes a launch (that still needs --approve-cost)."""
+    path = root / PROJECT_FILE
+    require(path.is_file() and not path.is_symlink(),
+            'Add ' + PROJECT_FILE + ' at the Git root naming launch_profile and instance_type')
+    p = load(path)
+    require(isinstance(p, dict) and set(p) == {'version', 'launch_profile', 'instance_type'} and
+            type(p['version']) is int and p['version'] == 1,
+            PROJECT_FILE + ' must contain exactly version 1, launch_profile and instance_type')
+    require(p['launch_profile'] in c['launch_profiles'], 'Repository launch_profile is not defined in the private config')
+    lp = c['launch_profiles'][p['launch_profile']]
+    require(p['instance_type'] in lp['instance_types'], 'Repository instance_type is not approved for its launch profile')
+    e = {k: v for k, v in c.items() if k != 'launch_profiles'}
+    e.update(launch_profile=p['launch_profile'], launch_template=lp['launch_template'],
+             launch_version=lp['launch_version'], instance_type=p['instance_type'], project=project_key(root))
+    return e
+
+
+def binding(e):
+    # A session binds only what identifies its own worker; editing another repository's
+    # profile, or the cross-project max_workers cap, leaves running sessions usable.
+    return digest(canonical({k: v for k, v in e.items() if k != 'max_workers'}))
 
 
 def prerequisites():
@@ -136,35 +190,42 @@ def owned(c, s):
     i = found[0]
     tags = {t['Key']: t['Value'] for t in i.get('Tags', [])}
     require(tags.get('remote-build:owner') == c['owner'] and
+            tags.get('remote-build:project') == c['project'] and
             tags.get('remote-build:session') == s['token'] and
             i.get('ClientToken') == s['token'], 'Ownership mismatch; refusing resource access')
     require(not s.get('instance') or s['instance'] == i['InstanceId'], 'Instance identity changed')
     return i
 
 
+CHANGED = ('Configuration changed during a session: restore ' + PROJECT_FILE +
+           ' and this launch profile to recover or tear down')
+
+
 def up(c, state, approve):
     path = state / 'session.json'
     if path.exists():
         s = load(path)
-        require(s['config'] == digest(canonical(c)), 'Configuration changed during a session')
+        require(s['config'] == binding(c), CHANGED)
         i = owned(c, s)
         s['instance'] = i['InstanceId']
         write(path, s)
-        return {'session': s['token'], 'state': i['State']['Name'], 'expires': s['expires']}
+        return {'session': s['token'], 'state': i['State']['Name'], 'expires': s['expires'],
+                'launch_profile': c['launch_profile'], 'instance_type': c['instance_type']}
     require(approve, 'Paid launch requires --approve-cost after explicit user authorization')
     account = identity(c)
     template(c)
     active = instances(c, 'Name=tag:remote-build:owner,Values=' + c['owner'],
                        'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
-    require(not active, 'Owner already has a worker; recover it before launching')
+    projects = [{t['Key']: t['Value'] for t in i.get('Tags', [])}.get('remote-build:project') for i in active]
+    require(c['project'] not in projects, 'This repository already has a worker; recover it before launching')
+    require(len(active) < c['max_workers'], 'Owner is at max_workers; release another worker first')
     token = str(uuid.uuid4())
     expires = int(time.time()) + c['ttl_minutes'] * 60
-    s = {'token': token, 'account': account, 'expires': expires,
-         'config': digest(canonical(c)), 'jobs': {}}
+    s = {'token': token, 'account': account, 'expires': expires, 'config': binding(c), 'jobs': {}}
     # Persist before the request. Never resubmit a possibly successful creation, even after timeout.
     write(path, s)
     tags = [{'Key': 'remote-build:' + k, 'Value': v} for k, v in
-            [('owner', c['owner']), ('session', token), ('expires', str(expires))]]
+            [('owner', c['owner']), ('project', c['project']), ('session', token), ('expires', str(expires))]]
     aws(c, 'ec2', 'run-instances', '--launch-template',
         json.dumps({'LaunchTemplateId': c['launch_template'], 'Version': c['launch_version']}),
         '--instance-type', c['instance_type'], '--count', '1', '--client-token', token,
@@ -302,7 +363,7 @@ def remote(c, s, i, payload):
 def session(c, state):
     require((state / 'session.json').exists(), 'No session; use up')
     s = load(state / 'session.json')
-    require(s['config'] == digest(canonical(c)), 'Configuration changed during a session')
+    require(s['config'] == binding(c), CHANGED)
     return s, owned(c, s)
 
 
@@ -372,10 +433,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--config', type=Path, default=Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'remote-build/config.json')
     p.add_argument('--state', type=Path, default=Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'remote-build')
+    p.add_argument('--project', type=Path, default=Path('.'),
+                   help='Checkout whose ' + PROJECT_FILE + ' selects the worker (default: current directory)')
     sub = p.add_subparsers(dest='action', required=True)
     sub.add_parser('setup')
     u = sub.add_parser('up'); u.add_argument('--approve-cost', action='store_true')
-    sn = sub.add_parser('snapshot'); sn.add_argument('project', type=Path)
+    sn = sub.add_parser('snapshot'); sn.add_argument('checkout', type=Path, nargs='?', help='Same as --project')
     r = sub.add_parser('run'); r.add_argument('--snapshot', required=True); r.add_argument('--approve-upload', action='store_true'); r.add_argument('command', nargs=argparse.REMAINDER)
     st = sub.add_parser('status'); st.add_argument('--job')
     sub.add_parser('down')
@@ -386,26 +449,44 @@ def main():
         plugin = Path(__file__).resolve().parent.parent
         for path in (a.state.resolve(), a.config.resolve()):
             require(path != plugin and plugin not in path.parents, 'Config and state must live outside the plugin')
-        if a.action == 'snapshot':
-            require(a.project.resolve() not in a.config.resolve().parents,
-                    'Config must live outside the source project')
-        a.state.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with open(a.state / 'lock', 'a') as lock:
+        try:
+            root = project_root(getattr(a, 'checkout', None) or a.project)
+        except Refused:
+            require(a.action == 'setup', 'Run inside a Git checkout or pass --project')
+            root = None
+        require(root is None or root not in a.config.resolve().parents, 'Config must live outside the source project')
+        if a.action == 'setup':
+            prerequisites()
+            identity(c)
+            chosen = selection(c, root) if root and (root / PROJECT_FILE).exists() else None
+            names = [chosen['launch_profile']] if chosen else sorted(c['launch_profiles'])
+            result = {'version': 2, 'provider': 'aws',
+                      'launch_profiles': {n: template(dict(c, **c['launch_profiles'][n])) for n in names},
+                      'repository': chosen and {k: chosen[k] for k in ('launch_profile', 'instance_type')},
+                      'limits': {k: c[k] for k in ('ttl_minutes', 'max_jobs', 'max_workers', 'max_snapshot_bytes', 'cache_retention')},
+                      'expiry': 'operator-attested independent janitor; not verified by CLI'}
+            print(json.dumps(result, sort_keys=True))
+            return 0
+        e = selection(c, root)
+        # One session, lock and snapshot store per checkout, so repositories never block each other.
+        state = a.state / 'projects' / e['project']
+        state.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with open(state / 'lock', 'a') as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                raise Refused('Another local remote-build command holds the state lock')
+                raise Refused('Another local remote-build command holds this project\'s state lock')
             prerequisites()
-            if a.action == 'setup':
-                identity(c)
-                result = {'version': 1, 'provider': 'aws', 'template': template(c),
-                          'limits': {k: c[k] for k in ('ttl_minutes', 'max_jobs', 'max_snapshot_bytes', 'cache_retention')},
-                          'expiry': 'operator-attested independent janitor; not verified by CLI'}
-            elif a.action == 'up': result = up(c, a.state, a.approve_cost)
-            elif a.action == 'snapshot': result = snapshot(a.project, a.state, c['max_snapshot_bytes'])
-            elif a.action == 'run': result = run(c, a.state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload)
-            elif a.action == 'status': result = status(c, a.state, a.job)
-            else: result = down(c, a.state)
+            if a.action == 'up':
+                # Projects lock separately, so serialize launches across them on this client:
+                # the per-project and max_workers discovery checks must not race each other.
+                with open(a.state / 'launch.lock', 'a') as launch:
+                    fcntl.flock(launch, fcntl.LOCK_EX)
+                    result = up(e, state, a.approve_cost)
+            elif a.action == 'snapshot': result = snapshot(root, state, e['max_snapshot_bytes'])
+            elif a.action == 'run': result = run(e, state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload)
+            elif a.action == 'status': result = status(e, state, a.job)
+            else: result = down(e, state)
             print(json.dumps(result, sort_keys=True))
     except (Refused, OSError, ValueError, KeyError, TypeError) as e:
         message = str(e) if isinstance(e, Refused) else 'Invalid or unavailable local/provider data; inspect privately'
