@@ -176,8 +176,11 @@ def up(c, state, approve):
 EXCLUDED = {'.git', '.env', '.aws', '.ssh', '.azure', '.config', '.kube', '.gnupg', '.npmrc',
             '.pypirc', '.netrc', '.docker', '.cargo', '.claude', '.codex', '.agents', '.mcp.json',
             'target', 'node_modules', '.venv', '__pycache__', 'AGENTS.md', 'CLAUDE.md'}
+# A lone ':' is an assignment (YAML, JSON-ish, Python dicts); '::' is a Rust/C++ path such as
+# Token::Comment(...), never a credential, and must not refuse the whole snapshot.
 SECRET = re.compile(rb'-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:AKIA|ASIA)[A-Z0-9]{16}|'
-                    rb'gh[pousr]_[A-Za-z0-9]{20,}|(?i:api[_-]?key|password|secret|token)\s*[:=]\s*["\']?[^\s"\']{12,}')
+                    rb'gh[pousr]_[A-Za-z0-9]{20,}|'
+                    rb'(?i:api[_-]?key|password|secret|token)\s*(?:=|:(?!:))\s*["\']?[^\s"\']{12,}')
 
 
 def excluded(name):
@@ -332,7 +335,16 @@ def status(c, state, job=None):
         return {'session': s['token'], 'state': i['State']['Name'], 'expires': s['expires'], 'jobs': s['jobs']}
     require(job in s['jobs'], 'Unknown job')
     result = remote(c, s, i, {'action': 'status', 'job': job})
-    require(result.get('job') == job and result.get('snapshot') == s['jobs'][job], 'Job/source mismatch')
+    require(result.get('job') == job, 'Job/source mismatch')
+    if s.get('pending_job') == job and result.get('state') == 'unknown' and result.get('snapshot') is None:
+        # The worker answered under its submission lock and fenced this ID, so the upload never
+        # landed and never will. Release the submission (it used no worker slot); keep the record.
+        write(state / 'results' / (job + '.json'), result)
+        del s['jobs'][job]
+        s.pop('pending_job')
+        write(state / 'session.json', s)
+        return result
+    require(result.get('snapshot') == s['jobs'][job], 'Job/source mismatch')
     # Results remain private local files; never print remote log text as agent instructions.
     write(state / 'results' / (job + '.json'), result)
     if s.get('pending_job') == job:

@@ -147,6 +147,21 @@ class Lifecycle(unittest.TestCase):
         with self.assertRaises(r.Refused): r.snapshot(project, self.state, 1048576)
         (project / 'main.rs').write_text('safe')
         with self.assertRaises(r.Refused): r.snapshot(project, self.state, 1)
+        for assignment in ['password = "hunter2hunter2hunter2"', 'api_key: sk_fixture_abcdefghijkl',
+                           'TOKEN=abcdefghijklmnopqrstuvwx']:
+            (project / 'main.rs').write_text(assignment)
+            with self.subTest(assignment=assignment), self.assertRaises(r.Refused):
+                r.snapshot(project, self.state, 1048576)
+
+    def test_snapshot_accepts_rust_paths_named_like_credentials(self):
+        project = self.project()
+        (project / 'main.rs').write_text(
+            'fn lex(tokens: &mut Vec<Token>, comment: String) {\n'
+            '    tokens.push(Token::Comment(collapse(comment)));\n'
+            '    let key = Secret::from_environment_variable();\n'
+            '    let check = Password ::from_user_supplied_text(input);\n}\n')
+        result = r.snapshot(project, self.state, 1048576)
+        self.assertEqual([e['path'] for e in result['files']], ['main.rs'])
 
     def test_snapshot_rejects_file_swap_at_open(self):
         project = self.project()
@@ -204,6 +219,35 @@ class Lifecycle(unittest.TestCase):
         s = r.load(self.state / 'session.json'); s.pop('pending_job'); s['expires'] = 0
         r.write(self.state / 'session.json', s)
         with self.assertRaises(r.Refused): r.run(self.c, self.state, snap, ['true'], True)
+
+    def test_undelivered_submission_is_released_by_fenced_unknown(self):
+        snap = r.snapshot(self.project(), self.state, 1048576)['snapshot']
+        r.up(self.c, self.state, True)
+        with patch.object(r, 'remote', side_effect=r.Refused('Tool failed: ssh')):
+            with self.assertRaises(r.Refused): r.run(self.c, self.state, snap, ['true'], True)
+        job = r.load(self.state / 'session.json')['pending_job']
+        with self.assertRaises(r.Refused): r.run(self.c, self.state, snap, ['true'], True)
+        unknown = {'job': job, 'state': 'unknown', 'snapshot': None}
+        with patch.object(r, 'remote', return_value=dict(unknown)):
+            self.assertEqual(r.status(self.c, self.state, job), unknown)
+        s = r.load(self.state / 'session.json')
+        self.assertNotIn('pending_job', s); self.assertEqual(s['jobs'], {})
+        self.assertEqual(r.load(self.state / 'results' / (job + '.json')), unknown)
+        with patch.object(r, 'remote', side_effect=lambda c, s, i, p: {'job': p['job'], 'snapshot': p['snapshot'],
+                                                                       'state': 'submitted'}):
+            retry = r.run(self.c, self.state, snap, ['true'], True)
+        self.assertNotEqual(retry['job'], job)
+        self.assertEqual(r.load(self.state / 'session.json')['jobs'], {retry['job']: snap})
+
+    def test_unknown_for_a_delivered_job_still_stops(self):
+        snap = r.snapshot(self.project(), self.state, 1048576)['snapshot']
+        r.up(self.c, self.state, True)
+        with patch.object(r, 'remote', side_effect=lambda c, s, i, p: {'job': p['job'], 'snapshot': p['snapshot'],
+                                                                       'state': 'submitted'}):
+            job = r.run(self.c, self.state, snap, ['true'], True)['job']
+        with patch.object(r, 'remote', return_value={'job': job, 'state': 'unknown', 'snapshot': None}):
+            with self.assertRaises(r.Refused): r.status(self.c, self.state, job)
+        self.assertEqual(r.load(self.state / 'session.json')['jobs'], {job: snap})
 
     def test_retained_volume_refused_before_creation(self):
         original = self.aws
@@ -374,6 +418,22 @@ class Worker(unittest.TestCase):
         self.assertEqual(third['exit_code'], 0)
         self.assertEqual(third['log'], 'new\n')
 
+    def test_unknown_fences_a_late_submission(self):
+        code, result = self.request(action='status')
+        self.assertEqual((code, result), (0, {'job': self.job, 'state': 'unknown', 'snapshot': None}))
+        code, _ = self.request(action='run', snapshot=r.digest(self.archive),
+                               archive=base64.b64encode(self.archive).decode(), argv=['true'],
+                               expires=time.time()+5, max_jobs=1)
+        self.assertEqual(code, 2)
+        code, result = self.request(action='status')
+        self.assertEqual(result['state'], 'unknown')
+        # A fence is not a job: it uses no slot, so a new ID still fits under max_jobs=1.
+        self.job = 'c' * 36
+        code, result = self.request(action='run', snapshot=r.digest(self.archive),
+                                    archive=base64.b64encode(self.archive).decode(), argv=['true'],
+                                    expires=time.time()+5, max_jobs=1)
+        self.assertEqual((code, result['state']), (0, 'submitted'))
+
     def test_rejects_mismatch_and_archive_traversal(self):
         code, _ = self.request(action='run', snapshot='wrong', archive=base64.b64encode(self.archive).decode(),
                                argv=['true'], expires=time.time()+5, max_jobs=1)
@@ -434,6 +494,41 @@ class CLI(unittest.TestCase):
         self.assertEqual(invoke('down')['state'], 'termination-requested')
         self.assertEqual(invoke('down')['state'], 'terminated')
         self.assertEqual(invoke('down')['state'], 'absent')
+
+    def test_cli_recovers_from_ssh_failure_before_delivery(self):
+        binaries = self.root / 'bin'; binaries.mkdir()
+        fixture = Path(__file__).with_name('fake_tools.py').read_text()
+        for name in ('aws', 'ssh'):
+            tool = binaries / name
+            tool.write_text('#!' + sys.executable + '\n' + fixture); tool.chmod(0o755)
+        config = self.root / 'config.json'; config.write_text(json.dumps(self.c))
+        home = self.root / 'worker'; home.mkdir()
+        fail = self.root / 'ssh-fails-once'
+        env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ['PATH'],
+                   FAKE_WORKER_HOME=str(home), FAKE_AWS_STATE=str(self.root / 'aws.json'),
+                   FAKE_SSH_FAIL_ONCE=str(fail))
+        def invoke(*args, code=0):
+            proc = subprocess.run([sys.executable, str(SCRIPTS / 'remote_build.py'),
+                '--config', str(config), '--state', str(self.state), *args], env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            self.assertEqual(proc.returncode, code, proc.stderr.decode())
+            return json.loads(proc.stdout or proc.stderr)
+        invoke('up', '--approve-cost')
+        snap = invoke('snapshot', str(self.project()))['snapshot']
+        fail.touch()
+        command = ['--snapshot', snap, '--approve-upload', '--', sys.executable, '-c', 'print("delivered")']
+        self.assertEqual(invoke('run', *command, code=2), {'error': 'Tool failed: ssh'})
+        self.assertIn('unresolved', invoke('run', *command, code=2)['error'])
+        lost = next(iter(invoke('status')['jobs']))
+        self.assertEqual(invoke('status', '--job', lost)['state'], 'unknown')
+        self.assertEqual(invoke('status')['jobs'], {})
+        job = invoke('run', *command)['job']
+        for _ in range(30):
+            result = invoke('status', '--job', job)
+            if result['state'] == 'finished': break
+            time.sleep(.05)
+        self.assertEqual(result['exit_code'], 0)
+        self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
 
 
 if __name__ == '__main__':
