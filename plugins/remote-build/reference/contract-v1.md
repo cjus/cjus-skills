@@ -33,7 +33,9 @@ after snapshot creation require a new snapshot. This is a snapshot of each file 
 not a filesystem-wide atomic transaction: pause concurrent edits when consistency matters.
 
 Review eligible files before passing `--approve-upload`; exclusions and secret-pattern
-screening cannot detect arbitrary embedded credentials. The approved object is the saved
+screening cannot detect arbitrary embedded credentials. The credential-assignment pattern
+accepts `=` or a lone `:` as the separator, never `::`, so Rust and C++ paths such as
+`Token::Comment(...)` are not mistaken for assignments. The approved object is the saved
 archive, not the current working tree. Each job extracts into a new directory, so deleted
 files cannot survive from a previous run. Worker extraction rejects links and traversal.
 
@@ -55,8 +57,14 @@ local intent manually. Never delete state and launch again to bypass uncertainty
 
 A job ID and source mapping are persisted before upload. If SSH disconnects, use `status`
 to recover the ID and `status --job ID` to reconcile. Another submission is blocked while
-its outcome remains uncertain. Unknown/mismatched jobs stop reconciliation; inspect privately
-or tear down rather than creating a duplicate. Worker death may leave `interrupted` or
+its outcome remains uncertain. When the worker has no record of a job, it answers `unknown`
+under the same session lock that submission holds and leaves a fence for that ID, so a
+submission still in flight with that ID is refused when it arrives. `unknown` for the pending
+submission is therefore final: the upload never landed and never will, so the client releases
+it, drops the ID from the session (it used no worker slot), keeps the result record, and
+accepts the next `run`. This covers an SSH failure before delivery, such as an unenrolled host
+key. `unknown` for any other job, or a mismatched job/source, stops reconciliation; inspect
+privately or tear down rather than creating a duplicate. Worker death may leave `interrupted` or
 `running` without an exit code; neither is success. The worker is not a full process supervisor
 and cannot prove PID identity after reboot or PID reuse. An expiry still belongs to the janitor.
 

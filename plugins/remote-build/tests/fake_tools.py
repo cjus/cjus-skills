@@ -12,6 +12,11 @@ if args in (['--version'], ['-V']):
     print('offline fixture')
     sys.exit(0)
 if name == 'ssh':
+    # Simulate a connection refused before anything reaches the worker (exit 255, like ssh).
+    fail_once = os.environ.get('FAKE_SSH_FAIL_ONCE')
+    if fail_once and Path(fail_once).exists():
+        Path(fail_once).unlink()
+        sys.exit(255)
     env = dict(os.environ, HOME=os.environ['FAKE_WORKER_HOME'])
     # The production SSH command is parsed as argv, never run by a fixture shell.
     argv = shlex.split(args[-1])

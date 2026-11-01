@@ -27,4 +27,5 @@ or include them in examples. This repository's tests use synthetic fixtures only
 The independent janitor, IAM restrictions, verified host identity and trusted image are
 operator responsibilities. Losing state, using a second client, disabling the janitor or
 changing owner names can defeat local bounds. Restore/reconcile original state rather than
-silently treating an unknown outcome as absence.
+silently treating an unknown outcome as absence. The one absence the client accepts is a
+pending submission the worker has fenced under its submission lock, which can never run.

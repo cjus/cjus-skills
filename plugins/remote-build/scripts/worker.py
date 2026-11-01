@@ -177,7 +177,13 @@ def handle(payload):
     job = root / payload['job']
     if payload['action'] == 'status':
         if not (job / 'meta.json').exists():
-            return {'job': payload['job'], 'state': 'unknown', 'snapshot': None}
+            # Answer under the submission lock and fence the ID: an empty directory makes a
+            # late-arriving run with this ID refuse ("already submitted"), so 'unknown' is final.
+            with open(root / 'lock', 'a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if not (job / 'meta.json').exists():
+                    job.mkdir(mode=0o700, exist_ok=True)
+                    return {'job': payload['job'], 'state': 'unknown', 'snapshot': None}
         meta = json.loads((job / 'result.json' if (job / 'result.json').exists() else job / 'meta.json').read_text())
         if meta['state'] in ('running', 'queued'):
             try:
