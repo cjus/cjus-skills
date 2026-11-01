@@ -10,7 +10,7 @@ provider.
 - [Configuration and complete example](reference/config.md): every field and private storage locations.
 - [AWS prerequisites](reference/aws.md): infrastructure the operator supplies outside the plugin.
 - [Troubleshooting and validation boundaries](reference/troubleshooting.md): exact failure/recovery behavior, costs and mocked versus live coverage.
-- [Contract v1](reference/contract-v1.md) and [security](reference/security.md): source identity, session ownership and trust boundaries.
+- [Contract v2](reference/contract-v2.md) and [security](reference/security.md): source identity, session ownership and trust boundaries.
 
 ## Install and requirements
 
@@ -31,20 +31,34 @@ The Linux image needs Python 3.9+, the build toolchain on PATH, and trusted SSH 
 Build tools must already be installed; this plugin does not install them.
 
 Read [configuration](reference/config.md) and [AWS prerequisites](reference/aws.md) before
-setup. An operator supplies a pinned launch template, network access, SSH identity, verified
-host keys, and independent expiry cleanup. Setup probes existing auth; it does not grant
+setup. An operator supplies pinned launch templates (named launch profiles), network access,
+SSH identity, verified host keys, and independent expiry cleanup. Setup probes existing auth; it does not grant
 launch authorization. Credentials remain on the local client.
+
+## Per-repository selection
+
+Each repository commits `.remote-build.json` at its Git root, choosing one of the operator's
+launch profiles and one of that profile's instance types:
+
+```json
+{ "version": 1, "launch_profile": "x86", "instance_type": "<approved-x86-type>" }
+```
+
+Each checkout has its own session, state and worker, tagged with a per-project key, so
+repositories with different instance types or architectures can run workers concurrently up
+to the owner's `max_workers`. The file selects; it never authorizes a launch. See
+[configuration](reference/config.md#repository-selection).
 
 ## Workflow
 
-Claude Code supplies `CLAUDE_PLUGIN_ROOT` for the installed plugin. All five skills resolve
+Run commands from the repository (or pass `--project DIR`). Claude Code supplies `CLAUDE_PLUGIN_ROOT` for the installed plugin. All five skills resolve
 the shared CLI through that path, independently of the consumer project's working directory.
 
 ```sh
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" setup
 # Only after the user approves this paid worker and its lifetime:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" up --approve-cost
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot .
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot
 # Review the manifest and eligible source, then use its exact fingerprint:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status
@@ -79,8 +93,8 @@ Only an explicit `down` action releases it; closing or merging a PR does not cal
 The agent should collect results and explicitly release its worker when finished. Independent
 maximum-lifetime cleanup is a safety backstop for abandoned sessions, not per-build teardown.
 
-Jobs retain separate immutable source archives/results, but execute one at a time under a
-session lock against a stable working directory. Unchanged source files keep their mtimes;
+Within a project's session, jobs retain separate immutable source archives/results, but execute
+one at a time under a session lock against a stable working directory. Unchanged source files keep their mtimes;
 changed and deleted files are synchronized before execution. Cargo home and target directories
 are reused only while that lock is held. A toolchain identity change resets both caches.
 Result metadata reports `cache_key` and `cache_reused`; Cargo still decides which crates need
@@ -90,8 +104,9 @@ job when an opaque external input changes. Caches never cross session terminatio
 ## Cost and retention
 
 EC2, EBS, networking and public IPs can incur charges. There is no dollar-price estimator or
-billing cap. The CLI enforces one outstanding session per state directory, checks for existing
-workers under the configured owner, and caps requested TTL at eight hours and jobs at twenty.
+billing cap. The CLI enforces one outstanding session per project, refuses a second worker for
+the same project, caps the owner's concurrent workers at `max_workers` (at most ten), and caps
+requested TTL at eight hours and jobs at twenty.
 Cross-machine races and other AWS tools require account-side IAM/quota controls.
 An expiry tag is only a timestamp: the operator's independent janitor must terminate expired
 workers, even when the laptop is offline. CLI setup validates the operator's declaration,
@@ -114,5 +129,5 @@ Rust fixture uses an already installed toolchain to verify warm builds without d
 requires that toolchain and local runs explicitly skip the Rust test if none exists. No AWS
 credentials, paid instances, or real SSH connections are used. CI runs Python 3.9 and a
 current version on macOS and Linux. See [security](reference/security.md) and
-[contract v1](reference/contract-v1.md) for recovery and trust boundaries. A first live smoke
+[contract v2](reference/contract-v2.md) for recovery and trust boundaries. A first live smoke
 test requires separate user authorization and operator-provisioned infrastructure.

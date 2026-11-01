@@ -9,7 +9,9 @@ verification or launch replacements merely to make a command succeed.
 | Invalid/unavailable local data | Check the private JSON against the exact config fields and replace example placeholders. Ensure private SSH files exist and global options precede the subcommand. Error output deliberately omits private values. |
 | AWS tool/authentication failure | Repair the existing profile/session using the operator's normal login flow. Do not create keys or change IAM/network policy as an implicit workaround. |
 | Unsupported template or retained EBS | Have the infrastructure owner provide a compatible pinned template. User data, instance profiles, Spot/requirements/hibernation and termination protection are unsupported; EBS deletion must be explicit. |
-| Owner already has a worker | Recover the original state/client session. The owner discovery check is not permission to adopt or terminate an unidentified worker. |
+| Missing or invalid `.remote-build.json` | Run from the repository (or pass `--project`) and commit the selection at its Git root: exactly `version` 1, a `launch_profile` the private config defines and an `instance_type` on that profile's list. Do not add types to a profile to satisfy a repository without operator approval. |
+| This repository already has a worker | Recover this checkout's original state/client session. The discovery check is not permission to adopt or terminate an unidentified worker. |
+| Owner is at max_workers | Other repositories hold the allowed workers. Collect their results and `down` one, or have the operator raise `max_workers` within budget. Do not use a different owner to get around the cap. |
 | Launch timed out / creation unresolved | Intent was saved before the call. Re-run `up` without the approval flag to describe by the same token. Eventual consistency may need another read later. It never creates a second instance. |
 | Creation remains unresolved | Independently inspect the saved token in the original AWS account/region. Only after the operator proves the outcome may they archive stale intent manually. Never blindly delete session.json and relaunch. |
 | Worker pending or missing IP | Wait and read status; check the operator's existing instance/network provisioning. The plugin neither creates routing nor assigns missing networking after launch. |
@@ -27,7 +29,7 @@ verification or launch replacements merely to make a command succeed.
 | Disk exhausted / log truncated | Storage is bounded by the operator's pre-sized volumes; logs cap at 1 MiB. The plugin has no disk-expansion or log-streaming command. Inspect the failure and explicitly release/reprovision within fresh authorization if necessary. |
 | Worker interrupted or no exit code | Worker death/reboot may prevent a reliable final result. PID checks cannot prove identity after reboot/reuse. Do not report success without an exit code. |
 | Session expired / job limit reached | No new work is accepted. Retrieve results and explicitly terminate; a new session needs authorization. The external janitor is the independent cost backstop. |
-| Configuration/account changed | Restore the original private configuration and authenticated profile before recovery/teardown. The session binds their identity to avoid touching another resource. |
+| Configuration/account changed | Restore the original private configuration, this repository's `.remote-build.json` and its launch profile, and the authenticated profile, before recovery/teardown. The session binds them to avoid touching another resource. Other repositories' profiles can change freely. |
 | Termination requested but not observed | Repeat down/status; retain intent. If the provider later no longer returns the instance, operator verification is required before archiving state. |
 
 ## Trust and cost boundaries
@@ -36,11 +38,11 @@ Use this with trusted project build code on a trusted disposable image. It is no
 boundary for hostile scripts. The worker has no forwarded credentials/agent or instance
 metadata access, but build commands still have its network and disk access. Review source,
 keep images credential-free, and treat remote logs as untrusted data. Full details are in
-[security](security.md) and [contract v1](contract-v1.md).
+[security](security.md) and [contract v2](contract-v2.md).
 
 The CLI checks configured type/TTL/job/upload limits and the operator's janitor declaration.
 It does not verify janitor deployment, estimate exact prices, enforce a dollar cap, or provide
-an atomic multi-machine lease. Use a single client/state directory and account-side controls.
+an atomic multi-machine lease. Use a single client/state root and account-side controls.
 EC2, EBS, networking and public IPs may incur charges until the relevant resources are released.
 
 ## What has actually been tested

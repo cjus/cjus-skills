@@ -1,25 +1,42 @@
-# Remote-build contract v1
+# Remote-build contract v2
 
 ## Commands and results
 
-All commands use `python3 <plugin>/scripts/remote_build.py [--config FILE] [--state DIR] COMMAND`.
+All commands use `python3 <plugin>/scripts/remote_build.py [--config FILE] [--state DIR] [--project DIR] COMMAND`.
+`--project` names the checkout (default: the current directory); its Git root is the project.
 Successful local operations print one JSON object and exit 0. Refusals print a redacted JSON
 error to stderr and exit 2. A completed remote command's exit code appears in the job result;
 local `status` exit 0 means retrieval succeeded, not that the build passed.
 
 | Command | Contract |
 |---|---|
-| `setup` | Probe dependencies, existing authentication, config and pinned template; no cloud mutation |
-| `up [--approve-cost]` | Launch one approved worker, or reconcile an existing session without another launch |
-| `snapshot PROJECT` | Save an immutable tar of eligible tracked and untracked files; print manifest and SHA-256 |
+| `setup` | Probe dependencies, authentication and config. Inside a checkout with `.remote-build.json`, validate that selection and its pinned template; otherwise check every launch profile's template. No cloud mutation |
+| `up [--approve-cost]` | Launch one approved worker for this project with its selected profile and type, or reconcile its existing session without another launch |
+| `snapshot [PROJECT]` | Save an immutable tar of the project's eligible tracked and untracked files; print manifest and SHA-256. `PROJECT` is the same as `--project` |
 | `run --snapshot SHA --approve-upload -- ARGV...` | Submit that exact archive and command; print durable job ID |
 | `status` | Report session state, expiry and recorded job-to-source mapping |
 | `status --job ID` | Retrieve job state, exit code and bounded log; verify job/source identity |
-| `down` | Verify account, client token, session/owner tags and instance identity before requesting termination |
+| `down` | Verify account, client token, owner/project/session tags and instance identity before requesting termination |
 
 The API is provider-neutral at the command boundary; provider v1 is AWS only. New providers
 must preserve ownership, uncertainty and result semantics. Config and result fields may be
-extended only with an explicit contract version change.
+extended only with an explicit contract version change. v2 replaced v1's single template and
+instance type with named launch profiles, a committed repository selection and per-project
+sessions; v1 configs are refused.
+
+## Repository selection
+
+Each project commits `.remote-build.json` at its Git root: exactly `version` (1),
+`launch_profile` and `instance_type`. The profile must exist in the operator's private config
+and the type must be on that profile's `instance_types` list; anything else is refused before
+any AWS call. The file holds no account identifiers or credentials and is uploaded with the
+source like any other file. It selects; it never authorizes. A launch still needs
+`--approve-cost` after the agent states the selected profile, type and lifetime.
+
+The session binds the effective configuration: the shared private settings plus this
+project's selected profile and type, never `max_workers` or other projects' profiles. Editing
+another repository's profile, or adding one, leaves running sessions usable. Editing this
+project's selection or its profile mid-session is refused until it is restored.
 
 ## Source contract
 
@@ -40,6 +57,14 @@ archive, not the current working tree. Each job extracts into a new directory, s
 files cannot survive from a previous run. Worker extraction rejects links and traversal.
 
 ## Session ownership
+
+Sessions are per project. Each checkout keeps its own lock, session, snapshots, results and
+history under `<state>/projects/<key>/`, where the key is derived from the checkout's absolute
+Git root, and its worker carries a `remote-build:project` tag with that key. Separate
+checkouts, including worktrees of one repository, are separate projects, and moving a checkout
+needs it moved back to recover its session. `up` refuses when this project already has a
+worker or the owner already has `max_workers` active workers across all projects. `down`
+verifies the project tag, so a session can never terminate another project's worker.
 
 `up` and `down` are separate operations. The local agent working on a PR keeps the same worker
 through repeated edits and tests, including after a failed command. Neither job completion nor
@@ -76,7 +101,9 @@ retrieve results first. A failed termination call retains recoverable state.
 
 ## Boundaries
 
-A local lock serializes commands sharing a state directory. It does not coordinate multiple
+A local lock serializes commands for one project; different projects run independently, except
+that `up` also holds a launch lock in the state root so the per-project and `max_workers` checks
+do not race on one client. It does not coordinate multiple
 machines. Owner-tag discovery is a check, not an atomic distributed lease. Use a single client
 and account-side constraints for a hard global count/cost ceiling. Worker processes enforce
 job expiry while alive; neither that timeout nor a tag is independent compute cleanup.

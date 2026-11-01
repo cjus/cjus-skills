@@ -6,16 +6,19 @@ allowed-tools: Bash(python3:*), Read, AskUserQuestion
 
 # /remote-build:up
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/contract-v1.md` and the AWS prerequisites.
-Run setup first. Describe the chosen instance type, pinned template version, lifetime,
-On-Demand/EBS/network costs and session-only retention from private config. Obtain explicit
+Read `${CLAUDE_PLUGIN_ROOT}/reference/contract-v2.md` and the AWS prerequisites.
+Run setup first, from the repository. Describe the repository's launch profile and instance type
+from its `.remote-build.json`, the profile's pinned template version, lifetime,
+On-Demand/EBS/network costs and session-only retention. The repository file selects; it never
+authorizes. Each repository has its own worker, up to the owner's `max_workers`. Obtain explicit
 paid-launch authorization unless already granted for this exact scope. Then:
 
 ```sh
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" up --approve-cost
 ```
 
-To reconnect to existing intent, use `up` without the flag. Report session ID and state.
+To reconnect to existing intent, use `up` without the flag. Report session ID, state, launch
+profile and instance type.
 A pending worker needs status checks and independently verified host identity before use.
 An uncertain launch requires reconciliation, never deleting state or launching a replacement.
 

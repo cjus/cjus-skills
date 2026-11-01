@@ -1,4 +1,4 @@
-# AWS provider v1
+# AWS provider
 
 The operator provisions the infrastructure separately. This plugin does not create IAM
 credentials, keys, security groups, network rules, launch templates, images or a janitor.
@@ -10,8 +10,9 @@ Rustup images are supported when their required toolchains are preinstalled; the
 the original RUSTUP_HOME and disables auto-install. Its session Cargo home does not inherit
 credentials. See [rustup environment variables](https://rust-lang.github.io/rustup/environment-variables.html).
 
-Use a pinned Linux AMI and numeric launch-template version with an unprivileged SSH user,
-Python and the build toolchain. The client rejects template user data, instance profiles,
+Each launch profile names a pinned Linux AMI through a numeric launch-template version, with an
+unprivileged SSH user, Python and the build toolchain. Use one profile per AMI architecture or
+image; a repository selects a profile and one of its types in `.remote-build.json`. The client rejects template user data, instance profiles,
 Spot options, instance requirements, hibernation and termination protection. It disables
 instance metadata at launch, requests one On-Demand worker of the configured type, and sets
 OS-initiated shutdown to terminate. No credentials are uploaded or forwarded.
@@ -25,7 +26,8 @@ Before setting `janitor_confirmed`, independently test an account-side janitor t
 instances with the exact owner tag after the `remote-build:expires` epoch timestamp, including
 when the client is offline. Its permission boundary must prevent deleting unrelated resources.
 It must inspect pending/running/stopped workers, retry failures, and alert on missed deadlines.
-The CLI supplies `remote-build:owner`, `remote-build:session` and `remote-build:expires` tags.
+The CLI supplies `remote-build:owner`, `remote-build:project`, `remote-build:session` and
+`remote-build:expires` tags. A janitor keyed on the owner tag covers every project's workers.
 It does not install, inspect or guarantee the janitor. Budget alerts are useful but are not a
 termination mechanism or spending cap.
 
