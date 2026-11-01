@@ -23,6 +23,9 @@ build machines, key pairs and images an interrupted run left behind, then carrie
 | The daily profile cannot launch an approved worker | IAM can take minutes to apply; re-run. If it persists, check the admin profile may assume roles (`sts:AssumeRole`) and that `~/.aws/config` holds the profile bootstrap wrote. |
 | Janitor test `failed` | Read `/aws/lambda/remote-build-<owner>-janitor` in CloudWatch, fix the cause, and re-run with `--retest-janitor`. `janitor_confirmed` stays false until it passes. |
 | Workers are running | Apply won't change images, and teardown won't run, while your workers exist. Collect results and `/remote-build:down` them. |
+| No default VPC | `plan` names the subnets that would work: an internet route (in public mode) in a zone offering every type. Pass one with `--subnet`. If it names none, create a default VPC (`aws ec2 create-default-vpc`) or such a subnet. |
+| A subnet has no route to an internet gateway, or its zone lacks a type | Checked before any change, on every run, for `--subnet` and the remembered subnet. Pick another subnet, or use `--address private --cidr <your network>` if you reach the VPC privately. Network ACLs aren't checked. |
+| `apply`'s output stopped in Claude Code after about two minutes | A `!` command moves to the background after about two minutes; `apply` keeps running and Claude is told when it ends. Not a failure. |
 | A toolchain is missing from the image's list, or one you meant to keep is gone | A new `--rust-toolchain` list replaces the remembered one. Re-run with `--rebake` and every extra toolchain you need; `plan` shows them as `bake_toolchains`. |
 
 ## Sessions
@@ -48,6 +51,7 @@ build machines, key pairs and images an interrupted run left behind, then carrie
 | Unknown (not the pending submission) or mismatched job/source | Stop and inspect private worker/state evidence. Do not silently retry. If recovery is impossible, explicitly collect available evidence and tear down the session. |
 | Job is queued | Another job holds the session workspace/cache lock. Jobs serialize, and a queued job can expire before it starts. |
 | Command exits nonzero | Retrieval can still succeed. Inspect exit_code and the private log, edit locally, and submit a new reviewed snapshot on the same worker. |
+| A test or build script passes locally and fails on the worker over git | Snapshots never include `.git`, so the worker builds a source tree. Make scripts that ask git handle a missing repository (as builds from a release tarball must), and tests that assume a checkout check for one. |
 | Rust toolchain unavailable | Preinstall the requested toolchain on the worker image and expose cargo/rustc through the actual noninteractive SSH PATH. The plugin preserves worker RUSTUP_HOME but disables auto-install; local toolchains are not uploaded. |
 | `repository` fails: the image lacks a pinned toolchain, or `up` says `Not launching` | The repository's `rust-toolchain(.toml)` pins a channel the image's `remote-build:toolchains` tag doesn't list. The operator runs the rebuild command `setup` prints (`bootstrap.py apply ... --rebake --rust-toolchain <channel>`); it keeps the image's other extra toolchains. Nothing launched. |
 | `repository` says a pinned toolchain was `not checked` | The image has no `remote-build:toolchains` tag (made before bootstrap tagged images, or by hand). A `--rebake` tags it; for a hand-built image, add the tag as in the operator guide's step 6. |

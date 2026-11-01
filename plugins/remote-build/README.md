@@ -93,17 +93,22 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot
 # Review the manifest and eligible source, then use its exact fingerprint:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" run --snapshot <sha256> --approve-upload -- cargo test --locked
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job <job-id>
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" down
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job <job-id> --wait
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" down --wait
 ```
 
 `up` returns while the worker may still be pending. Use `status`; provision trusted host keys
 through an existing authenticated channel before submitting a job. Do not accept an
 unverified `ssh-keyscan` result. Each `run` submits a new job and returns quickly. The worker
 keeps running through a local disconnect. Poll the same job ID to retrieve its bounded log
-and exit status into private local state. A failed command is reported as `exit_code`, not
-as a successful test. Collect results before `down`, then repeat `down` until it observes
-termination. Do not call `run` again to reconnect.
+and exit status into private local state (`status --job --wait` polls until it has one, and
+names the result file). A failed command is reported as `exit_code`, not as a successful test.
+Collect results before `down`; `down --wait` repeats until it observes termination. Do not call
+`run` again to reconnect. Snapshots never include `.git`, so the worker builds a source tree.
+
+What the tools print (account and IAM identity, IP addresses, network, image and instance IDs,
+the alert email) is private: keep it out of commits, PRs, issues and comments, since the project
+may be public ([security](reference/security.md), "Publishing").
 
 Commands are argv arrays: shell operators such as `&&` are literal arguments. Run separate
 jobs, or deliberately invoke a trusted script already in the snapshot. Logs and result

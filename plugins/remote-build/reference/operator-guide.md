@@ -67,7 +67,10 @@ and `amd64` ones `x86`; repositories choose a profile by that name.
 
 Find the installed plugin (`setup` prints it as `guide.installed`; the plugin is two folders
 up), look first, then apply. In Claude Code, prefix each command with `!` so its output lands
-in the conversation and Claude can help read it.
+in the conversation and Claude can help read it. `apply` runs far longer than a `!` command stays
+in the foreground (about two minutes): Claude Code then moves it to the background, keeps it
+running, and tells Claude when it ends. In a plain terminal, append `2>&1 | tee` and a log file
+to keep its output.
 
 ```sh
 PLUGIN=~/.claude/plugins/cache/cjus-skills/remote-build/<version>
@@ -78,7 +81,10 @@ python3 "$PLUGIN/scripts/bootstrap.py" apply --admin-profile default --owner you
 ```
 
 `plan` only reads: it checks the admin profile, that each type runs its architecture, picks a
-default-VPC subnet whose zone offers every type, and says what apply would build. `apply` takes
+default-VPC subnet whose zone offers every type, and says what apply would build. Without a
+default VPC it stops and names the subnets that would work (an internet route, in a zone offering
+every type); pass one with `--subnet`. A subnet you pass, or the one remembered from earlier
+runs, is checked the same way before anything changes. `apply` takes
 20-40 minutes, mostly compiling the toolchain into the image, and prints progress as it goes:
 
 1. Creates `~/.ssh/remote-build-identity` if it does not exist.

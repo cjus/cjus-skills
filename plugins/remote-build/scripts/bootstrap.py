@@ -679,6 +679,41 @@ def region_for(a, state):
     return out.decode().strip()
 
 
+def offering_zones(admin, types):
+    """Each availability zone and the requested types it offers."""
+    offers = admin('ec2', 'describe-instance-type-offerings', '--location-type', 'availability-zone',
+                   '--filters', 'Name=instance-type,Values=' + ','.join(types))['InstanceTypeOfferings']
+    zones = {}
+    for o in offers:
+        zones.setdefault(o['Location'], set()).add(o['InstanceType'])
+    return zones
+
+
+def route_tables(admin, vpc=None):
+    return admin('ec2', 'describe-route-tables', *(['--filters', 'Name=vpc-id,Values=' + vpc] if vpc else []))['RouteTables']
+
+
+def internet_routed(tables, subnet):
+    """Whether the subnet's route table (its own association, else its VPC's main table) sends
+    0.0.0.0/0 to an internet gateway. Network ACLs are not checked."""
+    def associated(t, test):
+        return any(test(x) for x in t.get('Associations', []))
+    own = [t for t in tables if associated(t, lambda x: x.get('SubnetId') == subnet['SubnetId'])]
+    main = [t for t in tables if t.get('VpcId') == subnet['VpcId'] and associated(t, lambda x: x.get('Main'))]
+    table = (own or main or [{}])[0]
+    return any(r.get('DestinationCidrBlock') == '0.0.0.0/0' and r.get('GatewayId', '').startswith('igw-')
+               and r.get('State', 'active') == 'active' for r in table.get('Routes', []))
+
+
+def usable_subnets(admin, zones, types, public):
+    """Subnets in zones offering every type, and in public mode with an internet route."""
+    subnets = admin('ec2', 'describe-subnets')['Subnets']
+    tables = route_tables(admin) if public else []
+    return sorted((s for s in subnets if zones.get(s['AvailabilityZone'], set()) >= set(types)
+                   and (not public or internet_routed(tables, s))),
+                  key=lambda s: (s['VpcId'], s['AvailabilityZone'], s['SubnetId']))
+
+
 def prepare(a):
     """Everything apply needs, from read-only calls. Plan prints this; apply acts on it."""
     require(re.fullmatch(OWNER, a.owner), 'Owner must be lowercase letters, digits and hyphens, at most 32')
@@ -723,22 +758,35 @@ def prepare(a):
         for t in found:
             require(ARCHES[p['arch']] in t['ProcessorInfo']['SupportedArchitectures'],
                     '%s does not run %s images (profile %s)' % (t['InstanceType'], p['arch'], p['name']))
+    types = sorted({t for p in requested for t in p['types']})
+    zones = offering_zones(admin, types)
     if a.subnet or state.get('subnet'):
         subnet_id = a.subnet or state['subnet']
         s = admin('ec2', 'describe-subnets', '--subnet-ids', subnet_id)['Subnets'][0]
         vpc, subnet = s['VpcId'], s['SubnetId']
+        # Checked on every run, before anything changes: a bad subnet otherwise fails only at
+        # SSH, after a build machine has started.
+        require(zones.get(s['AvailabilityZone'], set()) >= set(types),
+                'Subnet %s is in %s, which does not offer every type (%s); pass a subnet in a zone that does'
+                % (subnet, s['AvailabilityZone'], ', '.join(types)))
+        require(not public or internet_routed(route_tables(admin, vpc), s),
+                'Subnet %s has no route to an internet gateway, so workers with public addresses could not be '
+                'reached; pass a subnet whose route table sends 0.0.0.0/0 to one, or use --address private '
+                'with a route from your network (--cidr)' % subnet)
     else:
         vpcs = admin('ec2', 'describe-vpcs', '--filters', 'Name=is-default,Values=true')['Vpcs']
-        require(vpcs, 'No default VPC in %s; pass --subnet' % region)
+        if not vpcs:
+            candidates = usable_subnets(admin, zones, types, public)
+            require(False, 'No default VPC in %s. %s' % (region, (
+                'Subnets that would work: %s; pass one with --subnet' % ', '.join(
+                    '%s (%s, %s)' % (c['SubnetId'], c['VpcId'], c['AvailabilityZone']) for c in candidates))
+                if candidates else
+                'No subnet has %s in a zone that offers every type (%s). Create a default VPC '
+                '(aws ec2 create-default-vpc) or a subnet that does, then pass --subnet'
+                % ('a route to an internet gateway' if public else 'room', ', '.join(types))))
         vpc = vpcs[0]['VpcId']
         subnets = admin('ec2', 'describe-subnets', '--filters', 'Name=vpc-id,Values=' + vpc,
                         'Name=default-for-az,Values=true')['Subnets']
-        types = sorted({t for p in requested for t in p['types']})
-        offers = admin('ec2', 'describe-instance-type-offerings', '--location-type', 'availability-zone',
-                       '--filters', 'Name=instance-type,Values=' + ','.join(types))['InstanceTypeOfferings']
-        zones = {}
-        for o in offers:
-            zones.setdefault(o['Location'], set()).add(o['InstanceType'])
         usable = sorted((s for s in subnets if zones.get(s['AvailabilityZone'], set()) >= set(types)),
                         key=lambda s: s['AvailabilityZone'])
         require(usable, 'No default subnet whose zone offers every type (%s); pass --subnet' % ', '.join(types))

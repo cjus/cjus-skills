@@ -32,7 +32,12 @@ the operator guide that does it). `next` at the top level names the first thing 
    `aws configure list-profiles` to help. Then run `plan` yourself (it only reads) and show what
    apply would build. Hand the user the exact `apply` command, using the real plugin path
    `${CLAUDE_PLUGIN_ROOT}`, to run with a `!` prefix so its output lands in the conversation,
-   and help read the summary. Offer the manual steps only when they can't or don't want to run
+   and help read the summary. Say up front that `apply` runs 20 to 40 minutes, longer than a `!`
+   command stays in the foreground (about two minutes): Claude Code then moves it to the
+   background, its output goes to a file, and Claude is told when it ends. That is expected,
+   not a failure. In a plain terminal, suggest appending `2>&1 | tee ~/remote-build-apply.log`.
+   If `plan` stops with "No default VPC", it names the subnets that would work: help pick one
+   and add `--subnet`. Offer the manual steps only when they can't or don't want to run
    bootstrap.
 4. Offer to re-run setup after they finish a step.
 5. If `repository` fails because the image lacks the repository's pinned toolchain, hand the
@@ -41,6 +46,10 @@ the operator guide that does it). `next` at the top level names the first thing 
    show that only the image is rebuilt.
 
 ## What you may and may not do
+
+- Tool output is private: account IDs, IAM names, IP addresses, network, image, template and
+  instance IDs, and the alert email never go into commits, PRs, issues or comments of the
+  project, which may be public (`${CLAUDE_PLUGIN_ROOT}/reference/security.md`, "Publishing").
 
 - Do not run `bootstrap.py apply` or `teardown`, the guide's AWS commands, install tools,
   change IAM, network or security groups, or create, change or delete any cloud resource, even

@@ -121,8 +121,11 @@ After source upload is authorized, read the fingerprint from the reviewed manife
 SNAPSHOT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["snapshot"])' "$REMOTE_BUILD_STATE/manifest.json")
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" run --snapshot "$SNAPSHOT" --approve-upload -- cargo test --locked > "$REMOTE_BUILD_STATE/submission.json"
 JOB=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["job"])' "$REMOTE_BUILD_STATE/submission.json")
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job "$JOB"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" status --job "$JOB" --wait
 ```
+
+`--wait` returns once the job has an outcome; drop it to read the state once. The printed result
+leaves out the log and names the private file holding it (`result_file`).
 
 A successful submission returns `job`, `snapshot` and `state: submitted`; exit 0 means accepted,
 not that tests passed. Job status progresses through submitted/queued/running to finished,
@@ -170,11 +173,11 @@ Successful jobs, failed jobs, PR close and PR merge do not terminate the worker.
 agent explicitly releases its session after collecting everything needed:
 
 ```sh
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" down
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" down --wait
 ```
 
-A response of `termination-requested` is not confirmation. Repeat `down` after a suitable
-interval until it reports `terminated`; subsequent `down` returns `absent`. State remains
+A response of `termination-requested` is not confirmation. `--wait` repeats `down` until it
+reports `terminated` (without it, repeat `down` yourself); a later `down` returns `absent`. State remains
 recoverable until termination is observed, then session metadata is archived locally.
 Ownership/account/config mismatches stop teardown rather than guessing.
 

@@ -317,7 +317,9 @@ class Lifecycle(unittest.TestCase):
         with self.assertRaises(r.Refused): r.run(self.c, self.state, snap, ['true'], True)
         unknown = {'job': job, 'state': 'unknown', 'snapshot': None}
         with patch.object(r, 'remote', return_value=dict(unknown)):
-            self.assertEqual(r.status(self.c, self.state, job), unknown)
+            released = r.status(self.c, self.state, job)
+        self.assertEqual({k: v for k, v in released.items() if k != 'result_file'}, unknown)
+        self.assertTrue(released['result_file'].endswith(job + '.json'))
         s = r.load(self.state / 'session.json')
         self.assertNotIn('pending_job', s); self.assertEqual(s['jobs'], {})
         self.assertEqual(r.load(self.state / 'results' / (job + '.json')), unknown)
@@ -684,6 +686,64 @@ class CLI(unittest.TestCase):
         self.assertEqual(invoke(project, 'down')['state'], 'termination-requested')
         self.assertEqual(invoke(project, 'down')['state'], 'terminated')
         self.assertEqual(invoke(project, 'down')['state'], 'absent')
+
+    def test_cli_waits_for_a_job_and_a_teardown(self):
+        invoke = self.tools()
+        project = self.repo
+        invoke(project, 'up', '--approve-cost')
+        snap = invoke(project, 'snapshot')['snapshot']
+        job = invoke(project, 'run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
+                     '-c', 'import time; time.sleep(1.5); print("waited for")')['job']
+        result = invoke(project, 'status', '--job', job, '--wait')
+        self.assertEqual((result['state'], result['exit_code']), ('finished', 0))
+        self.assertNotIn('log', result)  # the log stays in the private result file it names
+        saved = self.state / 'projects' / r.project_key(project) / 'results' / (job + '.json')
+        self.assertEqual(result['result_file'], r.shown(saved))
+        self.assertIn('waited for', r.load(saved)['log'])
+        self.assertIn('Pass --job with --wait', invoke(project, 'status', '--wait', code=2)['error'])
+        self.assertEqual(invoke(project, 'down', '--wait')['state'], 'terminated')
+        self.assertEqual(invoke(project, 'down', '--wait')['state'], 'absent')
+
+    def test_poll_backs_off_and_stops_at_the_deadline(self):
+        states, slept, clock = iter(['submitted', 'queued', 'running', 'finished']), [], [1000.0]
+        def sleep(seconds):
+            slept.append(seconds)
+            clock[0] += seconds
+        done = lambda result: result['state'] not in r.RUNNING
+        step = lambda: {'state': next(states)}
+        self.assertEqual(r.poll(step, done, 2000, sleep, lambda: clock[0]), {'state': 'finished'})
+        self.assertEqual(slept, [1, 2, 4])
+        slept.clear()
+        result = r.poll(lambda: {'state': 'running'}, done, clock[0] + 100, sleep, lambda: clock[0])
+        self.assertEqual(result['state'], 'running')
+        self.assertIn('stopped at the deadline', result['wait'])
+        self.assertEqual(slept, [1, 2, 4, 8, 16, 20, 20, 20])
+        self.assertLessEqual(sum(slept), 100)
+
+    def test_waiting_releases_the_project_lock_between_polls(self):
+        import fcntl
+        free = []
+        states = iter(['running', 'finished'])
+        # Between polls another command takes the lock without waiting, as a CLI command would.
+        r.poll(lambda: r.locked(self.state, lambda: {'state': next(states)}, wait=True),
+               lambda x: x['state'] not in r.RUNNING, 10 ** 10,
+               lambda seconds: free.append(r.locked(self.state, lambda: 'free')), lambda: 0)
+        self.assertEqual(free, ['free'])
+        # While a command holds it, another refuses at once instead of waiting. The attempt runs in
+        # a thread, so a lock that waits fails this test rather than hanging it.
+        import threading
+        outcome = []
+        def attempt():
+            try:
+                outcome.append(r.locked(self.state, lambda: 'ran'))
+            except r.Refused as e:
+                outcome.append(str(e))
+        with open(self.state / 'lock', 'a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            thread = threading.Thread(target=attempt, daemon=True)
+            thread.start()
+            thread.join(5)
+            self.assertTrue(outcome and 'holds this project' in outcome[0], outcome or 'blocked instead of refusing')
 
     def test_cli_recovers_from_ssh_failure_before_delivery(self):
         fail = self.root / 'ssh-fails-once'
