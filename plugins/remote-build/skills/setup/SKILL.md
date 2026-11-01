@@ -35,6 +35,10 @@ the operator guide that does it). `next` at the top level names the first thing 
    and help read the summary. Offer the manual steps only when they can't or don't want to run
    bootstrap.
 4. Offer to re-run setup after they finish a step.
+5. If `repository` fails because the image lacks the repository's pinned toolchain, hand the
+   operator the rebuild command it names (with their real admin profile in place of
+   `<admin-profile>`) to run with `!`, and run `bootstrap.py plan` with the same flags first to
+   show that only the image is rebuilt.
 
 ## What you may and may not do
 

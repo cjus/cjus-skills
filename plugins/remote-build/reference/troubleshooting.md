@@ -23,6 +23,7 @@ build machines, key pairs and images an interrupted run left behind, then carrie
 | The daily profile cannot launch an approved worker | IAM can take minutes to apply; re-run. If it persists, check the admin profile may assume roles (`sts:AssumeRole`) and that `~/.aws/config` holds the profile bootstrap wrote. |
 | Janitor test `failed` | Read `/aws/lambda/remote-build-<owner>-janitor` in CloudWatch, fix the cause, and re-run with `--retest-janitor`. `janitor_confirmed` stays false until it passes. |
 | Workers are running | Apply won't change images, and teardown won't run, while your workers exist. Collect results and `/remote-build:down` them. |
+| A toolchain is missing from the image's list, or one you meant to keep is gone | A new `--rust-toolchain` list replaces the remembered one. Re-run with `--rebake` and every extra toolchain you need; `plan` shows them as `bake_toolchains`. |
 
 ## Sessions
 
@@ -48,6 +49,8 @@ build machines, key pairs and images an interrupted run left behind, then carrie
 | Job is queued | Another job holds the session workspace/cache lock. Jobs serialize, and a queued job can expire before it starts. |
 | Command exits nonzero | Retrieval can still succeed. Inspect exit_code and the private log, edit locally, and submit a new reviewed snapshot on the same worker. |
 | Rust toolchain unavailable | Preinstall the requested toolchain on the worker image and expose cargo/rustc through the actual noninteractive SSH PATH. The plugin preserves worker RUSTUP_HOME but disables auto-install; local toolchains are not uploaded. |
+| `repository` fails: the image lacks a pinned toolchain, or `up` says `Not launching` | The repository's `rust-toolchain(.toml)` pins a channel the image's `remote-build:toolchains` tag doesn't list. The operator runs the rebuild command `setup` prints (`bootstrap.py apply ... --rebake --rust-toolchain <channel>`); it keeps the image's other extra toolchains. Nothing launched. |
+| `repository` says a pinned toolchain was `not checked` | The image has no `remote-build:toolchains` tag (made before bootstrap tagged images, or by hand). A `--rebake` tags it; for a hand-built image, add the tag as in the operator guide's step 6. |
 | Cache not reused | A first build or changed toolchain identity is cold. Source/dependency/feature changes also trigger Cargo's own rebuilding. cache_reused reports the session cache identity, not that every crate was Fresh. |
 | Disk exhausted / log truncated | Storage is bounded by the operator's pre-sized volumes; logs cap at 1 MiB. The plugin has no disk-expansion or log-streaming command. Inspect the failure and explicitly release/reprovision within fresh authorization if necessary. |
 | Worker interrupted or no exit code | Worker death/reboot may prevent a reliable final result. PID checks cannot prove identity after reboot/reuse. Do not report success without an exit code. |

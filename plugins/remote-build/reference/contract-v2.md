@@ -33,6 +33,14 @@ any AWS call. The file holds no account identifiers or credentials and is upload
 source like any other file. It selects; it never authorizes. A launch still needs
 `--approve-cost` after the agent states the selected profile, type and lifetime.
 
+Workers never download a toolchain. When the Git root has `rust-toolchain` or
+`rust-toolchain.toml` (rustup reads the first if both exist) naming a channel, and the selected
+profile's image carries a `remote-build:toolchains` tag (space-separated toolchain names without
+host triples, which bootstrap writes from the image's own `rustup toolchain list`), `setup`'s
+`repository` check fails and `up` refuses before `RunInstances` unless the channel is on that list.
+The refusal names the rebuild command. A file naming a custom toolchain by `path`, a file without a
+channel, or an image without the tag is not checked; `setup` says when a pin went unchecked.
+
 The session binds the effective configuration: the shared private settings plus this
 project's selected profile and type, never `max_workers` or other projects' profiles. Editing
 another repository's profile, or adding one, leaves running sessions usable. Editing this

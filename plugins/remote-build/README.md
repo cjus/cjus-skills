@@ -111,7 +111,9 @@ metadata are retrieved; arbitrary binary artifact download is outside v1.
 
 For Rust, use a baked Linux image with `cargo`, `rustc` and optionally rustup on PATH.
 Preinstall the toolchains named by `rust-toolchain.toml` or a worker-side `RUSTUP_TOOLCHAIN`;
-automatic rustup installation is disabled. The worker preserves its installed `RUSTUP_HOME`
+automatic rustup installation is disabled. Bootstrap tags each image with the toolchains it has,
+and `setup` and `up` refuse a repository whose pinned toolchain the image lacks, naming the
+`--rebake --rust-toolchain` command that adds it, before anything launches. The worker preserves its installed `RUSTUP_HOME`
 while using a fresh session Cargo home that contains no operator registry credentials.
 Start with `cargo test --locked` or `cargo build --locked`. Private registries/dependencies
 requiring credentials are unsupported; public dependency downloads need preconfigured outbound

@@ -36,6 +36,8 @@ elif op == 'describe-launch-template-versions':
     result = {'LaunchTemplateVersions': [{'LaunchTemplateData': {'ImageId': 'ami-fixture'}}]}
 elif op == 'describe-images':
     result = {'Images': [{'BlockDeviceMappings': [{'DeviceName': '/dev/root', 'Ebs': {'DeleteOnTermination': True}}]}]}
+    if 'FAKE_IMAGE_TOOLCHAINS' in os.environ:
+        result['Images'][0]['Tags'] = [{'Key': 'remote-build:toolchains', 'Value': os.environ['FAKE_IMAGE_TOOLCHAINS']}]
 elif op == 'describe-instances':
     def matches(item, spec):
         key, values = spec[len('Name='):].split(',Values=')

@@ -430,6 +430,19 @@ def clean_bake_leftovers(admin, owner, state):
     state.pop('pending', None)
 
 
+def installed_toolchains(paths, known, host):
+    """The toolchains builder has, as rustup lists them without host triples, or None when rustup
+    isn't there (a custom provisioning script) or the list won't fit in one tag value."""
+    code, out, _ = execute(ssh_argv(paths, known, 'builder', host, 'rustup toolchain list'), timeout=60)
+    if code != 0:
+        return None
+    names = sorted({rb.toolchain_name(line.split()[0]) for line in out.decode(errors='replace').splitlines()
+                    if line.strip() and not line.startswith('no installed toolchains')})
+    if not names or not all(rb.named(n) for n in names) or len(' '.join(names)) > 256:  # AWS tag value limit
+        return None
+    return names
+
+
 def bake(admin, paths, owner, profile, sg, subnet, opts, state):
     """Build one worker image. Returns the image, its host key and root device."""
     name = profile['name']
@@ -487,16 +500,21 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
         say('[%s] builder sees: %s' % (name, ' / '.join(l for l in out.decode().splitlines() if l)))
         code, _, _ = execute(ssh_argv(paths, known, 'builder', host, 'sudo -n true'), timeout=60)
         require(code != 0, 'builder has sudo on the image; fix the provisioning script')
+        toolchains = installed_toolchains(paths, known, host)
+        say('[%s] builder has toolchains: %s' % (name, ', '.join(toolchains) if toolchains else
+                                                  'unknown (no rustup); the image is not tagged with them'))
         code, _, _ = execute(ssh_argv(paths, known, 'ubuntu', host, 'echo ok'), timeout=60)
         require(code != 0, 'ubuntu can still log in; the provisioning script must remove its key')
         say('[%s] making the image' % name)
         admin('ec2', 'stop-instances', '--instance-ids', instance)
         admin('ec2', 'wait', 'instance-stopped', '--instance-ids', instance, timeout=900)
         tags = [{'Key': 'remote-build:bake', 'Value': owner}, {'Key': 'remote-build:profile', 'Value': name}]
+        # setup and up read this tag to refuse a repository whose pinned toolchain the image lacks.
+        listed = [{'Key': rb.TOOLCHAIN_TAG, 'Value': ' '.join(toolchains)}] if toolchains else []
         ami = admin('ec2', 'create-image', '--instance-id', instance,
                     '--name', 'remote-build-%s-%s-%s' % (owner, name, stamp),
                     '--description', 'remote-build worker image (%s, %s)' % (owner, profile['arch']),
-                    '--tag-specifications', json.dumps([{'ResourceType': 'image', 'Tags': tags},
+                    '--tag-specifications', json.dumps([{'ResourceType': 'image', 'Tags': tags + listed},
                                                         {'ResourceType': 'snapshot', 'Tags': tags}]))['ImageId']
         state['pending']['image'] = ami
         save_state(paths, state)
@@ -510,7 +528,7 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
             require('Ebs' not in mapping or mapping['Ebs'].get('DeleteOnTermination') is True,
                     'Image %s keeps a volume after termination' % ami)
         failed = False
-        return {'ami': ami, 'host_key': key, 'root_device': image['RootDeviceName']}
+        return {'ami': ami, 'host_key': key, 'root_device': image['RootDeviceName'], 'toolchains': toolchains}
     finally:
         if known.exists():
             known.unlink()
@@ -758,6 +776,8 @@ def prepare(a):
             'profiles': requested, 'previous': previous, 'public': public, 'vpc': vpc, 'subnet': subnet,
             'cidr': cidr, 'cidr_source': source, 'stack': stack, 'stack_status': status, 'outputs': outputs,
             'bake': sorted(bake), 'keep': sorted(keep), 'unavailable': unavailable, 'remove': removed, 'active_workers': active,
+            # A new --rust-toolchain list replaces the remembered one, so a toolchain can be dropped.
+            'toolchains': a.rust_toolchain or state.get('toolchains', []),
             'janitor_test': 'already passed' if tested else ('skipped' if a.skip_janitor_test else 'will run')}
 
 
@@ -772,6 +792,7 @@ def summary_of(p):
             'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
                                             'image': 'bake' if x['name'] in p['bake'] else 'reuse'}
                                 for x in p['profiles']},
+            'bake_toolchains': ['stable'] + p['toolchains'],
             'remove_profiles': p['remove'], 'active_workers': p['active_workers'], 'janitor_test': p['janitor_test']}
 
 
@@ -781,8 +802,11 @@ def applied(p, status, state, built, retired):
             'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
                                             'image': ('built ' if x['name'] in p['bake'] else 'reused ') +
                                             state['profiles'][x['name']]['ami'],
-                                            'launch_version': built[x['name']]['launch_version']}
+                                            'launch_version': built[x['name']]['launch_version'],
+                                            'toolchains': state['profiles'][x['name']].get('toolchains') or
+                                            'unknown: the image has no %s tag; --rebake records them' % rb.TOOLCHAIN_TAG}
                                 for x in p['profiles']},
+            'bake_toolchains': ['stable'] + p['toolchains'],
             'removed_profiles': p['remove'], 'retired_images': retired, 'active_workers': p['active_workers']}
 
 
@@ -839,7 +863,7 @@ def apply(a):
     require(provision.is_file(), 'Provisioning script not found: %s' % provision)
     state.update(account=p['account'], region=p['region'], stack=p['stack'], subnet=p['subnet'],
                  cidr=p['cidr'], cidr_source=p['cidr_source'], address=a.address, disk_gb=a.disk_gb,
-                 toolchains=a.rust_toolchain or state.get('toolchains', []),
+                 toolchains=p['toolchains'],
                  provision_script=str(provision) if (a.provision_script or state.get('provision_script')) else None,
                  alert_email=a.alert_email or state.get('alert_email'))
     state.setdefault('profiles', {})
@@ -1012,7 +1036,9 @@ def parser():
         s.add_argument('--known-hosts', type=Path, default=home / '.ssh' / 'remote-build-known-hosts')
         s.add_argument('--identity', type=Path, default=home / '.ssh' / 'remote-build-identity')
         s.add_argument('--disk-gb', type=int, help='Worker disk size; workers cannot grow it (default 40)')
-        s.add_argument('--rust-toolchain', action='append', default=[], help='Extra toolchain to preinstall (repeatable)')
+        s.add_argument('--rust-toolchain', action='append', default=[],
+                       help='Extra toolchain to preinstall besides stable (repeatable). The list replaces the one '
+                            'remembered from earlier runs, so name every toolchain to keep')
         s.add_argument('--provision-script', help='Your own provisioning script instead of scripts/aws/provision.sh')
         s.add_argument('--rebake', action='store_true', help='Build fresh images even when the current ones are usable')
         s.add_argument('--skip-janitor-test', action='store_true', help='Leave janitor_confirmed false; test it yourself')
