@@ -466,21 +466,55 @@ def status(c, state, job=None):
     require(job in s['jobs'], 'Unknown job')
     result = remote(c, s, i, {'action': 'status', 'job': job})
     require(result.get('job') == job, 'Job/source mismatch')
+    saved = state / 'results' / (job + '.json')
+    # Results remain private local files; never print remote log text as agent instructions.
+    # The printed result names the file, so the log can be read there as evidence.
+    shown_result = dict({k: v for k, v in result.items() if k != 'log'}, result_file=shown(saved))
     if s.get('pending_job') == job and result.get('state') == 'unknown' and result.get('snapshot') is None:
         # The worker answered under its submission lock and fenced this ID, so the upload never
         # landed and never will. Release the submission (it used no worker slot); keep the record.
-        write(state / 'results' / (job + '.json'), result)
+        write(saved, result)
         del s['jobs'][job]
         s.pop('pending_job')
         write(state / 'session.json', s)
-        return result
+        return shown_result
     require(result.get('snapshot') == s['jobs'][job], 'Job/source mismatch')
-    # Results remain private local files; never print remote log text as agent instructions.
-    write(state / 'results' / (job + '.json'), result)
+    write(saved, result)
     if s.get('pending_job') == job:
         s.pop('pending_job')
         write(state / 'session.json', s)
-    return {k: v for k, v in result.items() if k != 'log'}
+    return shown_result
+
+
+# Job states before a job has an outcome; every other state is final.
+RUNNING = ('submitted', 'queued', 'running')
+WAIT_CAP_SECONDS = 20  # the longest pause between polls; they start at one second
+DOWN_WAIT_SECONDS = 900  # how long down --wait watches for termination
+
+
+def locked(state, action, wait=False):
+    """Run action() holding this project's state lock. A command refuses at once when another
+    holds it; a poll (wait=True) waits for it instead, then releases it before its next pause."""
+    with open(state / 'lock', 'a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused('Another local remote-build command holds this project\'s state lock')
+        return action()
+
+
+def poll(step, done, deadline, sleep=time.sleep, clock=time.time):
+    """Repeat step() until done(result) or the deadline (epoch seconds), backing off from one
+    second to WAIT_CAP_SECONDS. Returns the last result, marked when the deadline stopped it."""
+    delay = 1
+    while True:
+        result = step()
+        if done(result):
+            return result
+        if clock() + delay > deadline:
+            return dict(result, wait='stopped at the deadline; this is the last state read')
+        sleep(delay)
+        delay = min(delay * 2, WAIT_CAP_SECONDS)
 
 
 def down(c, state):
@@ -695,7 +729,9 @@ def main():
     sn = sub.add_parser('snapshot'); sn.add_argument('checkout', type=Path, nargs='?', help='Same as --project')
     r = sub.add_parser('run'); r.add_argument('--snapshot', required=True); r.add_argument('--approve-upload', action='store_true'); r.add_argument('command', nargs=argparse.REMAINDER)
     st = sub.add_parser('status'); st.add_argument('--job')
-    sub.add_parser('down')
+    st.add_argument('--wait', action='store_true', help='With --job: poll until the job has an outcome or the session expires')
+    dn = sub.add_parser('down')
+    dn.add_argument('--wait', action='store_true', help='Repeat until the worker is terminated (at most %d s)' % DOWN_WAIT_SECONDS)
     a = p.parse_args()
     os.umask(0o077)
     if a.action == 'setup':
@@ -725,23 +761,30 @@ def main():
         # One session, lock and snapshot store per checkout, so repositories never block each other.
         state = a.state / 'projects' / e['project']
         state.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with open(state / 'lock', 'a') as lock:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise Refused('Another local remote-build command holds this project\'s state lock')
-            prerequisites()
-            if a.action == 'up':
-                # Projects lock separately, so serialize launches across them on this client:
-                # the per-project and max_workers discovery checks must not race each other.
-                with open(a.state / 'launch.lock', 'a') as launch:
-                    fcntl.flock(launch, fcntl.LOCK_EX)
-                    result = up(e, state, a.approve_cost, root)
-            elif a.action == 'snapshot': result = snapshot(root, state, e['max_snapshot_bytes'])
-            elif a.action == 'run': result = run(e, state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload)
-            elif a.action == 'status': result = status(e, state, a.job)
-            else: result = down(e, state)
-            print(json.dumps(result, sort_keys=True))
+        prerequisites()
+
+        def launch():
+            # Projects lock separately, so serialize launches across them on this client:
+            # the per-project and max_workers discovery checks must not race each other.
+            with open(a.state / 'launch.lock', 'a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                return up(e, state, a.approve_cost, root)
+
+        require(not getattr(a, 'wait', False) or a.action != 'status' or a.job, 'Pass --job with --wait')
+        if a.action == 'up': result = locked(state, launch)
+        elif a.action == 'snapshot': result = locked(state, lambda: snapshot(root, state, e['max_snapshot_bytes']))
+        elif a.action == 'run': result = locked(state, lambda: run(e, state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload))
+        elif a.action == 'status' and a.wait:
+            # Each poll takes the lock and releases it, so other commands still run meanwhile.
+            expires = locked(state, lambda: session(e, state)[0]['expires'])
+            result = poll(lambda: locked(state, lambda: status(e, state, a.job), wait=True),
+                          lambda r: r.get('state') not in RUNNING, expires + 60)
+        elif a.action == 'status': result = locked(state, lambda: status(e, state, a.job))
+        elif a.wait:
+            result = poll(lambda: locked(state, lambda: down(e, state), wait=True),
+                          lambda r: r['state'] in ('terminated', 'absent'), time.time() + DOWN_WAIT_SECONDS)
+        else: result = locked(state, lambda: down(e, state))
+        print(json.dumps(result, sort_keys=True))
     except (Refused, OSError, ValueError, KeyError, TypeError) as e:
         message = str(e) if isinstance(e, Refused) else 'Invalid or unavailable local/provider data; inspect privately'
         print(json.dumps({'error': message}), file=sys.stderr)

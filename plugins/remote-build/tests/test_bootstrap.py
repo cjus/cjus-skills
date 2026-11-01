@@ -27,7 +27,7 @@ CONSOLE = 'boot\n-----BEGIN SSH HOST KEY KEYS-----\necdsa-sha2-nistp256 AAAAE2 r
           HOST_KEY + ' root@ip\n-----END SSH HOST KEY KEYS-----\n'
 READ_ONLY = {'get-caller-identity', 'describe-instance-types', 'describe-vpcs', 'describe-subnets',
              'describe-instance-type-offerings', 'describe-stacks', 'describe-images', 'describe-instances',
-             'get'}
+             'get', 'describe-route-tables'}
 
 
 def fail(text):
@@ -53,6 +53,11 @@ class FakeCloud:
         self.sns_readable = True
         self.toolchains = {}  # host: the extra toolchains its provisioning installed
         self.no_rustup = False
+        self.default_vpc = True
+        self.subnets = [{'SubnetId': 'subnet-b', 'VpcId': 'vpc-default', 'AvailabilityZone': 'us-test-1b'},
+                        {'SubnetId': 'subnet-a', 'VpcId': 'vpc-default', 'AvailabilityZone': 'us-test-1a'}]
+        self.route_tables = [{'RouteTableId': 'rtb-main', 'VpcId': 'vpc-default', 'Associations': [{'Main': True}],
+                              'Routes': [{'DestinationCidrBlock': '0.0.0.0/0', 'GatewayId': 'igw-1', 'State': 'active'}]}]
 
     def next_id(self, prefix):
         self.counter += 1
@@ -154,14 +159,19 @@ class FakeCloud:
             'arm64' if re.match(r'[a-z]+[0-9]+g', t) else 'x86_64']}} for t in found]}
 
     def op_describe_vpcs(self, args, profile):
-        return {'Vpcs': [{'VpcId': 'vpc-default'}]}
+        return {'Vpcs': [{'VpcId': 'vpc-default'}] if self.default_vpc else []}
 
     def op_describe_subnets(self, args, profile):
-        subnets = [{'SubnetId': 'subnet-b', 'VpcId': 'vpc-default', 'AvailabilityZone': 'us-test-1b'},
-                   {'SubnetId': 'subnet-a', 'VpcId': 'vpc-default', 'AvailabilityZone': 'us-test-1a'}]
+        subnets = self.subnets
         if '--subnet-ids' in args:
             subnets = [s for s in subnets if s['SubnetId'] == self.arg(args, '--subnet-ids')]
+        elif '--filters' in args:
+            subnets = [s for s in subnets if s['VpcId'] in self.filters(args).get('vpc-id', [s['VpcId']])]
         return {'Subnets': subnets}
+
+    def op_describe_route_tables(self, args, profile):
+        vpcs = self.filters(args).get('vpc-id') if '--filters' in args else None
+        return {'RouteTables': [t for t in self.route_tables if vpcs is None or t['VpcId'] in vpcs]}
 
     def op_describe_instance_type_offerings(self, args, profile):
         wanted = self.filters(args)['instance-type']
@@ -739,6 +749,59 @@ class Bootstrap(unittest.TestCase):
         self.assertEqual(result['janitor_test'], 'will run')
         self.assertFalse((self.root / 'ssh' / 'id').exists())
         self.assertFalse((self.root / 'state').exists())
+
+    def legacy_network(self):
+        """No default VPC: one older VPC whose public route table serves two subnets, one in a zone
+        without the types, and whose main table (the private subnet's) has no internet route."""
+        self.cloud.default_vpc = False
+        self.cloud.subnets = [
+            {'SubnetId': 'subnet-pub-b', 'VpcId': 'vpc-legacy', 'AvailabilityZone': 'us-test-1b'},
+            {'SubnetId': 'subnet-pub-a', 'VpcId': 'vpc-legacy', 'AvailabilityZone': 'us-test-1a'},
+            {'SubnetId': 'subnet-priv-b', 'VpcId': 'vpc-legacy', 'AvailabilityZone': 'us-test-1b'}]
+        self.cloud.route_tables = [
+            {'RouteTableId': 'rtb-main', 'VpcId': 'vpc-legacy', 'Associations': [{'Main': True}],
+             'Routes': [{'DestinationCidrBlock': '10.0.0.0/16', 'GatewayId': 'local', 'State': 'active'}]},
+            {'RouteTableId': 'rtb-public', 'VpcId': 'vpc-legacy',
+             'Associations': [{'SubnetId': 'subnet-pub-b'}, {'SubnetId': 'subnet-pub-a'}],
+             'Routes': [{'DestinationCidrBlock': '0.0.0.0/0', 'GatewayId': 'igw-legacy', 'State': 'active'}]}]
+
+    def test_without_a_default_vpc_plan_names_the_subnets_that_would_work(self):
+        self.legacy_network()
+        error = self.main('plan', '--image', 'arm64:c7g.xlarge', code=2)['error']
+        self.assertIn('No default VPC in us-test-1. Subnets that would work: subnet-pub-b (vpc-legacy, us-test-1b); '
+                      'pass one with --subnet', error)
+        self.assertNotIn('subnet-pub-a', error)  # its zone lacks the type
+        self.assertNotIn('subnet-priv-b', error)  # no internet route
+        self.assertTrue({op for _, _, op in self.cloud.ops} <= READ_ONLY, self.cloud.ops)
+        self.assertEqual(self.main('plan', '--image', 'arm64:c7g.xlarge', '--subnet', 'subnet-pub-b')['network']['subnet'],
+                         'subnet-pub-b')
+        # With private addressing, an internet route isn't needed.
+        error = self.main('plan', '--image', 'arm64:c7g.xlarge', '--address', 'private', '--cidr', '10.8.0.0/16',
+                          code=2)['error']
+        self.assertIn('subnet-priv-b (vpc-legacy, us-test-1b), subnet-pub-b (vpc-legacy, us-test-1b)', error)
+        self.cloud.route_tables = self.cloud.route_tables[:1]
+        self.assertIn('No subnet has a route to an internet gateway in a zone that offers every type (c7g.xlarge)',
+                      self.main('plan', '--image', 'arm64:c7g.xlarge', code=2)['error'])
+
+    def test_a_subnet_that_cannot_work_is_refused_before_any_change(self):
+        self.legacy_network()
+        error = self.apply('--subnet', 'subnet-priv-b', code=2)['error']
+        self.assertIn('Subnet subnet-priv-b has no route to an internet gateway', error)
+        self.assertIn('Subnet subnet-pub-a is in us-test-1a, which does not offer every type',
+                      self.apply('--subnet', 'subnet-pub-a', code=2)['error'])
+        self.assertEqual((self.cloud.deploys, self.builds()), ([], []))
+        self.assertFalse((self.root / 'ssh' / 'id').exists())
+        # Private addressing accepts the subnet without an internet route.
+        self.assertEqual(self.apply('--subnet', 'subnet-priv-b', '--address', 'private', '--cidr', '10.0.0.0/16')
+                         ['network']['subnet'], 'subnet-priv-b')
+
+    def test_a_remembered_public_subnet_that_lost_its_route_is_refused(self):
+        self.legacy_network()
+        self.apply('--subnet', 'subnet-pub-b')
+        self.cloud.route_tables[1]['Routes'] = []
+        deploys = len(self.cloud.deploys)
+        self.assertIn('Subnet subnet-pub-b has no route to an internet gateway', self.apply(code=2)['error'])
+        self.assertEqual(len(self.cloud.deploys), deploys)
 
     def test_type_that_cannot_run_the_architecture_is_refused(self):
         self.assertIn('does not run arm64', self.main('plan', '--image', 'arm64:c7i.large', code=2)['error'])

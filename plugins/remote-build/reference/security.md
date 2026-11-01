@@ -26,6 +26,15 @@ are redacted rather than echoing provider stderr. Logs, command arguments, manif
 identity and SSH paths may exist in private state; do not commit them, attach them to a PR,
 or include them in examples. This repository's tests use synthetic fixtures only.
 
+**Publishing.** The project a worker builds may be public, and so may its PRs, issues and
+comments. What the tools print is private even when it isn't secret: `plan` and `apply` show the
+operator's public address (`ssh_from`) and subnet, VPC and AMI IDs; `setup` shows the AMI; `aws`
+output carries the account ID; IAM user and role names, launch template and instance IDs, and the
+alert email appear along the way. An agent never copies these into commits, PR or issue text,
+comments or committed docs. It describes them generically instead ("the owner's workers in
+us-east-1", "a c7i.2xlarge from the `x86` profile"). A job's exit code, timing and the lines of its
+log that a reviewer needs are fine to report after the review above; whole logs are not.
+
 Bootstrap is an operator tool. It runs with an admin profile, so the setup skill lets Claude run
 only its read-only `plan` and `template`; the operator runs `apply` and `teardown`. The daily
 profile it writes assumes a role whose trust policy names the account, so it works from any

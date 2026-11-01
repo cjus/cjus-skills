@@ -15,8 +15,8 @@ local `status` exit 0 means retrieval succeeded, not that the build passed.
 | `snapshot [PROJECT]` | Save an immutable tar of the project's eligible tracked and untracked files; print manifest and SHA-256. `PROJECT` is the same as `--project` |
 | `run --snapshot SHA --approve-upload -- ARGV...` | Submit that exact archive and command; print durable job ID |
 | `status` | Report session state, expiry and recorded job-to-source mapping |
-| `status --job ID` | Retrieve job state, exit code and bounded log; verify job/source identity |
-| `down` | Verify account, client token, owner/project/session tags and instance identity before requesting termination |
+| `status --job ID [--wait]` | Retrieve job state and exit code, save the bounded log to the private result file named by `result_file`, and verify job/source identity. `--wait` polls (from 1 s, backing off to 20 s, releasing the project lock between polls) until the job leaves submitted/queued/running or the session expires |
+| `down [--wait]` | Verify account, client token, owner/project/session tags and instance identity before requesting termination. `--wait` repeats it until `terminated` or `absent`, for at most 15 minutes |
 
 The API is provider-neutral at the command boundary; provider v1 is AWS only. New providers
 must preserve ownership, uncertainty and result semantics. Config and result fields may be
@@ -49,7 +49,8 @@ project's selection or its profile mid-session is refused until it is restored.
 ## Source contract
 
 Git root only. Dirty tracked content and nonignored untracked files are included; tracked
-deletions disappear. Ignore rules do not override the mandatory exclusions in
+deletions disappear. The snapshot never contains `.git`, so the worker builds a source tree, not
+a checkout: build scripts that ask git find no repository, and tests that assume one fail there. Ignore rules do not override the mandatory exclusions in
 `remote_build.py:excluded`. Symlinks, hard links, submodules, special files and control-character
 paths are rejected. Reads hold directory descriptors and use no-follow opens for every path
 component, so a replacement symlink cannot redirect a read outside the project. The snapshot is sorted, has normalized tar metadata and preserves only
