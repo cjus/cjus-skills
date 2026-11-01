@@ -1,13 +1,22 @@
 # Operator guide
 
-This guide walks an operator through everything remote-build needs before its first build.
-The plugin itself never creates, changes or deletes cloud resources: you run these commands,
-and `setup` checks the result. Run `setup` after any step to see what is left; each of its
-failing checks links to the step below that fixes it.
+This guide sets up everything remote-build needs before its first build. There are two ways
+to do it:
 
-> These commands were written for this guide and have not been run against live AWS by the
-> plugin's tests. Each step ends with a **Check**. Stop at the first check that does not match
-> and fix it before continuing.
+- **[Quick start](#quick-start-bootstrap):** run `bootstrap.py apply` once with an AWS profile
+  that can create EC2, IAM, Lambda and CloudFormation resources. It builds every piece below,
+  tests them, and writes the private config. Most operators want this.
+- **[Manual setup](#manual-setup):** the same pieces, one command at a time. Use it to see
+  exactly what bootstrap does, to build in an account where you can't run CloudFormation, or
+  as the starting point for your own variant.
+
+Either way, `setup` checks the result. Run it after any step to see what is left; each failing
+check links to the section that fixes it. The plugin's own commands (`up`, `run`, `status`,
+`down`) never create infrastructure. Only you do, by running bootstrap or the manual steps.
+
+> Neither bootstrap nor these commands have been run against live AWS by the plugin's tests.
+> Bootstrap's tests drive it against a simulated cloud. Each step ends with a **Check**; stop
+> at the first one that does not match and fix it before continuing.
 
 ## Overview
 
@@ -25,20 +34,190 @@ You will build, once:
 | An expiry janitor | Terminates expired workers even when your laptop is offline |
 | The private config and a per-repository selection | Tell the plugin what to use |
 
-Expect an hour or two. Charges while you work: the build machine's hours, the image's
-snapshot storage (ongoing, per GB-month), public IPv4 addresses while machines run, and small
-Lambda, EventBridge and CloudWatch usage. Review current AWS prices; the plugin has no price
+Charges: build-machine hours while an image is made, the image's snapshot storage (ongoing,
+per GB-month), public IPv4 addresses while machines run, and small Lambda, EventBridge,
+CloudWatch and CloudFormation usage. Review current AWS prices; the plugin has no price
 estimator or spending cap.
 
-Set these shell variables first and keep the terminal open; later steps use them. Replace the
-angle-bracket values.
+Two choices are deliberate and stay even with bootstrap:
+
+- **The narrow daily profile.** Your admin credentials can do anything, which is exactly why
+  remote-build's commands should not use them. The daily profile can only launch your approved
+  templates and types, tagged as yours, and terminate its own workers. It limits what the
+  plugin's commands can do, including when one misbehaves. It is not a sandbox against an agent
+  that can read your other AWS profiles.
+- **The baked host key.** Every worker presents the host key read from the image's build
+  machine through the AWS API, so the client verifies workers strictly from the first
+  connection, without waiting minutes per launch for console output.
+
+## Quick start: bootstrap
+
+You decide five things; bootstrap does the rest.
+
+| Choice | Flag | Example |
+|---|---|---|
+| Admin AWS profile (creates the pieces) | `--admin-profile` | `default` |
+| Region (default: the admin profile's) | `--region` | `us-east-1` |
+| Owner: a stable name for your workers | `--owner` | `yourname-builds` |
+| One launch profile per architecture: approved instance types (the first also builds the image) | `--image`, repeatable | `arm64:c7g.xlarge,c7g.2xlarge`, `x86=amd64:c7i.xlarge` |
+| Where janitor alarms go (optional, recommended) | `--alert-email` | `you@example.com` |
+
+`--image` takes `[name=]arch:type[,type...]`. Without a name, `arm64` profiles are called `arm`
+and `amd64` ones `x86`; repositories choose a profile by that name.
+
+Find the installed plugin (`setup` prints it as `guide.installed`; the plugin is two folders
+up), look first, then apply. In Claude Code, prefix each command with `!` so its output lands
+in the conversation and Claude can help read it.
+
+```sh
+PLUGIN=~/.claude/plugins/cache/cjus-skills/remote-build/<version>
+python3 "$PLUGIN/scripts/bootstrap.py" plan --admin-profile default --owner yourname-builds \
+  --image arm64:c7g.xlarge,c7g.2xlarge
+python3 "$PLUGIN/scripts/bootstrap.py" apply --admin-profile default --owner yourname-builds \
+  --image arm64:c7g.xlarge,c7g.2xlarge --alert-email you@example.com
+```
+
+`plan` only reads: it checks the admin profile, that each type runs its architecture, picks a
+default-VPC subnet whose zone offers every type, and says what apply would build. `apply` takes
+20-40 minutes, mostly compiling the toolchain into the image, and prints progress as it goes:
+
+1. Creates `~/.ssh/remote-build-identity` if it does not exist.
+2. Deploys the CloudFormation stack `remote-build-<owner>`: the security group (SSH from this
+   machine's public address only), the janitor Lambda with its five-minute schedule, a 30-day
+   log group, and alarms for a janitor that fails or stops running.
+3. Builds one image per launch profile: a build machine from Ubuntu 24.04, its host key read
+   through `get-console-output`, [`scripts/aws/provision.sh`](../scripts/aws/provision.sh) run over
+   SSH, checks that `builder` has Python and no sudo and that `ubuntu` can no longer log in,
+   then the image. The build machine and its temporary key pair are deleted, also on failure.
+4. Updates the stack with a launch template per profile and the operator role, whose policy is
+   the one in [step 8](#step-8-iam-permissions).
+5. Writes the daily profile to `~/.aws/config`: it assumes the operator role, using your admin
+   profile as its source, so there is no access key to create or rotate.
+6. Writes `~/.ssh/remote-build-known-hosts` and the private config (step 10's fields).
+7. Proves the policy with dry runs (an approved launch is allowed; an unapproved type and
+   another owner's tag are denied; nothing starts).
+8. Runs the janitor test from [step 9](#step-9-expiry-janitor), which also proves a real worker
+   works: it launches a worker with the daily profile exactly as the client does (metadata
+   service off), logs in as `builder` against the new known-hosts file, and waits for the
+   janitor to terminate it once its five-minute expiry passes. Only a termination the janitor
+   made counts. Only then is `janitor_confirmed` set to `true`. This costs up to twenty minutes
+   of your first listed type.
+
+If you gave `--alert-email`, confirm the subscription email AWS sends, or the alarms reach no one.
+
+**Check:** apply ends with a JSON summary whose `janitor_test` is `passed` and whose `setup`
+shows every check `ok` except `repository`. Then commit each repository's selection
+([step 11](#step-11-repository-selection)) and run the first smoke test ([step 12](#step-12-first-smoke-test)).
+
+### Running apply again
+
+Apply is safe to repeat. It remembers your choices (in `~/.local/state/remote-build/bootstrap/`),
+reuses images that are still available, removes anything an interrupted run left behind, and
+only changes what you asked for. Re-runs need only `--admin-profile` and `--owner`.
+
+| You want to | Run apply with | Image rebuilt? |
+|---|---|---|
+| Follow a new public address (SSH stops working) | nothing extra | No |
+| Approve other types for a profile | `--image` lists with the new types | No |
+| Add an architecture | the existing `--image` values plus the new one | Only the new one |
+| Drop a profile | `--image` without it (its image is deleted) | No |
+| Update the toolchain or OS packages | `--rebake` | Yes |
+| Preinstall a pinned Rust toolchain | `--rebake --rust-toolchain 1.85.0` | Yes |
+| Use your own provisioning script | `--rebake --provision-script ./my-provision.sh` | Yes |
+| Retry a janitor test that failed | `--retest-janitor` | No |
+| Debug a failed image build | `--keep-on-failure`, then SSH in as `ubuntu`; the next apply removes it | Yes |
+
+A rebuilt image becomes a new version of the same launch template, so repositories keep working;
+the replaced image and its snapshot are deleted. Apply refuses to change images while any of
+your workers runs: collect results and `/remote-build:down` first. Your edits to `max_workers`,
+`ttl_minutes`, `max_jobs` and `max_snapshot_bytes` in the private config are kept.
+
+Apply refuses, before changing anything, when a private config for another owner exists
+(`--replace-config` backs it up and replaces it) or when the daily profile name is already used
+by a profile bootstrap did not write (`--replace-profile`, or pick `--daily-profile`).
+
+### Removing everything
+
+```sh
+python3 "$PLUGIN/scripts/bootstrap.py" teardown --admin-profile default --owner yourname-builds \
+  --confirm yourname-builds
+```
+
+It refuses while any of your workers runs. Then it deletes the stack (security group, role,
+templates, janitor, alarms), every image and snapshot it made, the daily profile section in
+`~/.aws/config`, the private config, the known-hosts file and its own state. It keeps your SSH
+key and per-project build state; delete those yourself if you no longer need them.
+
+To read the exact stack without touching AWS, print it: `bootstrap.py template --owner
+yourname-builds --image arm64:c7g.xlarge` (placeholder IDs).
+
+## Make it yours
+
+remote-build is a starting point, not a fixed product. Its defaults suit one operator building
+Rust on public-address Ubuntu workers. Your projects, network and rules for Claude probably
+differ, and you should change the plugin to fit them. There are two levels.
+
+**1. Change your setup (no code).** Most needs are a flag or a config field:
+
+| Need | Where |
+|---|---|
+| Other toolchains or tools on the image | `--provision-script` with your copy of `scripts/aws/provision.sh`, or `--rust-toolchain`; then `--rebake` |
+| Bigger disks | `--disk-gb` (workers can't grow their disk); then `--rebake` |
+| Private networking (VPN, peered VPC) | `--subnet`, `--address private`, `--cidr <your network>` |
+| Other instance types or architectures | `--image` |
+| Limits: lifetime, concurrency, jobs, snapshot size | `ttl_minutes`, `max_workers`, `max_jobs`, `max_snapshot_bytes` in the [private config](config.md) |
+| Which types a repository may use | the repository's `.remote-build.json`, within the profile's types |
+
+**2. Make a custom version.** When you want the plugin itself to behave differently, change your
+own copy. Some examples: let Claude run `bootstrap.py apply` itself, use another base image or
+OS, run the janitor more often, keep caches between sessions, screen secrets differently, ask
+for approval another way, or add a provider.
+
+- **Don't edit the installed copy.** Everything under `~/.claude/plugins/cache/` is replaced
+  when the plugin updates.
+- **Fork the marketplace** (`cjus/cjus-skills`) or copy `plugins/remote-build` into your own
+  marketplace repository. Give the plugin a new `name` in `.claude-plugin/plugin.json` and in the
+  marketplace entry so it can be installed next to the original, and set `homepage` to your
+  repository so `setup`'s guide links point at your copy.
+- **Install yours:** `claude plugin marketplace add <you>/<repo>`, then
+  `claude plugin install <name>@<marketplace>`. A fork changes only when you merge upstream
+  changes, so it also pins the version you tested.
+- **Run the offline tests** after each change: `python3 tests/test_remote_build.py` and
+  `python3 tests/test_bootstrap.py`.
+
+Where each behaviour lives:
+
+| To change | Edit |
+|---|---|
+| What the worker image contains | `scripts/aws/provision.sh` |
+| Which workers the janitor terminates | `scripts/aws/janitor.py` |
+| The AWS resources bootstrap creates | `render()` in `scripts/bootstrap.py` |
+| What the daily profile may do | `operator_policy()` in `scripts/bootstrap.py` |
+| What Claude may and may not do at each step | `skills/<step>/SKILL.md` |
+| Client rules: template checks, limits, snapshot exclusions and secret screen | `scripts/remote_build.py` |
+
+The client relies on a few things being true, and refuses or misbehaves when they are not. Keep
+them, or change the client's checks and tests with them on purpose: every volume deletes on
+termination; templates carry no user data, instance profile, Spot options, instance
+requirements, hibernation or termination protection; images boot without cloud-init (the client
+disables the metadata service at launch), give `builder` Python 3.9+ and no sudo, and present a host key you
+read through an authenticated channel; and something independent terminates expired workers
+tagged with your owner.
+
+## Manual setup
+
+The steps below build the same pieces by hand. Set these shell variables first and keep the
+terminal open; later steps use them. Replace the angle-bracket values.
 
 ```sh
 ADMIN=<admin-profile>        # an existing AWS CLI profile that can create EC2, IAM and Lambda resources
 REGION=<region>              # for example us-east-1
 OWNER=<owner>                # a stable name for your workers, for example yourname-builds
+PLUGIN=<installed-plugin>    # the folder holding scripts/ and reference/; setup prints guide.installed
 ACCOUNT_ID=$(aws sts get-caller-identity --profile "$ADMIN" --query Account --output text)
 ```
+
+Expect an hour or two.
 
 ## Step 0: Local tools
 
@@ -185,60 +364,21 @@ ssh -F /dev/null -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/r
 
 ## Step 6: Build the worker image
 
-Save this script as `provision.sh`. It creates the unprivileged `builder` user, installs Rust
-with rustfmt, clippy, cargo-deny and mdbook on the non-interactive SSH `PATH`, and prepares the
-image for how the client launches workers.
-
-```sh
-#!/bin/bash
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update
-sudo apt-get -y upgrade
-sudo apt-get -y install build-essential pkg-config curl python3 git
-
-# Unprivileged build user, reachable only with the remote-build key; no sudo.
-sudo useradd --create-home --shell /bin/bash builder
-sudo install -d -m 700 -o builder -g builder /home/builder/.ssh
-printf '%s\n' "$PUBKEY" | sudo tee /home/builder/.ssh/authorized_keys >/dev/null
-sudo chown builder:builder /home/builder/.ssh/authorized_keys
-sudo chmod 600 /home/builder/.ssh/authorized_keys
-
-# Rust for builder. Add `rustup toolchain install <version>` lines for any toolchain your
-# projects pin in rust-toolchain.toml: workers never download toolchains.
-sudo -iu builder bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable -c rustfmt -c clippy'
-sudo -iu builder bash -c '~/.cargo/bin/cargo install --locked cargo-deny mdbook'
-# Non-interactive SSH sessions do not read the rustup PATH line in ~/.bashrc; link the tools instead.
-for tool in cargo rustc rustdoc rustup rustfmt cargo-fmt cargo-clippy clippy-driver cargo-deny mdbook; do
-  sudo ln -sf /home/builder/.cargo/bin/$tool /usr/local/bin/$tool
-done
-
-# The client disables the instance metadata service at launch, and cloud-init needs it to set
-# up networking and would regenerate host keys. Turn cloud-init off, keep this host key, and
-# use DHCP on any ethernet interface rather than this machine's MAC address.
-sudo tee /etc/netplan/60-remote-build.yaml >/dev/null <<'NETPLAN'
-network:
-  version: 2
-  ethernets:
-    primary:
-      match:
-        name: "en*"
-      dhcp4: true
-NETPLAN
-sudo chmod 600 /etc/netplan/60-remote-build.yaml
-sudo rm -f /etc/netplan/50-cloud-init.yaml
-sudo touch /etc/cloud/cloud-init.disabled
-
-# Only builder may log in to workers.
-sudo rm -f /home/ubuntu/.ssh/authorized_keys
-```
+The plugin ships the provisioning script as
+[`scripts/aws/provision.sh`](../scripts/aws/provision.sh); bootstrap runs the same file. It creates
+the unprivileged `builder` user, installs Rust with rustfmt, clippy, cargo-deny and mdbook on the
+non-interactive SSH `PATH`, and prepares the image for how the client launches workers. Copy and
+change it for another toolchain (see [Make it yours](#make-it-yours)); keep its last two sections.
+Set `RUST_TOOLCHAINS` to preinstall the toolchains your projects pin in `rust-toolchain.toml`:
+workers never download toolchains.
 
 Run it on the build machine, then check the result as `builder`:
 
 ```sh
 rbssh() { ssh -F /dev/null -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-build-known-hosts" \
   -o IdentitiesOnly=yes -i "$HOME/.ssh/remote-build-identity" "$@"; }
-rbssh ubuntu@"$BUILD_IP" "PUBKEY='$(cat ~/.ssh/remote-build-identity.pub)' bash -s" < provision.sh
+rbssh ubuntu@"$BUILD_IP" "cat > /tmp/remote-build-provision.sh && PUBKEY='$(cat ~/.ssh/remote-build-identity.pub)' \
+  RUST_TOOLCHAINS='' bash /tmp/remote-build-provision.sh </dev/null" < "$PLUGIN/scripts/aws/provision.sh"
 rbssh builder@"$BUILD_IP" 'cargo --version && rustc --version && cargo deny --version && mdbook --version && python3 --version'
 rbssh builder@"$BUILD_IP" 'sudo -n true' && echo 'builder has sudo: fix this' || echo 'builder has no sudo: good'
 ```
@@ -328,6 +468,20 @@ approve in any profile.
       }
     },
     {
+      "Sid": "NoOverridingTemplateResources",
+      "Effect": "Deny",
+      "Action": "ec2:RunInstances",
+      "Resource": ["arn:aws:ec2:*:*:image/*", "arn:aws:ec2:*:*:security-group/*",
+                   "arn:aws:ec2:*:*:subnet/*", "arn:aws:ec2:*:*:network-interface/*"],
+      "Condition": {"Bool": {"ec2:IsLaunchTemplateResource": "false"}}
+    },
+    {
+      "Sid": "NoKeyPairs",
+      "Effect": "Deny",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:*:*:key-pair/*"
+    },
+    {
       "Sid": "OnlyApprovedInstanceTypes",
       "Effect": "Deny",
       "Action": "ec2:RunInstances",
@@ -359,6 +513,10 @@ approve in any profile.
 }
 ```
 
+The template condition alone would still let a caller override the template's image, network or
+key pair at launch; the two deny statements close that. No IAM condition can block `--user-data`,
+which the client never sends.
+
 Create it, then give it to the daily `remote-build` profile (step 1): attach it to the IAM user,
 or add it to the Identity Center permission set.
 
@@ -389,39 +547,11 @@ The janitor terminates workers whose `remote-build:expires` time has passed, eve
 minutes, whether or not your laptop is on. This example is a small Lambda function. It treats a
 worker with a missing or unreadable expiry tag as expired.
 
-Save as `janitor.py`:
+The handler is [`scripts/aws/janitor.py`](../scripts/aws/janitor.py), the same code bootstrap
+deploys. Copy it next to the files below:
 
-```python
-import os
-import time
-
-import boto3
-
-OWNER = os.environ['OWNER']
-ec2 = boto3.client('ec2')
-
-
-def handler(event, context):
-    now = int(time.time())
-    expired = []
-    pages = ec2.get_paginator('describe_instances').paginate(Filters=[
-        {'Name': 'tag:remote-build:owner', 'Values': [OWNER]},
-        {'Name': 'instance-state-name', 'Values': ['pending', 'running', 'stopping', 'stopped']}])
-    for page in pages:
-        for reservation in page['Reservations']:
-            for instance in reservation['Instances']:
-                tags = {t['Key']: t['Value'] for t in instance.get('Tags', [])}
-                try:
-                    deadline = int(tags['remote-build:expires'])
-                except (KeyError, ValueError):
-                    deadline = 0
-                if deadline <= now:
-                    expired.append(instance['InstanceId'])
-    if expired:
-        # An exception here fails the run, which the error alarm below reports.
-        ec2.terminate_instances(InstanceIds=expired)
-    print({'terminated': expired})
-    return {'terminated': expired}
+```sh
+cp "$PLUGIN/scripts/aws/janitor.py" janitor.py
 ```
 
 Save as `janitor-trust.json`:

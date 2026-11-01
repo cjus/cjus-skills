@@ -1,9 +1,11 @@
 # AWS provider
 
-The operator provisions the infrastructure separately. This plugin does not create IAM
-credentials, keys, security groups, network rules, launch templates, images or a janitor.
-The [operator guide](operator-guide.md) gives the commands to build each of them; this page
-states the requirements they must meet.
+The operator provisions the infrastructure. The plugin's session commands (`up`, `run`,
+`status`, `down`) never create IAM credentials, keys, security groups, network rules, launch
+templates, images or a janitor. The operator builds them either with `scripts/bootstrap.py
+apply`, run with an admin profile, which deploys them as one CloudFormation stack plus one image
+per launch profile, or by hand; the [operator guide](operator-guide.md) covers both. This page
+states the requirements they must meet, whichever way they were built.
 Use an existing AWS CLI profile with scoped permissions for STS identity, EC2 description,
 RunInstances, launch-time tagging and TerminateInstances. Restrict template, region, instance
 types and owner tags through IAM as appropriate; local config is not an IAM boundary.

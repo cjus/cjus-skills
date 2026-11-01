@@ -6,6 +6,26 @@ verification or launch replacements merely to make a command succeed.
 For setup problems, run `setup`: every failing check names its next step and links the
 [operator guide](operator-guide.md) section that fixes it.
 
+## Bootstrap
+
+`bootstrap.py` prints progress to stderr and, on failure, one JSON line naming what failed with
+AWS's own error text. Re-running the same `apply` is always the first recovery step: it removes
+build machines, key pairs and images an interrupted run left behind, then carries on.
+
+| Symptom | Meaning and next action |
+|---|---|
+| A private config or AWS profile already exists | Apply refuses before changing anything. `--replace-config` backs the config up; `--replace-profile` or another `--daily-profile` resolves a profile name bootstrap did not write. |
+| A type does not run an architecture, or no subnet offers every type | Choose types of the profile's architecture (`c7g` and `t4g` are arm64; `c7i` and `t3` are amd64), or pass `--subnet` in a zone that offers them. |
+| Stack deploy failed | The error lists the failed resources and AWS's reasons (often a missing admin permission, or a name already taken by a resource from manual setup). Fix it and re-run; a stack that failed to create is deleted and retried. |
+| No SSH host key in the console output | The build machine's console never printed its keys. Re-run; if it repeats, the base image or type may not support console output (use a Nitro type). |
+| Cannot reach the build machine over SSH | Your public address changed, or `--address private` lacks a route. Re-run on the network you will use, or pass `--cidr`. |
+| Provisioning failed | Read the log the error names (in `~/.local/state/remote-build/bootstrap/`). Fix the script, or re-run with `--keep-on-failure` and SSH in as `ubuntu` to investigate; the next apply removes the machine. |
+| The daily profile cannot launch an approved worker | IAM can take minutes to apply; re-run. If it persists, check the admin profile may assume roles (`sts:AssumeRole`) and that `~/.aws/config` holds the profile bootstrap wrote. |
+| Janitor test `failed` | Read `/aws/lambda/remote-build-<owner>-janitor` in CloudWatch, fix the cause, and re-run with `--retest-janitor`. `janitor_confirmed` stays false until it passes. |
+| Workers are running | Apply won't change images, and teardown won't run, while your workers exist. Collect results and `/remote-build:down` them. |
+
+## Sessions
+
 | Symptom | Meaning and next action |
 |---|---|
 | Missing/broken executable | Install or repair the operator-managed dependency, then rerun setup. The plugin installs nothing. |
@@ -55,10 +75,14 @@ authentication/launch uncertainty, ownership checks, source exclusions and symli
 job/source matching, reconnect, exit status, timeouts and bounded logs. A dependency-free real
 Rust fixture uses an already installed toolchain with offline Cargo commands; it proves warm
 reuse, changed-source rebuilding and toolchain identity invalidation. Concurrency and a failed
-job followed by success on the same running instance are covered. CI runs those tests on
-macOS/Linux and Python 3.9/3.14.
+job followed by success on the same running instance are covered. Bootstrap's suite runs apply
+from an empty simulated account to a config `setup` reports ready, plus re-runs, rebakes, type
+changes, failed and kept builds, the janitor failing, refusals before any change, and teardown;
+the simulated cloud evaluates the deployed operator policy for dry runs and runs the janitor
+between polls. CI runs both suites on macOS/Linux and Python 3.9/3.14.
 
-No real AWS launch, real SSH handshake, live IAM/network behavior, janitor termination, billing
-verification or EBS deletion has been tested by this implementation task. Before live use,
+No real AWS launch, real SSH handshake, live IAM/network behavior, CloudFormation deployment,
+janitor termination, billing verification or EBS deletion has been tested by this implementation
+task. Bootstrap's own janitor test and dry runs are the first live evidence an operator gets. Before live use,
 an operator must separately authorize and perform a bounded smoke test of those surfaces.
 The configuration declaration and mocked tests are not evidence that live infrastructure works.

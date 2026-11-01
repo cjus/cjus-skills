@@ -38,7 +38,7 @@ and `#!/usr/bin/env bash` scripts and are run through their shebangs.
 | **council** | Nothing. With no roster file it seats four Claude members, which needs no key, no Node and no `jq`. | `jq` **or** Node for a roster file — either, not both; `curl` to probe Ollama; Node plus `COUNCIL_OPENROUTER_API_KEY` for OpenRouter members; the `codex` CLI, logged in, for a Codex member |
 | **explain** | Nothing. | Network when a `/explain:qve` page is opened, since Mermaid loads from a CDN at view time — unreachable means the diagram source stays visible, degraded rather than broken. Graphviz (`dot`) for a guaranteed-offline page |
 | **iac** | `python3` **3.9 or newer**, standard library only, and the `gh` CLI logged in. | Ollama, or an OpenAI-compatible server such as LM Studio, for a local agent; `IAC_OPENROUTER_API_KEY` for an OpenRouter agent; the `codex` CLI, logged in, for a Codex agent; a ChatGPT dot with a GitHub connector |
-| **remote-build** | Python **3.9+**, Git, OpenSSH, AWS CLI v2 and operator-managed AWS/SSH infrastructure; see its README for the live-validation boundary. | None. |
+| **remote-build** | Python **3.9+**, Git, OpenSSH, AWS CLI v2 and AWS/SSH infrastructure, which its operator-run bootstrap builds in one command; see its README for the live-validation boundary. | None. |
 | **pr** | `git`, the `gh` CLI authenticated against your repo, and Node for the lifecycle script | `jq`, used where present and routed around where not |
 
 Run `${CLAUDE_PLUGIN_ROOT}/scripts/install.sh` once for `/makebook`. It builds its virtualenv

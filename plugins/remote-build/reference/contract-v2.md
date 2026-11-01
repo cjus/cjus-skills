@@ -10,7 +10,7 @@ local `status` exit 0 means retrieval succeeded, not that the build passed.
 
 | Command | Contract |
 |---|---|
-| `setup` | Check every prerequisite (tools, config file, fields, permissions and location, AWS authentication, each launch profile's pinned template, SSH identity, known hosts, janitor declaration, repository selection) without stopping at the first problem. Prints `ready`, a `checks` list (`ok`, `fail` or `blocked`, each non-ok entry with `next` and an operator-guide `guide` link) and the guide's locations; exits 0 only when ready, otherwise 2 with the report on stdout. No cloud mutation |
+| `setup` | Check every prerequisite (tools, config file, fields, permissions and location, AWS authentication, each launch profile's pinned template, SSH identity, known hosts, janitor declaration, repository selection) without stopping at the first problem. Prints `ready`, a `checks` list (`ok`, `fail` or `blocked`, each non-ok entry with `next` and an operator-guide `guide` link) and the guide's locations; exits 0 only when ready, otherwise 2 with the report on stdout. No cloud mutation. Infrastructure comes from the separate operator-run `bootstrap.py` (`plan`, `apply`, `teardown`, `template`), which is outside this contract |
 | `up [--approve-cost]` | Launch one approved worker for this project with its selected profile and type, or reconcile its existing session without another launch |
 | `snapshot [PROJECT]` | Save an immutable tar of the project's eligible tracked and untracked files; print manifest and SHA-256. `PROJECT` is the same as `--project` |
 | `run --snapshot SHA --approve-upload -- ARGV...` | Submit that exact archive and command; print durable job ID |
