@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+"""remote-build contract v1. Standard library; never invokes a local shell."""
+import argparse
+import base64
+import fcntl
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import time
+import uuid
+
+
+class Refused(Exception):
+    pass
+
+
+def require(ok, message):
+    if not ok:
+        raise Refused(message)
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+
+def call(argv, data=None, timeout=60):
+    try:
+        result = subprocess.run(argv, input=data, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        raise Refused('Tool unavailable or timed out: ' + Path(argv[0]).name)
+    # Tool stderr can contain credentials, source, or private paths; do not echo it.
+    require(result.returncode == 0, 'Tool failed: ' + Path(argv[0]).name)
+    return result.stdout
+
+
+def write(path, value):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_suffix('.tmp')
+    with open(tmp, 'wb') as stream:
+        os.chmod(tmp, 0o600)
+        stream.write(canonical(value))
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(tmp, path)
+
+
+def load(path):
+    return json.loads(path.read_text())
+
+
+def configuration(path):
+    c = load(path)
+    required = {'version', 'provider', 'profile', 'region', 'owner', 'launch_template',
+                'launch_version', 'instance_type', 'allowed_instance_types', 'ttl_minutes',
+                'janitor_confirmed', 'ssh_user', 'known_hosts', 'identity_file',
+                'address_field', 'max_snapshot_bytes', 'max_jobs', 'cache_retention'}
+    require(set(c) == required, 'Config fields must match reference/config.md exactly')
+    require(c['version'] == 1 and c['provider'] == 'aws', 'Only contract v1 / AWS is supported')
+    for key in ('profile', 'region', 'owner', 'instance_type', 'ssh_user'):
+        require(isinstance(c[key], str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}', c[key]), 'Invalid ' + key)
+    require(re.fullmatch(r'lt-[a-f0-9]+', c['launch_template']), 'Invalid launch template')
+    require(re.fullmatch(r'[1-9][0-9]*', c['launch_version']), 'Pin a numeric launch template version')
+    require(isinstance(c['allowed_instance_types'], list) and c['allowed_instance_types'] and
+            all(isinstance(t, str) for t in c['allowed_instance_types']), 'Provide an instance-type list')
+    require(c['instance_type'] in c['allowed_instance_types'], 'Instance type not approved in config')
+    for key, upper in [('ttl_minutes', 480), ('max_snapshot_bytes', 33554432), ('max_jobs', 20)]:
+        require(type(c[key]) is int and 1 <= c[key] <= upper, 'Out-of-bounds ' + key)
+    require(c['janitor_confirmed'] is True, 'Independent expiry janitor must be confirmed by operator')
+    require(c['cache_retention'] == 'session', 'Only session-scoped cache retention is supported')
+    require(c['address_field'] in ('PublicIpAddress', 'PrivateIpAddress'), 'Unsupported address field')
+    for key in ('known_hosts', 'identity_file'):
+        p = Path(c[key]).expanduser()
+        require(p.is_absolute() and p.is_file() and not p.is_symlink(), 'Provide an existing absolute ' + key)
+        c[key] = str(p)
+    return c
+
+
+def prerequisites():
+    for binary, arg in [('aws', '--version'), ('ssh', '-V'), ('git', '--version')]:
+        require(shutil.which(binary), 'Missing dependency: ' + binary)
+        call([binary, arg])
+
+
+def aws(c, service, operation, *args):
+    data = call(['aws', '--profile', c['profile'], '--region', c['region'], '--output', 'json',
+                 '--no-cli-pager', service, operation] + list(args))
+    return json.loads(data)
+
+
+def identity(c):
+    return aws(c, 'sts', 'get-caller-identity')['Account']
+
+
+def instances(c, *filters):
+    data = aws(c, 'ec2', 'describe-instances', '--filters', *filters)
+    return [i for r in data['Reservations'] for i in r['Instances']]
+
+
+def template(c):
+    versions = aws(c, 'ec2', 'describe-launch-template-versions', '--launch-template-id',
+                   c['launch_template'], '--versions', c['launch_version'])['LaunchTemplateVersions']
+    require(len(versions) == 1, 'Ambiguous launch template')
+    t = versions[0]['LaunchTemplateData']
+    require(not any(t.get(k) for k in ('IamInstanceProfile', 'UserData', 'InstanceMarketOptions',
+                                      'InstanceRequirements', 'HibernationOptions')), 'Unsupported template capabilities')
+    require(not t.get('DisableApiTermination'), 'Template enables termination protection')
+    require(t.get('ImageId', '').startswith('ami-'), 'Pin an AMI in the template')
+    images = aws(c, 'ec2', 'describe-images', '--image-ids', t['ImageId'])['Images']
+    require(len(images) == 1, 'AMI unavailable')
+    mappings = {b['DeviceName']: b for b in images[0].get('BlockDeviceMappings', [])}
+    mappings.update({b['DeviceName']: b for b in t.get('BlockDeviceMappings', [])})
+    require(mappings, 'Cannot verify storage retention')
+    for b in mappings.values():
+        require('Ebs' not in b or b['Ebs'].get('DeleteOnTermination') is True,
+                'Every EBS volume must explicitly delete on termination')
+    return {'image': t['ImageId'], 'storage': 'delete-on-termination'}
+
+
+def owned(c, s):
+    require(identity(c) == s['account'], 'AWS account changed; restore the original profile')
+    found = instances(c, 'Name=client-token,Values=' + s['token'])
+    require(len(found) == 1, 'Creation unresolved or resource no longer visible; do not relaunch')
+    i = found[0]
+    tags = {t['Key']: t['Value'] for t in i.get('Tags', [])}
+    require(tags.get('remote-build:owner') == c['owner'] and
+            tags.get('remote-build:session') == s['token'] and
+            i.get('ClientToken') == s['token'], 'Ownership mismatch; refusing resource access')
+    require(not s.get('instance') or s['instance'] == i['InstanceId'], 'Instance identity changed')
+    return i
+
+
+def up(c, state, approve):
+    path = state / 'session.json'
+    if path.exists():
+        s = load(path)
+        require(s['config'] == digest(canonical(c)), 'Configuration changed during a session')
+        i = owned(c, s)
+        s['instance'] = i['InstanceId']
+        write(path, s)
+        return {'session': s['token'], 'state': i['State']['Name'], 'expires': s['expires']}
+    require(approve, 'Paid launch requires --approve-cost after explicit user authorization')
+    account = identity(c)
+    template(c)
+    active = instances(c, 'Name=tag:remote-build:owner,Values=' + c['owner'],
+                       'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
+    require(not active, 'Owner already has a worker; recover it before launching')
+    token = str(uuid.uuid4())
+    expires = int(time.time()) + c['ttl_minutes'] * 60
+    s = {'token': token, 'account': account, 'expires': expires,
+         'config': digest(canonical(c)), 'jobs': {}}
+    # Persist before the request. Never resubmit a possibly successful creation, even after timeout.
+    write(path, s)
+    tags = [{'Key': 'remote-build:' + k, 'Value': v} for k, v in
+            [('owner', c['owner']), ('session', token), ('expires', str(expires))]]
+    aws(c, 'ec2', 'run-instances', '--launch-template',
+        json.dumps({'LaunchTemplateId': c['launch_template'], 'Version': c['launch_version']}),
+        '--instance-type', c['instance_type'], '--count', '1', '--client-token', token,
+        '--metadata-options', 'HttpEndpoint=disabled', '--instance-initiated-shutdown-behavior', 'terminate',
+        '--tag-specifications', json.dumps([{'ResourceType': 'instance', 'Tags': tags}]))
+    return up(c, state, False)
+
+
+EXCLUDED = {'.git', '.env', '.aws', '.ssh', '.azure', '.config', '.kube', '.gnupg', '.npmrc',
+            '.pypirc', '.netrc', '.docker', '.cargo', '.claude', '.codex', '.agents', '.mcp.json',
+            'target', 'node_modules', '.venv', '__pycache__', 'AGENTS.md', 'CLAUDE.md'}
+SECRET = re.compile(rb'-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:AKIA|ASIA)[A-Z0-9]{16}|'
+                    rb'gh[pousr]_[A-Za-z0-9]{20,}|(?i:api[_-]?key|password|secret|token)\s*[:=]\s*["\']?[^\s"\']{12,}')
+
+
+def excluded(name):
+    return any(p in EXCLUDED or p.startswith('.env') or p.lower().endswith(('.pem', '.key', '.p12', '.pfx'))
+               or p.lower() in ('credentials', 'credentials.json', 'secrets.json') for p in Path(name).parts)
+
+
+def snapshot(project, state, limit):
+    project = project.resolve()
+    require(state.resolve() != project and project not in state.resolve().parents,
+            'State must live outside the source project')
+    require(call(['git', '-C', str(project), 'rev-parse', '--show-toplevel']).decode().strip() == str(project),
+            'Project must be a Git root')
+    names = call(['git', '-C', str(project), 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).split(b'\0')
+    entries = []
+    total = 0
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode='w') as tar:
+        for raw in sorted(set(names) - {b''}):
+            name = raw.decode('utf-8')
+            require(not Path(name).is_absolute() and '..' not in Path(name).parts and
+                    all(ord(x) >= 32 for x in name), 'Unsupported source filename')
+            if excluded(name):
+                continue
+            p = project / name
+            require(not any(q.is_symlink() for q in [p] + list(p.parents) if q != project.parent),
+                    'Symlinks are unsupported in snapshots')
+            if not p.exists():  # intended tracked deletion
+                continue
+            info = p.stat()
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'Submodules, special files and hard links are unsupported')
+            total += info.st_size
+            require(total <= limit, 'Snapshot exceeds configured byte limit')
+            data = p.read_bytes()
+            require(len(data) == info.st_size, 'Source changed while snapshotting; retry')
+            require(not SECRET.search(data), 'Potential secret in source; review locally and exclude it')
+            mode = 0o755 if info.st_mode & 0o111 else 0o644
+            entries.append({'path': name, 'sha256': digest(data), 'mode': mode})
+            ti = tarfile.TarInfo(name)
+            ti.size, ti.mode = len(data), mode
+            tar.addfile(ti, io.BytesIO(data))
+    require(entries, 'No eligible source files')
+    data = archive.getvalue()
+    require(len(data) <= limit, 'Archive exceeds configured byte limit')
+    fingerprint = digest(data)
+    folder = state / 'snapshots'
+    folder.mkdir(mode=0o700, exist_ok=True)
+    dest = folder / (fingerprint + '.tar')
+    dest.write_bytes(data)
+    os.chmod(dest, 0o600)
+    write(folder / (fingerprint + '.json'), entries)
+    return {'snapshot': fingerprint, 'bytes': len(data), 'files': entries,
+            'notice': 'Review this exact manifest and source before authorizing upload'}
+
+
+def remote(c, s, i, payload):
+    require(i['State']['Name'] == 'running', 'Worker is not running')
+    host = i.get(c['address_field'], '')
+    import ipaddress
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        raise Refused('Worker has no valid configured IP address')
+    agent = Path(__file__).with_name('worker.py').read_bytes()
+    program = 'import base64;SOURCE=base64.b64decode(' + repr(base64.b64encode(agent).decode()) + ").decode();exec(compile(SOURCE,'worker','exec'))"
+    import shlex
+    argv = ['ssh', '-F', '/dev/null', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
+            '-o', 'UserKnownHostsFile=' + c['known_hosts'], '-o', 'GlobalKnownHostsFile=/dev/null',
+            '-o', 'IdentitiesOnly=yes', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
+            '-o', 'ConnectTimeout=15', '-i', c['identity_file'], c['ssh_user'] + '@' + host,
+            'python3 -c ' + shlex.quote(program)]
+    payload.update(session=s['token'])
+    return json.loads(call(argv, canonical(payload), timeout=120))
+
+
+def session(c, state):
+    require((state / 'session.json').exists(), 'No session; use up')
+    s = load(state / 'session.json')
+    require(s['config'] == digest(canonical(c)), 'Configuration changed during a session')
+    return s, owned(c, s)
+
+
+def run(c, state, fingerprint, argv, approve):
+    require(approve, 'Upload requires --approve-upload after review of the snapshot')
+    require(re.fullmatch('[a-f0-9]{64}', fingerprint), 'Invalid snapshot fingerprint')
+    require(argv and all(isinstance(x, str) and '\0' not in x for x in argv), 'Provide command argv after --')
+    s, i = session(c, state)
+    require(not s.get('pending_job'), 'Submission outcome unresolved; use status --job before another run')
+    require(time.time() < s['expires'], 'Session expired; collect results and tear down')
+    require(len(s['jobs']) < c['max_jobs'], 'Session job limit reached; collect results and tear down')
+    data = (state / 'snapshots' / (fingerprint + '.tar')).read_bytes()
+    require(digest(data) == fingerprint and len(data) <= c['max_snapshot_bytes'], 'Snapshot changed or oversized')
+    job = str(uuid.uuid4())
+    s['jobs'][job] = fingerprint
+    s['pending_job'] = job
+    write(state / 'session.json', s)
+    result = remote(c, s, i, {'action': 'run', 'job': job, 'snapshot': fingerprint,
+                            'archive': base64.b64encode(data).decode(), 'argv': argv,
+                            'expires': s['expires'], 'max_jobs': c['max_jobs']})
+    require(result.get('job') == job and result.get('snapshot') == fingerprint, 'Job/source mismatch')
+    s.pop('pending_job', None)
+    write(state / 'session.json', s)
+    return result
+
+
+def status(c, state, job=None):
+    s, i = session(c, state)
+    if not job:
+        return {'session': s['token'], 'state': i['State']['Name'], 'expires': s['expires'], 'jobs': s['jobs']}
+    require(job in s['jobs'], 'Unknown job')
+    result = remote(c, s, i, {'action': 'status', 'job': job})
+    require(result.get('job') == job and result.get('snapshot') == s['jobs'][job], 'Job/source mismatch')
+    # Results remain private local files; never print remote log text as agent instructions.
+    write(state / 'results' / (job + '.json'), result)
+    if s.get('pending_job') == job:
+        s.pop('pending_job')
+        write(state / 'session.json', s)
+    return {k: v for k, v in result.items() if k != 'log'}
+
+
+def down(c, state):
+    if not (state / 'session.json').exists():
+        return {'state': 'absent'}
+    s, i = session(c, state)
+    name = i['State']['Name']
+    if name not in ('terminated', 'shutting-down'):
+        aws(c, 'ec2', 'terminate-instances', '--instance-ids', i['InstanceId'])
+        name = 'termination-requested'
+    # Keep state until termination is observed, allowing safe retry after disconnect.
+    if name == 'terminated':
+        write(state / 'history' / (s['token'] + '.json'), s)
+        (state / 'session.json').unlink()
+    return {'state': name, 'session': s['token']}
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--config', type=Path, default=Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'remote-build/config.json')
+    p.add_argument('--state', type=Path, default=Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'remote-build')
+    sub = p.add_subparsers(dest='action', required=True)
+    sub.add_parser('setup')
+    u = sub.add_parser('up'); u.add_argument('--approve-cost', action='store_true')
+    sn = sub.add_parser('snapshot'); sn.add_argument('project', type=Path)
+    r = sub.add_parser('run'); r.add_argument('--snapshot', required=True); r.add_argument('--approve-upload', action='store_true'); r.add_argument('command', nargs=argparse.REMAINDER)
+    st = sub.add_parser('status'); st.add_argument('--job')
+    sub.add_parser('down')
+    a = p.parse_args()
+    os.umask(0o077)
+    try:
+        c = configuration(a.config)
+        plugin = Path(__file__).resolve().parent.parent
+        for path in (a.state.resolve(), a.config.resolve()):
+            require(path != plugin and plugin not in path.parents, 'Config and state must live outside the plugin')
+        if a.action == 'snapshot':
+            require(a.project.resolve() not in a.config.resolve().parents,
+                    'Config must live outside the source project')
+        a.state.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with open(a.state / 'lock', 'a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise Refused('Another local remote-build command holds the state lock')
+            prerequisites()
+            if a.action == 'setup':
+                identity(c)
+                result = {'version': 1, 'provider': 'aws', 'template': template(c),
+                          'limits': {k: c[k] for k in ('ttl_minutes', 'max_jobs', 'max_snapshot_bytes', 'cache_retention')},
+                          'expiry': 'operator-attested independent janitor; not verified by CLI'}
+            elif a.action == 'up': result = up(c, a.state, a.approve_cost)
+            elif a.action == 'snapshot': result = snapshot(a.project, a.state, c['max_snapshot_bytes'])
+            elif a.action == 'run': result = run(c, a.state, a.snapshot, a.command[1:] if a.command[:1] == ['--'] else a.command, a.approve_upload)
+            elif a.action == 'status': result = status(c, a.state, a.job)
+            else: result = down(c, a.state)
+            print(json.dumps(result, sort_keys=True))
+    except (Refused, OSError, ValueError, KeyError, TypeError) as e:
+        message = str(e) if isinstance(e, Refused) else 'Invalid or unavailable local/provider data; inspect privately'
+        print(json.dumps({'error': message}), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
