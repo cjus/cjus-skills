@@ -39,3 +39,10 @@ Issue: https://github.com/cjus/cjus-skills/issues/104
 - Restrict the new plugin's documentation and metadata to Claude Code, remove the alternate
   harness adapter section, and use CLAUDE_PLUGIN_ROOT consistently in examples.
 - Preserve the shared CLI, source-privacy exclusions and unrelated existing plugin content.
+
+2026-11-01 UTC — usage documentation
+
+- Add a complete Claude Code PR-session walkthrough, configuration template and troubleshooting
+  guide, distinguishing external infrastructure from plugin checks and supported result retrieval.
+- Document actual argv syntax, exit semantics, authorization, warm iterative sessions, explicit
+  release, retained resources/costs, recovery, trust boundaries and offline/live validation limits.

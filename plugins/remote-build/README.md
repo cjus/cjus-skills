@@ -4,6 +4,14 @@ Build and test an exact source snapshot on an ephemeral Linux worker while an ag
 locally. Five Claude Code skills guide a shared Python CLI. AWS EC2 On-Demand is the first
 provider.
 
+## Usage guides
+
+- [Complete PR session walkthrough](reference/walkthrough.md): prerequisites, first safe preflight, approved launch, repeated builds, reconnect/results and explicit teardown.
+- [Configuration and complete example](reference/config.md): every field and private storage locations.
+- [AWS prerequisites](reference/aws.md): infrastructure the operator supplies outside the plugin.
+- [Troubleshooting and validation boundaries](reference/troubleshooting.md): exact failure/recovery behavior, costs and mocked versus live coverage.
+- [Contract v1](reference/contract-v1.md) and [security](reference/security.md): source identity, session ownership and trust boundaries.
+
 ## Install and requirements
 
 ```sh

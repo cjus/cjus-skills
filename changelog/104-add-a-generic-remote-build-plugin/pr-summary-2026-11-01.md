@@ -107,3 +107,12 @@ same instance running until an explicit down command. PR close/merge does not tr
   neither is an undisclosed code defect or an additional ticket. Review deferred block: none.
 - Final pushed-commit CI will be verified before reporting the close complete; no stale result
   from an earlier commit substitutes for that gate. No merge or release tag is performed.
+
+## Usage documentation
+
+The Claude Code-only README links a complete PR-session walkthrough, a full operator-substituted
+configuration example and a troubleshooting guide. They cover executable prerequisite checks,
+read-only preflight, explicit paid launch/upload authorization, repeated warm builds, reconnect,
+result JSON/log retrieval, explicit termination verification, costs/retained resources and exact
+offline-versus-live validation boundaries. The guides do not promise binary download or other
+unimplemented commands.

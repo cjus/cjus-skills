@@ -30,3 +30,6 @@ creates or reconnects; `run` never tears down; `down` is a separate explicit age
 after collecting results. PR close or merge does not implicitly release a worker. The
 independent TTL janitor is only an abandoned-session safety backstop. Jobs serialize writes
 to a toolchain-bound warm session cache while preserving their own source fingerprints.
+
+For an end-to-end usage example, read `${CLAUDE_PLUGIN_ROOT}/reference/walkthrough.md`.
+For an observed failure, consult `${CLAUDE_PLUGIN_ROOT}/reference/troubleshooting.md`.
