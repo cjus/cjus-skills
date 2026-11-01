@@ -702,6 +702,19 @@ class CLI(unittest.TestCase):
         self.assertEqual(checks['launch-profile:x86']['status'], 'blocked')
         self.assertEqual(checks['repository']['status'], 'ok')
 
+    def test_setup_links_survive_the_install_cache_layout(self):
+        installed = self.root / 'cache' / 'marketplace' / 'remote-build' / '9.9.9'
+        shutil.copytree(SCRIPTS.parent, installed, ignore=shutil.ignore_patterns('tests', '__pycache__'))
+        proc = subprocess.run([sys.executable, str(installed / 'scripts' / 'remote_build.py'),
+                               '--config', str(self.root / 'missing.json'), '--state', str(self.state),
+                               '--project', str(self.repo), 'setup'],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        result = json.loads(proc.stdout)
+        expected = 'https://github.com/cjus/cjus-skills/blob/main/plugins/remote-build/reference/operator-guide.md'
+        self.assertEqual(result['guide']['web'], expected)
+        self.assertEqual(result['guide']['installed'], str((installed / 'reference' / 'operator-guide.md').resolve()))
+        self.assertTrue(all(e['guide'].startswith(expected + '#') for e in result['checks'] if 'guide' in e))
+
     def test_setup_guide_anchors_exist(self):
         guide = (SCRIPTS.parent / 'reference' / 'operator-guide.md').read_text()
         # GitHub's heading anchors: lowercase, punctuation dropped, spaces to hyphens.

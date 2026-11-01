@@ -447,8 +447,9 @@ GUIDE = 'reference/operator-guide.md'
 def guide_links():
     """Where the operator guide lives: the installed copy, and the repository page."""
     plugin = Path(__file__).resolve().parent.parent
-    homepage = json.loads((plugin / '.claude-plugin' / 'plugin.json').read_text())['homepage']
-    return plugin / GUIDE, homepage.rstrip('/') + '/blob/main/plugins/' + plugin.name + '/' + GUIDE
+    meta = json.loads((plugin / '.claude-plugin' / 'plugin.json').read_text())
+    # Use the manifest name: an installed copy lives under cache/<marketplace>/<name>/<version>/.
+    return plugin / GUIDE, meta['homepage'].rstrip('/') + '/blob/main/plugins/' + meta['name'] + '/' + GUIDE
 
 
 def shown(path):
