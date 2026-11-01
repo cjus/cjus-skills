@@ -79,7 +79,7 @@ route, and would face the same two edits as Linux, but it is untested here. Git 
 | [**council**](plugins/council/README.md) | Puts one question to several independent members and reconciles their answers without manufacturing consensus. |
 | [**explain**](plugins/explain/README.md) | Explains a topic for a mid-level engineer — as prose in at most 250 words, or as a diagrammed page when the answer's shape is the point. |
 | [**iac**](plugins/iac/README.md) | Lets Claude Code sessions, a ChatGPT dot, Codex, and local or OpenRouter models hand each other work, as JSON messages on issues in a private GitHub repo. No server to host. |
-| [**remote-build**](plugins/remote-build/README.md) | Runs durable Linux build/test jobs on an approved ephemeral AWS worker, with exact source snapshots and ownership-checked teardown. |
+| [**remote-build**](plugins/remote-build/README.md) | Runs durable Linux build/test jobs on an approved ephemeral AWS worker per repository, each with its own committed instance type, with exact source snapshots and ownership-checked teardown. |
 | [**pr**](plugins/pr/README.md) | A GitHub-issue-backed PR lifecycle. The issue number is the ticket number, two labels carry state, and the merge closes the ticket. |
 
 Each plugin's own README is its full documentation — every skill it ships, plus whatever setup, configuration and running costs that plugin has.

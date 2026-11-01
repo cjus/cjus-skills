@@ -35,20 +35,32 @@ elif op == 'describe-launch-template-versions':
 elif op == 'describe-images':
     result = {'Images': [{'BlockDeviceMappings': [{'DeviceName': '/dev/root', 'Ebs': {'DeleteOnTermination': True}}]}]}
 elif op == 'describe-instances':
-    result = {'Reservations': [{'Instances': items}]}
+    def matches(item, spec):
+        key, values = spec[len('Name='):].split(',Values=')
+        values = values.split(',')
+        tags = {t['Key']: t['Value'] for t in item['Tags']}
+        if key == 'client-token': return item['ClientToken'] in values
+        if key == 'instance-state-name': return item['State']['Name'] in values
+        if key.startswith('tag:'): return tags.get(key[4:]) in values
+        raise SystemExit('Unexpected fake filter: ' + key)
+    filters = args[args.index('--filters') + 1:]
+    result = {'Reservations': [{'Instances': [i for i in items if all(matches(i, f) for f in filters)]}]}
 elif op == 'run-instances':
     token = args[args.index('--client-token') + 1]
-    assert not items, 'Duplicate launch'
+    assert all(i['ClientToken'] != token for i in items), 'Duplicate launch'
     assert args[args.index('--count') + 1] == '1'
     assert args[args.index('--metadata-options') + 1] == 'HttpEndpoint=disabled'
-    items = [{'InstanceId': 'i-fixture', 'ClientToken': token, 'State': {'Name': 'running'},
-              'PrivateIpAddress': '192.0.2.1',
-              'Tags': json.loads(args[args.index('--tag-specifications') + 1])[0]['Tags']}]
+    item = {'InstanceId': 'i-fixture%d' % len(items), 'ClientToken': token, 'State': {'Name': 'running'},
+            'PrivateIpAddress': '192.0.2.1', 'InstanceType': args[args.index('--instance-type') + 1],
+            'LaunchTemplate': json.loads(args[args.index('--launch-template') + 1]),
+            'Tags': json.loads(args[args.index('--tag-specifications') + 1])[0]['Tags']}
+    items.append(item)
     state.write_text(json.dumps(items))
-    result = {'Instances': items}
+    result = {'Instances': [item]}
 elif op == 'terminate-instances':
-    assert args[args.index('--instance-ids') + 1] == items[0]['InstanceId']
-    items[0]['State']['Name'] = 'terminated'
+    target = args[args.index('--instance-ids') + 1]
+    [item] = [i for i in items if i['InstanceId'] == target]
+    item['State']['Name'] = 'terminated'
     state.write_text(json.dumps(items))
     result = {}
 else:

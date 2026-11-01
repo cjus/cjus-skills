@@ -6,12 +6,13 @@ allowed-tools: Bash(python3:*), Read, AskUserQuestion
 
 # /remote-build:run
 
-Use the shared CLI; do not invent rsync or SSH commands. Read the source and recovery
-contract in `${CLAUDE_PLUGIN_ROOT}/reference/contract-v1.md` and privacy rules in
+Use the shared CLI from the repository (or pass `--project DIR` before the command); do not
+invent rsync or SSH commands. Read the source and recovery
+contract in `${CLAUDE_PLUGIN_ROOT}/reference/contract-v2.md` and privacy rules in
 `${CLAUDE_PLUGIN_ROOT}/reference/security.md`.
 
 ```sh
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot <project-root>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/remote_build.py" snapshot
 ```
 
 Review its exact eligible manifest and source for secrets. Explain that dirty and untracked

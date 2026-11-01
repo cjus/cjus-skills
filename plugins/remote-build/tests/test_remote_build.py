@@ -28,13 +28,17 @@ class Lifecycle(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.state = self.root / 'state'; self.state.mkdir()
-        self.c = dict(version=1, provider='aws', profile='test', region='test-region', owner='fixture',
-                      launch_template='lt-abc', launch_version='1', instance_type='small',
-                      allowed_instance_types=['small'], ttl_minutes=10, janitor_confirmed=True,
+        self.g = dict(version=2, provider='aws', profile='test', region='test-region', owner='fixture',
+                      launch_profiles={
+                          'x86': dict(launch_template='lt-abc', launch_version='1', instance_types=['small', 'medium']),
+                          'arm': dict(launch_template='lt-def', launch_version='2', instance_types=['graviton'])},
+                      max_workers=2, ttl_minutes=10, janitor_confirmed=True,
                       ssh_user='builder', known_hosts=str(self.root / 'hosts'),
                       identity_file=str(self.root / 'key'), address_field='PrivateIpAddress',
                       max_snapshot_bytes=1048576, max_jobs=2, cache_retention='session')
         (self.root / 'hosts').touch(); (self.root / 'key').touch()
+        self.repo = self.repository('repo', 'x86', 'small')
+        self.c = r.selection(self.g, self.repo)
         self.items = []; self.launches = 0; self.terminations = 0; self.fail_launch = False
         self.account = 'fixture-account'
         self.mock = patch.object(r, 'aws', side_effect=self.aws).start()
@@ -51,9 +55,8 @@ class Lifecycle(unittest.TestCase):
             self.launches += 1
             token = args[args.index('--client-token') + 1]
             self.items = [{'InstanceId': 'i-fixture', 'ClientToken': token, 'State': {'Name': 'running'},
-                           'PrivateIpAddress': '192.0.2.1', 'Tags': [
-                               {'Key': 'remote-build:owner', 'Value': 'fixture'},
-                               {'Key': 'remote-build:session', 'Value': token}]}]
+                           'PrivateIpAddress': '192.0.2.1',
+                           'Tags': json.loads(args[args.index('--tag-specifications') + 1])[0]['Tags']}]
             if self.fail_launch: raise r.Refused('timeout')
             return {'Instances': self.items}
         if op == 'terminate-instances':
@@ -86,10 +89,75 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(self.launches, 0)
         self.assertFalse((self.state / 'session.json').exists())
 
-    def test_existing_worker_prevents_launch(self):
-        self.items = [{}]
-        with self.assertRaises(r.Refused): r.up(self.c, self.state, True)
+    def repository(self, name, profile, instance_type):
+        repo = self.root / name; repo.mkdir()
+        subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+        (repo / r.PROJECT_FILE).write_text(json.dumps(
+            {'version': 1, 'launch_profile': profile, 'instance_type': instance_type}))
+        return repo.resolve()
+
+    def test_existing_worker_for_this_repository_prevents_launch(self):
+        self.items = [{'Tags': [{'Key': 'remote-build:project', 'Value': self.c['project']}]}]
+        with self.assertRaisesRegex(r.Refused, 'This repository already has a worker'):
+            r.up(self.c, self.state, True)
         self.assertEqual(self.launches, 0)
+
+    def test_other_repository_worker_counts_toward_max_workers(self):
+        self.items = [{'Tags': [{'Key': 'remote-build:project', 'Value': 'other'}]}]
+        c = dict(self.c, max_workers=1)
+        with self.assertRaisesRegex(r.Refused, 'max_workers'): r.up(c, self.state, True)
+        self.assertEqual(self.launches, 0)
+        self.assertEqual(r.up(self.c, self.state, True)['state'], 'running')
+        self.assertEqual(self.launches, 1)
+
+    def test_launch_uses_the_repository_selection(self):
+        repo = self.repository('arm-repo', 'arm', 'graviton')
+        c = r.selection(self.g, repo)
+        self.assertEqual(r.up(c, self.state, True)['instance_type'], 'graviton')
+        args = [a for call in self.mock.call_args_list if call[0][2] == 'run-instances' for a in call[0][3:]]
+        self.assertEqual(args[args.index('--instance-type') + 1], 'graviton')
+        self.assertEqual(json.loads(args[args.index('--launch-template') + 1]),
+                         {'LaunchTemplateId': 'lt-def', 'Version': '2'})
+        tags = {t['Key']: t['Value'] for t in self.items[0]['Tags']}
+        self.assertEqual(tags['remote-build:project'], r.project_key(repo))
+        self.assertNotEqual(tags['remote-build:project'], self.c['project'])
+
+    def test_repository_selection_is_validated_against_private_config(self):
+        for name, selected in [('undefined', {'version': 1, 'launch_profile': 'gpu', 'instance_type': 'small'}),
+                               ('unlisted', {'version': 1, 'launch_profile': 'x86', 'instance_type': 'graviton'}),
+                               ('extra', {'version': 1, 'launch_profile': 'x86', 'instance_type': 'small', 'ttl_minutes': 480}),
+                               ('version', {'version': 2, 'launch_profile': 'x86', 'instance_type': 'small'}),
+                               ('boolean', {'version': True, 'launch_profile': 'x86', 'instance_type': 'small'})]:
+            (self.repo / r.PROJECT_FILE).write_text(json.dumps(selected))
+            with self.subTest(name), self.assertRaises(r.Refused): r.selection(self.g, self.repo)
+        (self.repo / r.PROJECT_FILE).unlink()
+        with self.assertRaisesRegex(r.Refused, r.PROJECT_FILE): r.selection(self.g, self.repo)
+
+    def test_session_binds_only_its_own_selection(self):
+        r.up(self.c, self.state, True)
+        g = json.loads(json.dumps(self.g))
+        g['launch_profiles']['gpu'] = dict(launch_template='lt-0', launch_version='9', instance_types=['big'])
+        g['launch_profiles']['arm']['launch_version'] = '3'
+        g['max_workers'] = 5
+        self.assertEqual(r.status(r.selection(g, self.repo), self.state)['state'], 'running')
+        (self.repo / r.PROJECT_FILE).write_text(json.dumps(
+            {'version': 1, 'launch_profile': 'x86', 'instance_type': 'medium'}))
+        with self.assertRaisesRegex(r.Refused, 'Configuration changed'):
+            r.status(r.selection(g, self.repo), self.state)
+        g['launch_profiles']['x86']['launch_version'] = '2'
+        (self.repo / r.PROJECT_FILE).write_text(json.dumps(
+            {'version': 1, 'launch_profile': 'x86', 'instance_type': 'small'}))
+        with self.assertRaisesRegex(r.Refused, 'Configuration changed'):
+            r.down(r.selection(g, self.repo), self.state)
+        self.assertEqual(self.terminations, 0)
+
+    def test_teardown_refuses_another_repositorys_worker(self):
+        r.up(self.c, self.state, True)
+        other = r.selection(self.g, self.repository('other', 'x86', 'small'))
+        s = r.load(self.state / 'session.json'); s['config'] = r.binding(other)
+        r.write(self.state / 'session.json', s)
+        with self.assertRaisesRegex(r.Refused, 'Ownership mismatch'): r.down(other, self.state)
+        self.assertEqual(self.terminations, 0)
 
     def test_teardown_ownership_and_idempotence(self):
         r.up(self.c, self.state, True)
@@ -111,11 +179,24 @@ class Lifecycle(unittest.TestCase):
         with self.assertRaises(r.Refused): r.down(self.c, self.state)
 
     def test_limits_and_expiry_attestation(self):
-        for key, bad in [('ttl_minutes', 481), ('max_jobs', 21), ('janitor_confirmed', False),
-                         ('launch_version', '$Latest'), ('cache_retention', 'forever'), ('instance_type', 'large')]:
-            c = dict(self.c); c[key] = bad
-            path = self.root / 'config.json'; path.write_text(json.dumps(c))
-            with self.subTest(key=key), self.assertRaises(r.Refused): r.configuration(path)
+        path = self.root / 'config.json'; path.write_text(json.dumps(self.g))
+        self.assertEqual(r.configuration(path)['launch_profiles'], self.g['launch_profiles'])
+        for key, bad in [('ttl_minutes', 481), ('max_jobs', 21), ('max_workers', 0), ('max_workers', 11),
+                         ('janitor_confirmed', False), ('cache_retention', 'forever'), ('version', 1),
+                         ('launch_profiles', {})]:
+            c = dict(self.g); c[key] = bad
+            path.write_text(json.dumps(c))
+            with self.subTest(key=key, bad=bad), self.assertRaises(r.Refused): r.configuration(path)
+        for key, bad in [('launch_version', '$Latest'), ('launch_template', 'template'),
+                         ('instance_types', []), ('instance_types', ['bad type'])]:
+            c = json.loads(json.dumps(self.g)); c['launch_profiles']['x86'][key] = bad
+            path.write_text(json.dumps(c))
+            with self.subTest(profile_key=key, bad=bad), self.assertRaises(r.Refused): r.configuration(path)
+        v1 = {k: v for k, v in self.g.items() if k not in ('launch_profiles', 'max_workers')}
+        v1.update(version=1, launch_template='lt-abc', launch_version='1', instance_type='small',
+                  allowed_instance_types=['small'])
+        path.write_text(json.dumps(v1))
+        with self.assertRaisesRegex(r.Refused, 'version 2'): r.configuration(path)
 
     def project(self):
         project = self.root / 'project'; project.mkdir()
@@ -433,6 +514,12 @@ class Worker(unittest.TestCase):
                                     archive=base64.b64encode(self.archive).decode(), argv=['true'],
                                     expires=time.time()+5, max_jobs=1)
         self.assertEqual((code, result['state']), (0, 'submitted'))
+        # Let the detached job finish before the temporary home is removed.
+        for _ in range(100):
+            _, result = self.request(action='status')
+            if result['state'] == 'finished': break
+            time.sleep(.05)
+        self.assertEqual(result['exit_code'], 0)
 
     def test_rejects_mismatch_and_archive_traversal(self):
         code, _ = self.request(action='run', snapshot='wrong', archive=base64.b64encode(self.archive).decode(),
@@ -452,84 +539,105 @@ class CLI(unittest.TestCase):
     setUp = Lifecycle.setUp
     aws = Lifecycle.aws
     project = Lifecycle.project
-    def test_cli_fake_aws_ssh_round_trip(self):
-        binaries = self.root / 'bin'; binaries.mkdir()
+    repository = Lifecycle.repository
+
+    def tools(self, **extra):
+        binaries = self.root / 'bin'; binaries.mkdir(exist_ok=True)
         fixture = Path(__file__).with_name('fake_tools.py').read_text()
         for name in ('aws', 'ssh'):
             tool = binaries / name
             tool.write_text('#!' + sys.executable + '\n' + fixture); tool.chmod(0o755)
-        config = self.root / 'config.json'; config.write_text(json.dumps(self.c))
-        home = self.root / 'worker'; home.mkdir()
+        config = self.root / 'config.json'; config.write_text(json.dumps(self.g))
+        home = self.root / 'worker'; home.mkdir(exist_ok=True)
         env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ['PATH'],
-                   FAKE_WORKER_HOME=str(home), FAKE_AWS_STATE=str(self.root / 'aws.json'))
-        def invoke(*args):
-            proc = subprocess.run([sys.executable, str(SCRIPTS / 'remote_build.py'),
-                '--config', str(config), '--state', str(self.state), *args], env=env,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
-            return json.loads(proc.stdout)
-        self.assertEqual(invoke('setup')['version'], 1)
-        self.assertEqual(invoke('up', '--approve-cost')['state'], 'running')
-        snap = invoke('snapshot', str(self.project()))['snapshot']
-        job = invoke('run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
-                     '-c', 'print("offline integration");raise SystemExit(3)')['job']
-        for _ in range(30):
-            result = invoke('status', '--job', job)
-            if result['state'] == 'finished': break
-            time.sleep(.05)
-        self.assertEqual(result['exit_code'], 3)
-        self.assertEqual(result['snapshot'], snap)
-        self.assertIn('offline integration', r.load(self.state / 'results' / (job + '.json'))['log'])
-        self.assertEqual(invoke('status')['state'], 'running')
-        retry = invoke('run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
-                       '-c', 'print("next build")')['job']
-        for _ in range(30):
-            result = invoke('status', '--job', retry)
-            if result['state'] == 'finished': break
-            time.sleep(.05)
-        self.assertEqual(result['exit_code'], 0)
-        self.assertEqual(invoke('status')['state'], 'running')
-        self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
-
-        self.assertEqual(invoke('down')['state'], 'termination-requested')
-        self.assertEqual(invoke('down')['state'], 'terminated')
-        self.assertEqual(invoke('down')['state'], 'absent')
-
-    def test_cli_recovers_from_ssh_failure_before_delivery(self):
-        binaries = self.root / 'bin'; binaries.mkdir()
-        fixture = Path(__file__).with_name('fake_tools.py').read_text()
-        for name in ('aws', 'ssh'):
-            tool = binaries / name
-            tool.write_text('#!' + sys.executable + '\n' + fixture); tool.chmod(0o755)
-        config = self.root / 'config.json'; config.write_text(json.dumps(self.c))
-        home = self.root / 'worker'; home.mkdir()
-        fail = self.root / 'ssh-fails-once'
-        env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ['PATH'],
-                   FAKE_WORKER_HOME=str(home), FAKE_AWS_STATE=str(self.root / 'aws.json'),
-                   FAKE_SSH_FAIL_ONCE=str(fail))
-        def invoke(*args, code=0):
-            proc = subprocess.run([sys.executable, str(SCRIPTS / 'remote_build.py'),
-                '--config', str(config), '--state', str(self.state), *args], env=env,
+                   FAKE_WORKER_HOME=str(home), FAKE_AWS_STATE=str(self.root / 'aws.json'), **extra)
+        def invoke(project, *args, code=0):
+            proc = subprocess.run([sys.executable, str(SCRIPTS / 'remote_build.py'), '--config', str(config),
+                '--state', str(self.state), '--project', str(project), *args], env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
             self.assertEqual(proc.returncode, code, proc.stderr.decode())
             return json.loads(proc.stdout or proc.stderr)
-        invoke('up', '--approve-cost')
-        snap = invoke('snapshot', str(self.project()))['snapshot']
-        fail.touch()
-        command = ['--snapshot', snap, '--approve-upload', '--', sys.executable, '-c', 'print("delivered")']
-        self.assertEqual(invoke('run', *command, code=2), {'error': 'Tool failed: ssh'})
-        self.assertIn('unresolved', invoke('run', *command, code=2)['error'])
-        lost = next(iter(invoke('status')['jobs']))
-        self.assertEqual(invoke('status', '--job', lost)['state'], 'unknown')
-        self.assertEqual(invoke('status')['jobs'], {})
-        job = invoke('run', *command)['job']
-        for _ in range(30):
-            result = invoke('status', '--job', job)
-            if result['state'] == 'finished': break
+        return invoke
+
+    def wait(self, invoke, project, job):
+        for _ in range(60):
+            result = invoke(project, 'status', '--job', job)
+            if result['state'] in ('finished', 'failed', 'expired'): return result
             time.sleep(.05)
-        self.assertEqual(result['exit_code'], 0)
+        self.fail('job did not finish')
+
+    def test_cli_two_repositories_run_concurrent_workers(self):
+        invoke = self.tools()
+        arm = self.repository('arm-repo', 'arm', 'graviton')
+        (arm / 'main.rs').write_text('fn main() {}')
+        (self.repo / 'main.rs').write_text('fn main() {}')
+        self.assertEqual(invoke(self.repo, 'setup')['repository'], {'launch_profile': 'x86', 'instance_type': 'small'})
+        self.assertEqual(sorted(invoke(self.root, 'setup')['launch_profiles']), ['arm', 'x86'])
+        self.assertEqual(invoke(self.repo, 'up', '--approve-cost')['instance_type'], 'small')
+        self.assertEqual(invoke(arm, 'up', '--approve-cost')['instance_type'], 'graviton')
+        third = self.repository('third', 'x86', 'medium')
+        self.assertIn('max_workers', invoke(third, 'up', '--approve-cost', code=2)['error'])
+        launched = {i['InstanceType']: i['LaunchTemplate'] for i in json.loads((self.root / 'aws.json').read_text())}
+        self.assertEqual(launched, {'small': {'LaunchTemplateId': 'lt-abc', 'Version': '1'},
+                                    'graviton': {'LaunchTemplateId': 'lt-def', 'Version': '2'}})
+        jobs = {}
+        for project, word in [(self.repo, 'x86 build'), (arm, 'arm build')]:
+            snap = invoke(project, 'snapshot')['snapshot']
+            jobs[project] = invoke(project, 'run', '--snapshot', snap, '--approve-upload', '--',
+                                   sys.executable, '-c', 'print(%r)' % word)['job']
+        for project, word in [(self.repo, 'x86 build'), (arm, 'arm build')]:
+            self.assertEqual(self.wait(invoke, project, jobs[project])['exit_code'], 0)
+            results = self.state / 'projects' / r.project_key(project) / 'results'
+            self.assertIn(word, r.load(results / (jobs[project] + '.json'))['log'])
+            self.assertEqual(list(invoke(project, 'status')['jobs']), [jobs[project]])
+        self.assertEqual(invoke(self.repo, 'down')['state'], 'termination-requested')
+        self.assertEqual(invoke(self.repo, 'down')['state'], 'terminated')
+        self.assertEqual(invoke(arm, 'status')['state'], 'running')
+        self.assertEqual(invoke(arm, 'down')['state'], 'termination-requested')
+        self.assertEqual(invoke(arm, 'down')['state'], 'terminated')
+        self.assertEqual(invoke(third, 'down')['state'], 'absent')
+    def test_cli_fake_aws_ssh_round_trip(self):
+        invoke = self.tools()
+        project = self.repo
+        (project / 'main.rs').write_text('fn main() {}')
+        self.assertEqual(invoke(project, 'setup')['version'], 2)
+        self.assertEqual(invoke(project, 'up', '--approve-cost')['state'], 'running')
+        snap = invoke(project, 'snapshot', str(project))['snapshot']
+        job = invoke(project, 'run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
+                     '-c', 'print("offline integration");raise SystemExit(3)')['job']
+        result = self.wait(invoke, project, job)
+        self.assertEqual(result['exit_code'], 3)
+        self.assertEqual(result['snapshot'], snap)
+        results = self.state / 'projects' / r.project_key(project) / 'results'
+        self.assertIn('offline integration', r.load(results / (job + '.json'))['log'])
+        self.assertEqual(invoke(project, 'status')['state'], 'running')
+        retry = invoke(project, 'run', '--snapshot', snap, '--approve-upload', '--', sys.executable,
+                       '-c', 'print("next build")')['job']
+        self.assertEqual(self.wait(invoke, project, retry)['exit_code'], 0)
+        self.assertEqual(invoke(project, 'status')['state'], 'running')
         self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
 
+        self.assertEqual(invoke(project, 'down')['state'], 'termination-requested')
+        self.assertEqual(invoke(project, 'down')['state'], 'terminated')
+        self.assertEqual(invoke(project, 'down')['state'], 'absent')
+
+    def test_cli_recovers_from_ssh_failure_before_delivery(self):
+        fail = self.root / 'ssh-fails-once'
+        invoke = self.tools(FAKE_SSH_FAIL_ONCE=str(fail))
+        project = self.repo
+        (project / 'main.rs').write_text('fn main() {}')
+        invoke(project, 'up', '--approve-cost')
+        snap = invoke(project, 'snapshot')['snapshot']
+        fail.touch()
+        command = ['--snapshot', snap, '--approve-upload', '--', sys.executable, '-c', 'print("delivered")']
+        self.assertEqual(invoke(project, 'run', *command, code=2), {'error': 'Tool failed: ssh'})
+        self.assertIn('unresolved', invoke(project, 'run', *command, code=2)['error'])
+        lost = next(iter(invoke(project, 'status')['jobs']))
+        self.assertEqual(invoke(project, 'status', '--job', lost)['state'], 'unknown')
+        self.assertEqual(invoke(project, 'status')['jobs'], {})
+        job = invoke(project, 'run', *command)['job']
+        self.assertEqual(self.wait(invoke, project, job)['exit_code'], 0)
+        self.assertEqual(len(json.loads((self.root / 'aws.json').read_text())), 1)
 
 if __name__ == '__main__':
     unittest.main()
