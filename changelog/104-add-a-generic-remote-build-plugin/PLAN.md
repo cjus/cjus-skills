@@ -15,7 +15,8 @@ The objective is fixed for this branch; live cloud provisioning is outside autho
 - [x] Document config, security, AWS prerequisites and Codex adapter.
 - [x] Add offline tests and CI.
 - [x] Complete local validation and privacy review.
-- [ ] Publish a draft PR and inspect CI.
+- [x] Publish draft PR #105 and inspect initial CI.
+- [ ] Verify CI after pinning an available Python 3.9 runner.
 
 ## Deferred
 

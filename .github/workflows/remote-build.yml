@@ -13,11 +13,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
-        python: ['3.9', '3.14']
+        include:
+          - os: macos-latest
+            python: system
+          - os: macos-latest
+            python: '3.14'
+          # Python 3.9 is unavailable on Ubuntu 26.04 (the current latest image).
+          - os: ubuntu-22.04
+            python: '3.9'
+          - os: ubuntu-latest
+            python: '3.14'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        if: matrix.python != 'system'
         with:
           python-version: ${{ matrix.python }}
-      - run: python plugins/remote-build/tests/test_remote_build.py -v
+      - name: Choose interpreter and run offline suite
+        run: |
+          if [ "${{ matrix.python }}" = system ]; then
+            py=/usr/bin/python3
+            "$py" -c 'import sys; print(sys.version); sys.exit(sys.version_info[:2] != (3, 9))'
+          else
+            py=$(command -v python)
+          fi
+          "$py" plugins/remote-build/tests/test_remote_build.py -v

@@ -14,3 +14,5 @@ Issue: https://github.com/cjus/cjus-skills/issues/104
   explicit storage deletion and an operator-confirmed independent expiry janitor.
 - Document contract v1, configuration, AWS prerequisites, security, Rust workflow and Codex adapter.
 - Add offline lifecycle/worker tests and a macOS/Linux Python 3.9/3.14 CI matrix.
+- Pin the Linux Python 3.9 leg to Ubuntu 22.04 after the latest image lacked that interpreter;
+  use the asserted macOS system Python 3.9 floor, matching existing CI conventions.
