@@ -59,7 +59,8 @@ steps remain for anyone who wants to build each piece by hand.
 This plugin is a starting point. Its defaults suit one operator building Rust on public-address
 Ubuntu workers, and you will probably want to change some of it. Most needs are a bootstrap flag
 or a config field: your own provisioning script for other toolchains, bigger disks, private
-networking, other instance types, different limits. When you want the plugin itself to behave
+networking, other instance types, NVIDIA GPU profiles (the driver installed and checked when the
+image is built; see [GPU profiles](reference/operator-guide.md#gpu-profiles)), different limits. When you want the plugin itself to behave
 differently (say, let Claude run bootstrap, use another OS, keep caches, or change what each
 skill allows), make a custom version: fork this marketplace or copy the plugin into your own,
 give it a new name, and install that. Don't edit the installed copy, because updates replace it.

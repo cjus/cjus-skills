@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import sys
 import tempfile
 import types
@@ -27,7 +28,11 @@ CONSOLE = 'boot\n-----BEGIN SSH HOST KEY KEYS-----\necdsa-sha2-nistp256 AAAAE2 r
           HOST_KEY + ' root@ip\n-----END SSH HOST KEY KEYS-----\n'
 READ_ONLY = {'get-caller-identity', 'describe-instance-types', 'describe-vpcs', 'describe-subnets',
              'describe-instance-type-offerings', 'describe-stacks', 'describe-images', 'describe-instances',
-             'get', 'describe-route-tables'}
+             'get', 'describe-route-tables', 'get-parameter'}
+# Families the fake treats as GPU types: maker, model and memory per GPU.
+GPUS = {'g4dn': ('NVIDIA', 'T4', 15360), 'g5': ('NVIDIA', 'A10G', 23028), 'g5g': ('NVIDIA', 'T4g', 15360),
+        'g6': ('NVIDIA', 'L4', 23034), 'g6e': ('NVIDIA', 'L40S', 46068), 'g4ad': ('AMD', 'Radeon Pro V520', 8192)}
+NVIDIA_SMI = 'NVIDIA L40S, 46068 MiB, 570.172.08\n'
 
 
 def fail(text):
@@ -58,6 +63,14 @@ class FakeCloud:
                         {'SubnetId': 'subnet-a', 'VpcId': 'vpc-default', 'AvailabilityZone': 'us-test-1a'}]
         self.route_tables = [{'RouteTableId': 'rtb-main', 'VpcId': 'vpc-default', 'Associations': [{'Main': True}],
                               'Routes': [{'DestinationCidrBlock': '0.0.0.0/0', 'GatewayId': 'igw-1', 'State': 'active'}]}]
+        self.parameters = {}  # SSM parameters besides the stock Ubuntu ones
+        self.base_images = {}  # base images an operator may name with --base-image
+        self.bakes = []  # (instance type, base image, disk GB) per build machine
+        self.gpu_env = {}  # host: the GPU value its provisioning got
+        self.scripts = {}  # host: the provisioning script it ran
+        self.boots = {}  # host: reboots so far
+        self.driver_works = True
+        self.reboot_hangs = False
 
     def next_id(self, prefix):
         self.counter += 1
@@ -127,9 +140,17 @@ class FakeCloud:
             if self.fail_provision:
                 return 1, b'apt output\n', b'E: provisioning broke\n'
             self.provisioned.add(host)
-            extra = next(t for t in shlex.split(command) if t.startswith('RUST_TOOLCHAINS='))[len('RUST_TOOLCHAINS='):]
-            self.toolchains[host] = extra.split()
+            env = dict(t.split('=', 1) for t in shlex.split(command) if re.match(r'[A-Z_]+=', t))
+            self.toolchains[host] = env['RUST_TOOLCHAINS'].split()
+            self.gpu_env[host], self.scripts[host] = env['GPU'], data
             return 0, b'provisioned\n', b''
+        if command == b.BOOT_ID:
+            return (0, b'boot-%d\n' % self.boots.get(host, 0), b'') if done and user == 'builder' else (255, b'', b'denied')
+        if command == b.NVIDIA_QUERY:
+            assert user == 'builder'
+            if self.gpu_env.get(host) == 'nvidia' and self.boots.get(host) and self.driver_works:
+                return 0, NVIDIA_SMI.encode(), b''
+            return 9, b'', b"NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver.\n"
         if command == 'rustup toolchain list':
             if not done or user != 'builder' or self.no_rustup:
                 return 127, b'', b'bash: rustup: command not found\n'
@@ -149,14 +170,27 @@ class FakeCloud:
         return {'Account': '111122223333'}
 
     def op_get_parameter(self, args, profile):
-        arch = 'arm64' if '/arm64/' in self.arg(args, '--name') else 'amd64'
+        name = self.arg(args, '--name')
+        if name in self.parameters:
+            return {'Parameter': {'Value': self.parameters[name]}}
+        if not name.startswith('/aws/service/canonical/'):
+            return fail('An error occurred (ParameterNotFound) when calling the GetParameter operation')
+        arch = 'arm64' if '/arm64/' in name else 'amd64'
         return {'Parameter': {'Value': 'ami-base' + arch}}
 
     # -- network and types
     def op_describe_instance_types(self, args, profile):
         found = args[args.index('--instance-types') + 1:]
-        return {'InstanceTypes': [{'InstanceType': t, 'ProcessorInfo': {'SupportedArchitectures': [
-            'arm64' if re.match(r'[a-z]+[0-9]+g', t) else 'x86_64']}} for t in found]}
+
+        def described(t):
+            d = {'InstanceType': t, 'ProcessorInfo': {'SupportedArchitectures': [
+                'arm64' if re.match(r'[a-z]+[0-9]+g', t) else 'x86_64']}}
+            gpu = GPUS.get(t.split('.')[0])
+            if gpu:
+                d['GpuInfo'] = {'Gpus': [{'Manufacturer': gpu[0], 'Name': gpu[1], 'Count': 1,
+                                          'MemoryInfo': {'SizeInMiB': gpu[2]}}]}
+            return d
+        return {'InstanceTypes': [described(t) for t in found]}
 
     def op_describe_vpcs(self, args, profile):
         return {'Vpcs': [{'VpcId': 'vpc-default'}] if self.default_vpc else []}
@@ -258,6 +292,8 @@ class FakeCloud:
             return dict(image, Tags=[{'Key': k, 'Value': v} for k, v in image['Tags'].items()])
         if '--image-ids' in args:
             ami = self.arg(args, '--image-ids')
+            if ami in self.base_images:
+                return {'Images': [self.base_images[ami]]}
             if ami.startswith('ami-base'):
                 return {'Images': [{'ImageId': ami, 'RootDeviceName': '/dev/sda1'}]}
             return {'Images': [shown(self.images[ami])]} if ami in self.images else fail('InvalidAMIID.NotFound')
@@ -306,6 +342,8 @@ class FakeCloud:
                             'Request would have succeeded, but DryRun flag is set.')
         else:
             assert profile == 'admin' and self.arg(args, '--key-name') in self.key_pairs
+            disk = json.loads(self.arg(args, '--block-device-mappings'))[0]['Ebs']['VolumeSize']
+            self.bakes.append((itype, self.arg(args, '--image-id'), disk))
         instance = self.next_id('i')
         self.instances[instance] = {'InstanceId': instance, 'State': {'Name': 'running'}, 'Tags': tags,
                                     'PublicIpAddress': '198.51.100.%d' % (self.counter % 250),
@@ -359,6 +397,14 @@ class FakeCloud:
     def op_get_console_output(self, args, profile):
         self.console_reads += 1
         return {'Output': CONSOLE if self.console_reads > 1 else 'still booting'}
+
+    def op_reboot_instances(self, args, profile):
+        i = self.instances[self.arg(args, '--instance-ids')]
+        assert profile == 'admin' and i['State']['Name'] == 'running'
+        if not self.reboot_hangs:
+            for host in (i['PublicIpAddress'], i['PrivateIpAddress']):
+                self.boots[host] = self.boots.get(host, 0) + 1
+        return {}
 
     def op_stop_instances(self, args, profile):
         self.instances[self.arg(args, '--instance-ids')]['State']['Name'] = 'stopped'
@@ -805,6 +851,155 @@ class Bootstrap(unittest.TestCase):
 
     def test_type_that_cannot_run_the_architecture_is_refused(self):
         self.assertIn('does not run arm64', self.main('plan', '--image', 'arm64:c7i.large', code=2)['error'])
+
+    # ------------------------------------------------------------ GPU profiles and per-profile settings
+
+    GPU_BASE = 'ami-0123456789abcdef1'
+
+    def gpu_apply(self, *args, **kw):
+        return self.main('apply', '--image', 'x86=amd64:c7i.xlarge', '--image', 'gpu=amd64:g6e.xlarge,g6.xlarge',
+                         *args, **kw)
+
+    def gpu_base(self, arch='x86_64', size=75):
+        self.cloud.parameters['/fixture/gpu-base'] = self.GPU_BASE
+        self.cloud.base_images[self.GPU_BASE] = {
+            'ImageId': self.GPU_BASE, 'Name': 'gpu-base-fixture', 'Architecture': arch, 'RootDeviceType': 'ebs',
+            'RootDeviceName': '/dev/xvda', 'BlockDeviceMappings': [{'DeviceName': '/dev/xvda', 'Ebs': {'VolumeSize': size}}]}
+
+    def state_profiles(self):
+        return json.loads((self.root / 'state' / 'bootstrap' / 'fixture-builds.json').read_text())['profiles']
+
+    def test_plan_marks_a_gpu_profile_and_shows_its_own_settings(self):
+        self.gpu_base()
+        result = self.main('plan', '--image', 'x86=amd64:c7i.xlarge', '--image', 'gpu=amd64:g6e.xlarge,g6.xlarge',
+                           '--disk-gb', 'gpu=150', '--base-image', 'gpu=/fixture/gpu-base')
+        self.assertTrue({op for _, _, op in self.cloud.ops} <= READ_ONLY, self.cloud.ops)
+        gpu, x86 = result['launch_profiles']['gpu'], result['launch_profiles']['x86']
+        self.assertEqual(gpu['gpu'], {'g6.xlarge': '1x NVIDIA L4 23034 MiB', 'g6e.xlarge': '1x NVIDIA L40S 46068 MiB'})
+        self.assertEqual((gpu['disk_gb'], gpu['base_image'], gpu['provision_script']),
+                         (150, self.GPU_BASE + ' (gpu-base-fixture)', 'bundled'))
+        self.assertEqual((x86['gpu'], x86['disk_gb'], x86['base_image']), (None, 40, 'stock Ubuntu 24.04'))
+        self.assertFalse((self.root / 'state').exists())
+
+    def test_a_profile_mixing_gpu_and_cpu_types_or_another_gpu_maker_is_refused(self):
+        self.assertIn('Profile mix mixes types with GPUs (g6.xlarge) and without (c7i.xlarge); give the GPU types '
+                      'their own profile', self.main('plan', '--image', 'mix=amd64:c7i.xlarge,g6.xlarge', code=2)['error'])
+        self.assertIn('Profile amd has AMD GPUs; remote-build supports NVIDIA GPUs only',
+                      self.main('plan', '--image', 'amd=amd64:g4ad.xlarge', code=2)['error'])
+
+    def test_a_gpu_bake_reboots_then_checks_nvidia_smi_as_builder_and_tags_the_image(self):
+        self.gpu_base()
+        result = self.gpu_apply('--disk-gb', 'gpu=150', '--base-image', 'gpu=/fixture/gpu-base')
+        reboots = [o for o in self.cloud.ops if o[2] == 'reboot-instances']
+        self.assertEqual(len(reboots), 1)  # the GPU bake only
+        # Each build machine started from its profile's base with its profile's disk.
+        self.assertEqual(self.cloud.bakes, [('c7i.xlarge', 'ami-baseamd64', 40), ('g6e.xlarge', self.GPU_BASE, 150)])
+        self.assertEqual(sorted(self.cloud.gpu_env.values()), ['', 'nvidia'])
+        seen = '1x NVIDIA L40S 46068 MiB driver 570.172.08'
+        amis = self.state_amis()
+        self.assertEqual(self.cloud.images[amis['gpu']]['Tags']['remote-build:gpu'], seen)
+        self.assertNotIn('remote-build:gpu', self.cloud.images[amis['x86']]['Tags'])
+        self.assertEqual((result['launch_profiles']['gpu']['gpu'], result['launch_profiles']['x86']['gpu']), (seen, None))
+        self.assertEqual(result['janitor_test'], 'passed')
+        # setup reads the tag back and shows it.
+        config = rb.parse_config(self.config)
+        self.assertEqual(rb.template(dict(config, **config['launch_profiles']['gpu']))['gpu'], seen)
+        details = {c['check']: c['detail'] for c in rb.setup_report(self.config, self.root / 'state', None)['checks']}
+        self.assertIn('; GPU ' + seen + ';', details['launch-profile:gpu'])
+        self.assertNotIn('GPU', details['launch-profile:x86'])
+
+    def test_a_gpu_builder_cannot_use_fails_the_bake_cleans_up_and_a_rerun_recovers(self):
+        self.cloud.driver_works = False
+        error = self.gpu_apply(code=2)['error']
+        self.assertIn('builder cannot use the GPU after a reboot', error)
+        self.assertIn("couldn't communicate with the NVIDIA driver", error)
+        self.assertEqual({i['State']['Name'] for i in self.cloud.instances.values()}, {'terminated'})
+        self.assertEqual(self.cloud.key_pairs, set())
+        self.assertEqual(list(self.state_amis()), ['x86'])  # made before the GPU bake failed
+        self.assertEqual(set(self.cloud.images), set(self.state_amis().values()))
+        self.assertFalse(self.config.exists())
+        self.cloud.driver_works = True
+        builds = len(self.builds())
+        self.assertEqual(self.gpu_apply()['janitor_test'], 'passed')
+        self.assertEqual(self.cloud.bakes[builds:], [('g6e.xlarge', 'ami-baseamd64', 40)])
+
+    def test_a_build_machine_that_never_comes_back_from_its_reboot_fails_the_bake(self):
+        self.cloud.reboot_hangs = True
+        self.assertIn('did not come back within %d minutes of a reboot' % b.REBOOT_MINUTES,
+                      self.gpu_apply(code=2)['error'])
+        self.assertEqual({i['State']['Name'] for i in self.cloud.instances.values()}, {'terminated'})
+
+    def test_per_profile_settings_are_remembered_and_rebuild_only_their_profile(self):
+        self.gpu_apply('--disk-gb', 'gpu=150')
+        builds = len(self.cloud.bakes)
+        self.gpu_apply()
+        self.assertEqual(len(self.cloud.bakes), builds)
+        plan = self.main('plan')  # profiles and their settings from state
+        self.assertEqual({n: (x['disk_gb'], x['image']) for n, x in plan['launch_profiles'].items()},
+                         {'gpu': (150, 'reuse'), 'x86': (40, 'reuse')})
+        self.gpu_apply('--disk-gb', 'gpu=200')
+        self.assertEqual(self.cloud.bakes[builds:], [('g6e.xlarge', 'ami-baseamd64', 200)])
+        # A new shared size rebuilds only the profiles without their own.
+        self.gpu_apply('--disk-gb', '60')
+        self.assertEqual(self.cloud.bakes[builds + 1:], [('c7i.xlarge', 'ami-baseamd64', 60)])
+        # NAME=default drops the override, so the profile takes the shared size.
+        result = self.gpu_apply('--disk-gb', 'gpu=default')
+        self.assertEqual(self.cloud.bakes[builds + 2:], [('g6e.xlarge', 'ami-baseamd64', 60)])
+        self.assertEqual(result['launch_profiles']['gpu']['disk_gb'], 60)
+        # A profile's own script replaces the shared one for that profile alone.
+        script = self.root / 'gpu-provision.sh'
+        script.write_text('#!/bin/bash\n# gpu extras\n')
+        result = self.gpu_apply('--provision-script', 'gpu=' + str(script))
+        self.assertEqual(self.cloud.bakes[builds + 3:], [('g6e.xlarge', 'ami-baseamd64', 60)])
+        self.assertIn(b'# gpu extras', list(self.cloud.scripts.values())[-1])
+        self.assertEqual(result['launch_profiles']['gpu']['provision_script'], str(script.resolve()))
+        self.assertEqual(result['launch_profiles']['x86']['provision_script'], 'bundled')
+        # Dropping the profile forgets its settings.
+        self.main('apply', '--image', 'x86=amd64:c7i.xlarge')
+        state = json.loads((self.root / 'state' / 'bootstrap' / 'fixture-builds.json').read_text())
+        self.assertEqual(state['overrides'], {})
+
+    def test_per_profile_flags_are_checked_before_any_change(self):
+        self.gpu_base(size=75)
+        cases = [(['--base-image', '/fixture/gpu-base'], 'Name the profile a base image is for'),
+                 (['--disk-gb', 'nope=100'], '--disk-gb names nope, which is not a launch profile (x86, gpu)'),
+                 (['--disk-gb', 'gpu=2000'], '--disk-gb takes a size of 1-1024 GB'),
+                 (['--provision-script', 'gpu=' + str(self.root / 'missing.sh')], 'Provisioning script not found'),
+                 (['--base-image', 'gpu=ubuntu-latest'], '--base-image takes an AMI ID or an SSM parameter path'),
+                 (['--base-image', 'gpu=/fixture/missing'], 'ParameterNotFound'),
+                 (['--base-image', 'gpu=/fixture/gpu-base'],
+                  'Base image %s needs a disk of at least 75 GB; profile gpu has 40 (pass --disk-gb gpu=75 or more)'
+                  % self.GPU_BASE)]
+        for args, expected in cases:
+            with self.subTest(args):
+                self.assertIn(expected, self.gpu_apply(*args, code=2)['error'])
+        self.gpu_base(arch='arm64')
+        self.assertIn('Base image %s is arm64; profile gpu needs x86_64' % self.GPU_BASE,
+                      self.gpu_apply('--base-image', 'gpu=%s' % self.GPU_BASE, '--disk-gb', 'gpu=100', code=2)['error'])
+        self.assertEqual((self.cloud.deploys, self.cloud.bakes), ([], []))
+
+    def test_upgrading_rebuilds_no_image_except_a_gpu_one_without_a_driver(self):
+        self.gpu_apply()
+        # State as an earlier version wrote it: no per-profile keys, no overrides, no GPU record.
+        path = self.root / 'state' / 'bootstrap' / 'fixture-builds.json'
+        state = json.loads(path.read_text())
+        state.pop('overrides')
+        for record in state['profiles'].values():
+            for key in ('gpu', 'gpus', 'base_image', 'provision_script'):
+                record.pop(key, None)
+        path.write_text(json.dumps(state))
+        plan = self.main('plan')
+        # That earlier version baked GPU types without a driver; this one rebuilds that image.
+        self.assertEqual({n: x['image'] for n, x in plan['launch_profiles'].items()}, {'gpu': 'bake', 'x86': 'reuse'})
+        self.main('apply', '--image', 'x86=amd64:c7i.xlarge')
+        self.assertEqual(self.main('plan')['changes'], 'none')
+
+    def test_the_bundled_provisioning_script_parses(self):
+        script = SCRIPTS / 'aws' / 'provision.sh'
+        self.assertEqual(subprocess.run(['bash', '-n', str(script)]).returncode, 0)
+        text = script.read_text()
+        self.assertIn('if [ "${GPU:-}" = nvidia ]', text)
+        self.assertIn('python3-venv', text)
 
     # ------------------------------------------------------------ teardown
 

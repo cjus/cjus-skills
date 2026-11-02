@@ -59,11 +59,12 @@ You decide five things; bootstrap does the rest.
 | Admin AWS profile (creates the pieces) | `--admin-profile` | `default` |
 | Region (default: the admin profile's) | `--region` | `us-east-1` |
 | Owner: a stable name for your workers | `--owner` | `yourname-builds` |
-| One launch profile per architecture: approved instance types (the first also builds the image) | `--image`, repeatable | `arm64:c7g.xlarge,c7g.2xlarge`, `x86=amd64:c7i.xlarge` |
+| Launch profiles: an architecture and its approved instance types each (the first type also builds the image) | `--image`, repeatable | `arm64:c7g.xlarge,c7g.2xlarge`, `x86=amd64:c7i.xlarge` |
 | Where janitor alarms go (optional, recommended) | `--alert-email` | `you@example.com` |
 
 `--image` takes `[name=]arch:type[,type...]`. Without a name, `arm64` profiles are called `arm`
-and `amd64` ones `x86`; repositories choose a profile by that name.
+and `amd64` ones `x86`; repositories choose a profile by that name. A profile whose types have
+NVIDIA GPUs is a GPU profile; see [GPU profiles](#gpu-profiles).
 
 Find the installed plugin (`setup` prints it as `guide.installed`; the plugin is two folders
 up), look first, then apply. In Claude Code, prefix each command with `!` so its output lands
@@ -95,8 +96,9 @@ runs, is checked the same way before anything changes. `apply` takes
    through `get-console-output`, [`scripts/aws/provision.sh`](../scripts/aws/provision.sh) run over
    SSH, checks that `builder` has Python and no sudo and that `ubuntu` can no longer log in,
    then the image, tagged `remote-build:toolchains` with the toolchains `builder` has (`setup` and
-   `up` read the tag; see [step 11](#step-11-repository-selection)). The build machine and its
-   temporary key pair are deleted, also on failure.
+   `up` read the tag; see [step 11](#step-11-repository-selection)). A GPU profile's build machine
+   also gets the NVIDIA driver, reboots, and must show `builder` its GPU in `nvidia-smi`. The
+   build machine and its temporary key pair are deleted, also on failure.
 4. Updates the stack with a launch template per profile and the operator role, whose policy is
    the one in [step 8](#step-8-iam-permissions).
 5. Writes the daily profile to `~/.aws/config`: it assumes the operator role, using your admin
@@ -124,6 +126,8 @@ do instead: `image` is `bake` or `reuse`, `remove_profiles` lists what would go,
 | `launch_profiles.<name>.image` | `built <ami>` when this run made the image, `reused <ami>` when it kept one |
 | `launch_profiles.<name>.launch_version` | The launch template version the private config now pins |
 | `launch_profiles.<name>.toolchains` | What `builder` has on that image, as its `remote-build:toolchains` tag records, or `unknown` for an image made before images were tagged |
+| `launch_profiles.<name>.gpu` | For a GPU profile, what `builder`'s `nvidia-smi` reported when the image was made (its `remote-build:gpu` tag); `null` otherwise. `plan` shows each type's GPUs instead |
+| `launch_profiles.<name>.disk_gb`, `base_image`, `provision_script` | What the profile's image is built from: its disk size, `stock Ubuntu 24.04` or its own base, and `bundled` or the script's path |
 | `bake_toolchains` | What a bake installs: `stable` plus the remembered `--rust-toolchain` list |
 | `removed_profiles`, `retired_images` | Profiles dropped and images deleted by this run (replaced or dropped) |
 | `alerts` | `confirmed`, `pending` (confirm the email), `none` (no `--alert-email`) or `unknown` (the subscription could not be read) |
@@ -149,6 +153,8 @@ only changes what you asked for. Re-runs need only `--admin-profile` and `--owne
 | Update the toolchain or OS packages | `--rebake` | Yes |
 | Preinstall a pinned Rust toolchain | `--rebake --rust-toolchain 1.85.0` (name every extra toolchain to keep: the list replaces the last one) | Yes |
 | Use your own provisioning script | `--rebake --provision-script ./my-provision.sh` | Yes |
+| Add a GPU profile | the existing `--image` values plus one of GPU types, and usually `--disk-gb <name>=<GB>` ([GPU profiles](#gpu-profiles)) | Only the new one |
+| Give one profile its own disk, base image or script | `--disk-gb <name>=<GB>`, `--base-image <name>=<AMI or SSM parameter>`, `--provision-script <name>=<path>`; `<name>=default` drops it | Only that one |
 | Retry a janitor test that failed | `--retest-janitor` | No |
 | Debug a failed image build | `--keep-on-failure`, then SSH in as `ubuntu`; the next apply removes it | Yes |
 
@@ -160,6 +166,54 @@ your workers runs: collect results and `/remote-build:down` first. Your edits to
 Apply refuses, before changing anything, when a private config for another owner exists
 (`--replace-config` backs it up and replaces it) or when the daily profile name is already used
 by a profile bootstrap did not write (`--replace-profile`, or pick `--daily-profile`).
+
+### GPU profiles
+
+A profile whose instance types all have NVIDIA GPUs (`g4dn`, `g5`, `g6`, `g6e`, `p4d`, `p5` and
+others) is a GPU profile. `plan` reads each type's GPUs from AWS and shows them. A profile that
+mixes GPU and CPU types is refused, because the image is built on the first type and a
+repository may launch any of them. So is another GPU maker, whose driver the bundled script
+does not install. Give GPU types a profile of their own, next to your CPU one:
+
+```sh
+python3 "$PLUGIN/scripts/bootstrap.py" plan --admin-profile default --owner yourname-builds \
+  --image x86=amd64:c7i.2xlarge --image gpu=amd64:g6e.xlarge,g6.xlarge --disk-gb gpu=150
+```
+
+`--image` lists replace the remembered set, so name every profile you keep. Apply then builds
+only the new profile's image. For it, the bundled script installs the headless NVIDIA server
+driver (`ubuntu-drivers install --gpgpu`) and `nvidia-utils`. Bootstrap reboots the build
+machine so the driver loads, waits for the new boot, and runs `nvidia-smi` as `builder`. If that
+fails, the bake fails and cleans up like any other. The image is tagged `remote-build:gpu` with
+what `nvidia-smi` reported, and `setup` shows it in the profile's check. A repository selects the
+profile like any other: `{"version": 1, "launch_profile": "gpu", "instance_type": "g6e.xlarge"}`.
+
+Settings each profile can have, remembered like every other flag:
+
+| Setting | Flag | Notes |
+|---|---|---|
+| Disk size | `--disk-gb <name>=<GB>` | Model weights, CUDA libraries and Python environments need far more than the default 40 GB, and workers cannot grow their disk |
+| Base image | `--base-image <name>=<AMI or SSM parameter>` | For example an AWS GPU image with drivers and CUDA preinstalled. `plan` checks that it exists, matches the architecture and fits the disk. The bake logs in as `ubuntu` with sudo, so the bundled script needs an Ubuntu base; a driver that already works is kept |
+| Provisioning script | `--provision-script <name>=<path>` | Your copy of `provision.sh` for that profile alone, for example to add the CUDA toolkit (`nvcc`) or pin a driver branch |
+
+`<name>=default` drops a setting. Changing one rebuilds only that profile's image.
+
+The image has the driver but not the CUDA toolkit: frameworks such as PyTorch ship the CUDA
+libraries they need in their wheels. Jobs make a virtual environment for them (`python3 -m venv`;
+`builder` has no sudo). A few things cost more, or matter more, with GPUs:
+
+- **The bake and the janitor test run on GPU types.** The bake runs on the profile's first type,
+  and the janitor test on the first type of the first profile you list.
+- **Your account needs GPU quota.** AWS counts the vCPUs of running On-Demand GPU instances
+  against the "Running On-Demand G and VT instances" quota, and the P quota for `p` types. New
+  accounts often have 0; request an increase in Service Quotas before the bake.
+- **Every session starts empty.** Model weights do not fit in a source snapshot
+  (`max_snapshot_bytes`), so a job downloads them, and worker storage lasts only for the session.
+- **Lifetime is one setting for every profile.** `ttl_minutes` (at most 480) in the private config
+  also bounds GPU sessions; raise it for long runs.
+
+Upgrading from a version without GPU profiles rebuilds no image, except that of a profile whose
+types have GPUs: an earlier version baked it without a driver.
 
 ### Removing everything
 
@@ -186,16 +240,18 @@ differ, and you should change the plugin to fit them. There are two levels.
 
 | Need | Where |
 |---|---|
-| Other toolchains or tools on the image | `--provision-script` with your copy of `scripts/aws/provision.sh`, or `--rust-toolchain`; then `--rebake` |
-| Bigger disks | `--disk-gb` (workers can't grow their disk); then `--rebake` |
+| Other toolchains or tools on the image | `--provision-script` with your copy of `scripts/aws/provision.sh` (`<name>=<path>` for one profile), or `--rust-toolchain`; then `--rebake` |
+| Bigger disks | `--disk-gb` for every profile, or `--disk-gb <name>=<GB>` for one (workers can't grow their disk) |
+| GPUs | A launch profile of NVIDIA GPU types; see [GPU profiles](#gpu-profiles) |
+| Another base image | `--base-image <name>=<AMI or SSM parameter>` (an Ubuntu base, for the bundled script) |
 | Private networking (VPN, peered VPC) | `--subnet`, `--address private`, `--cidr <your network>` |
 | Other instance types or architectures | `--image` |
 | Limits: lifetime, concurrency, jobs, snapshot size | `ttl_minutes`, `max_workers`, `max_jobs`, `max_snapshot_bytes` in the [private config](config.md) |
 | Which types a repository may use | the repository's `.remote-build.json`, within the profile's types |
 
 **2. Make a custom version.** When you want the plugin itself to behave differently, change your
-own copy. Some examples: let Claude run `bootstrap.py apply` itself, use another base image or
-OS, run the janitor more often, keep caches between sessions, screen secrets differently, ask
+own copy. Some examples: let Claude run `bootstrap.py apply` itself, use another OS, support
+another GPU maker, run the janitor more often, keep caches between sessions, screen secrets differently, ask
 for approval another way, or add a provider.
 
 - **Don't edit the installed copy.** Everything under `~/.claude/plugins/cache/` is replaced

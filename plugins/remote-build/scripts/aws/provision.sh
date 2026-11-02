@@ -9,6 +9,8 @@
 #   PUBKEY           the remote-build public key; the only key that may log in to workers
 #   RUST_TOOLCHAINS  optional, space-separated extra toolchains to preinstall, for example
 #                    "1.85.0 nightly-2026-10-01". Workers never download toolchains.
+#   GPU              "nvidia" when every instance type in the profile has NVIDIA GPUs, else
+#                    empty. bootstrap reboots the machine afterwards and checks nvidia-smi.
 #
 # This is the file to change for your own toolchain (Node, Go, a C++ SDK, extra cargo tools).
 # Keep the last two sections: the client disables instance metadata at launch, so cloud-init
@@ -25,7 +27,27 @@ apt_get() {
 }
 apt_get update
 apt_get upgrade
-apt_get install build-essential pkg-config curl python3 git
+# python3-venv lets a job make a virtual environment: builder has no sudo, and Ubuntu's own
+# Python refuses pip installs outside one.
+apt_get install build-essential pkg-config curl python3 python3-venv git
+
+# NVIDIA driver for a GPU profile. A base image whose driver already works (--base-image, for
+# example one of AWS's GPU images) keeps its own. The server branch (--gpgpu) is the headless
+# compute driver; ubuntu-drivers picks the branch for this GPU and kernel modules prebuilt for
+# this kernel flavour, so nothing compiles at boot. nvidia-smi comes in the matching utils
+# package. To pin a branch, edit your copy: ubuntu-drivers install --gpgpu nvidia:570-server
+if [ "${GPU:-}" = nvidia ] && ! nvidia-smi >/dev/null 2>&1; then
+  apt_get install ubuntu-drivers-common
+  sudo DEBIAN_FRONTEND=noninteractive ubuntu-drivers install --gpgpu
+  branch=$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" { print $2 }' \
+    | sed -nE 's/^(linux-modules-nvidia|nvidia-dkms|nvidia-headless-no-dkms|nvidia-headless|nvidia-driver)-([0-9]+)-server.*/\2/p' \
+    | sort -n | tail -n 1)
+  if [ -z "$branch" ]; then
+    echo "ubuntu-drivers installed no NVIDIA server driver for this machine" >&2
+    exit 1
+  fi
+  apt_get install "nvidia-utils-$branch-server"
+fi
 
 # Unprivileged build user, reachable only with the remote-build key; no sudo.
 sudo useradd --create-home --shell /bin/bash builder

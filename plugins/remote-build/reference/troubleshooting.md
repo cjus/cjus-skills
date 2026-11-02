@@ -27,6 +27,11 @@ build machines, key pairs and images an interrupted run left behind, then carrie
 | A subnet has no route to an internet gateway, or its zone lacks a type | Checked before any change, on every run, for `--subnet` and the remembered subnet. Pick another subnet, or use `--address private --cidr <your network>` if you reach the VPC privately. Network ACLs aren't checked. |
 | `apply`'s output stopped in Claude Code after about two minutes | A `!` command moves to the background after about two minutes; `apply` keeps running and Claude is told when it ends. Not a failure. |
 | A toolchain is missing from the image's list, or one you meant to keep is gone | A new `--rust-toolchain` list replaces the remembered one. Re-run with `--rebake` and every extra toolchain you need; `plan` shows them as `bake_toolchains`. |
+| `builder cannot use the GPU after a reboot` | A GPU profile's driver installed but `nvidia-smi` cannot reach the GPU. Read the provisioning log the error names. Pin a driver branch in your own script (`--provision-script <name>=<path>`), or build from a base image whose driver works (`--base-image <name>=...`). With `--keep-on-failure`, SSH in as `builder` to run `nvidia-smi`: provisioning has already removed `ubuntu`'s key. |
+| The build machine did not come back after a reboot | Only GPU bakes reboot. The image may not boot without cloud-init on that type, or the driver may hang the boot. Re-run with `--keep-on-failure` and read `aws ec2 get-console-output --instance-id <id> --latest`. |
+| A profile mixes types with and without GPUs, or has another maker's GPUs | Give the GPU types a profile of their own. The bundled script installs only NVIDIA drivers; another maker needs your own version of the plugin. |
+| A base image is not found, is another architecture, or needs a bigger disk | AMI IDs and SSM parameters are per region. Choose a base of the profile's architecture, and pass `--disk-gb <name>=<GB>` of at least the size the error names. |
+| `VcpuLimitExceeded` when a GPU build machine or worker launches | The account's GPU quota ("Running On-Demand G and VT instances", or P instances for `p` types) is lower than the type's vCPUs, often 0 on a new account. Request an increase in Service Quotas, then re-run. |
 
 ## Sessions
 

@@ -195,7 +195,8 @@ def template(c):
     tags = {x.get('Key'): x.get('Value') for x in images[0].get('Tags', [])}
     listed = tags.get(TOOLCHAIN_TAG)
     return {'image': t['ImageId'], 'storage': 'delete-on-termination',
-            'toolchains': None if listed is None else [toolchain_name(n) for n in listed.split()]}
+            'toolchains': None if listed is None else [toolchain_name(n) for n in listed.split()],
+            'gpu': tags.get(GPU_TAG)}
 
 
 # Workers never download a toolchain (worker.py sets RUSTUP_AUTO_INSTALL=0), so a repository that
@@ -203,6 +204,8 @@ def template(c):
 # image without the tag (older or hand-built) is not checked.
 TOOLCHAIN_TAG = 'remote-build:toolchains'
 TOOLCHAIN_FILES = ('rust-toolchain', 'rust-toolchain.toml')  # rustup prefers the first if both exist
+# bootstrap tags a GPU profile's image with what builder's nvidia-smi reported after a reboot.
+GPU_TAG = 'remote-build:gpu'
 HOST_SUFFIX = re.compile(r'-(?:x86_64|aarch64|i686|armv7)-[a-z0-9_]+-[a-z0-9_]+(?:-[a-z0-9_]+)?$')
 
 
@@ -637,7 +640,8 @@ def setup_report(config_path, state, project):
             try:
                 info = template(dict(c, **c['launch_profiles'][name]))
                 images[name] = info
-                add(check, 'ok', 'Pinned template version; AMI ' + info['image'] + '; storage deletes on termination')
+                add(check, 'ok', 'Pinned template version; AMI ' + info['image'] +
+                    ('; GPU ' + info['gpu'] if info['gpu'] else '') + '; storage deletes on termination')
             except Refused as e:
                 add(check, 'fail', str(e), 'Check the template, its pinned version and its AMI in ' + c['region'],
                     'step-7-launch-template')
