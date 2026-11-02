@@ -9,7 +9,9 @@ steps 1-10 do, in order:
    schedule, log group and alarms, and (once images exist) a launch template per profile and
    the narrow operator role the daily profile assumes.
 3. A worker image per launch profile: build machine, host key read through the authenticated
-   console-output channel, provision.sh, image, cleanup.
+   console-output channel, provision.sh, image, cleanup. A profile can have its own base image,
+   provisioning script and disk; a GPU profile (NVIDIA types only) also reboots and must show
+   builder its GPU in nvidia-smi before the image is made.
 4. The daily profile (assumes the operator role), known-hosts file and private config.
 5. IAM dry-run checks and the janitor expiry test, so janitor_confirmed rests on a test that ran.
 
@@ -46,10 +48,14 @@ DEFAULT_NAMES = {'amd64': 'x86', 'arm64': 'arm'}
 # Smallest types per architecture, used only to prove the policy denies an unapproved type.
 UNAPPROVED_CANDIDATES = {'amd64': ['t3.nano', 't3.micro', 't2.nano'], 'arm64': ['t4g.nano', 't4g.micro']}
 BASE_IMAGE = '/aws/service/canonical/ubuntu/server/24.04/stable/current/{arch}/hvm/ebs-gp3/ami-id'
+AMI_ID = r'ami-[0-9a-f]{8,17}'
+SSM_PARAMETER = r'/[A-Za-z0-9_./-]{1,1010}'
+DEFAULT_DISK_GB = 40
 TUNABLES = {'max_workers': 2, 'ttl_minutes': 120, 'max_snapshot_bytes': 33554432, 'max_jobs': 20}
 ACTIVE = 'pending,running,stopping,stopped,shutting-down'
 LOG_RETENTION_DAYS = 30
 HOST_KEY_MINUTES = 15
+REBOOT_MINUTES = 10
 WORKER_LOGIN_MINUTES = 5
 JANITOR_TEST_MINUTES = 15
 IAM_PROPAGATION_MINUTES = 3
@@ -124,6 +130,38 @@ def parse_image(spec):
     m = re.fullmatch(r'(?:(%s)=)?(amd64|arm64):(%s(?:,%s)*)' % (PROFILE, TYPE, TYPE), spec)
     require(m, 'Image spec must look like arm64:c7g.xlarge,c7g.2xlarge or x86=amd64:c7i.xlarge (got %r)' % spec)
     return {'name': m.group(1) or DEFAULT_NAMES[m.group(2)], 'arch': m.group(2), 'types': m.group(3).split(',')}
+
+
+def per_profile(values, flag, convert=str):
+    """A repeatable flag's values: the shared one (the last plain value) and per-profile ones
+    (NAME=VALUE). NAME=default maps to None, which drops that profile's override."""
+    shared, named = None, {}
+    for value in values:
+        m = re.fullmatch(r'(%s)=(.*)' % PROFILE, value)
+        if m:
+            named[m.group(1)] = None if m.group(2) == 'default' else convert(m.group(2), flag)
+        else:
+            shared = convert(value, flag)
+    return shared, named
+
+
+def disk_size(value, flag):
+    require(re.fullmatch(r'[0-9]{1,4}', value) and 1 <= int(value) <= 1024,
+            '%s takes a size of 1-1024 GB (got %r)' % (flag, value))
+    return int(value)
+
+
+def script_path(value, flag):
+    """An absolute path, so a remembered script still resolves from another directory."""
+    path = Path(value).expanduser().resolve()
+    require(path.is_file(), 'Provisioning script not found: %s' % path)
+    return str(path)
+
+
+def base_spec(value, flag):
+    require(re.fullmatch(AMI_ID, value) or re.fullmatch(SSM_PARAMETER, value),
+            '%s takes an AMI ID or an SSM parameter path such as /aws/service/... (got %r)' % (flag, value))
+    return value
 
 
 def load_json(path, default=None):
@@ -443,6 +481,51 @@ def installed_toolchains(paths, known, host):
     return names
 
 
+BOOT_ID = 'cat /proc/sys/kernel/random/boot_id'
+NVIDIA_QUERY = 'nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader'
+
+
+def gpu_summary(text):
+    """nvidia-smi's CSV rows as one tag value, for example '1x NVIDIA L40S 46068 MiB driver 570.1'.
+    Characters some AWS services refuse in tag values become spaces."""
+    rows = [[f.strip() for f in line.split(',')] for line in text.splitlines() if line.strip()]
+    counts = {}
+    for row in rows:
+        key = ' '.join(row[:2])
+        counts[key] = counts.get(key, 0) + 1
+    drivers = sorted({row[2] for row in rows if len(row) > 2})
+    summary = ' + '.join('%dx %s' % (n, k) for k, n in counts.items()) + \
+        (' driver ' + ' '.join(drivers) if drivers else '')
+    return re.sub(r'[^A-Za-z0-9 +=._:/@-]', ' ', summary)[:256].strip()
+
+
+def reboot(admin, paths, known, host, instance, name):
+    """Reboot the build machine and wait until builder logs in to the new boot. A machine keeps
+    its addresses and host key across a reboot; the boot ID tells the new boot from the old."""
+    code, out, err = execute(ssh_argv(paths, known, 'builder', host, BOOT_ID), timeout=60)
+    require(code == 0 and out.strip(), 'builder cannot log in to the build machine: ' + tail(err))
+    before = out.strip()
+    say('[%s] rebooting so the NVIDIA driver loads' % name)
+    admin('ec2', 'reboot-instances', '--instance-ids', instance)
+    deadline = now() + REBOOT_MINUTES * 60
+    while True:
+        pause(15)
+        code, out, _ = execute(ssh_argv(paths, known, 'builder', host, BOOT_ID), timeout=60)
+        if code == 0 and out.strip() and out.strip() != before:
+            return
+        require(now() < deadline, 'The build machine did not come back within %d minutes of a reboot' % REBOOT_MINUTES)
+
+
+def gpu_check(paths, known, host, log):
+    """What builder's nvidia-smi reports, or a refusal: a driver that installed but cannot reach
+    the GPU would otherwise first show up in a paid job."""
+    code, out, err = execute(ssh_argv(paths, known, 'builder', host, NVIDIA_QUERY), timeout=120)
+    text = out.decode(errors='replace')
+    require(code == 0 and text.strip(), 'builder cannot use the GPU after a reboot (nvidia-smi: %s); the provisioning '
+            'log is %s' % (tail(err or out), log))
+    return gpu_summary(text)
+
+
 def bake(admin, paths, owner, profile, sg, subnet, opts, state):
     """Build one worker image. Returns the image, its host key and root device."""
     name = profile['name']
@@ -458,13 +541,16 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
               '--public-key-material', 'fileb://' + str(paths['identity']) + '.pub')
         state['pending'] = {'key_pair': key_name}
         save_state(paths, state)
-        base = admin('ssm', 'get-parameter', '--name', BASE_IMAGE.format(arch=profile['arch']))['Parameter']['Value']
-        root = admin('ec2', 'describe-images', '--image-ids', base)['Images'][0]['RootDeviceName']
+        if profile.get('base'):  # resolved and checked by prepare
+            base, root = profile['base']['ami'], profile['base']['root_device']
+        else:
+            base = admin('ssm', 'get-parameter', '--name', BASE_IMAGE.format(arch=profile['arch']))['Parameter']['Value']
+            root = admin('ec2', 'describe-images', '--image-ids', base)['Images'][0]['RootDeviceName']
         launch = admin('ec2', 'run-instances', '--image-id', base, '--instance-type', profile['types'][0],
                        '--count', '1', '--key-name', key_name, '--subnet-id', subnet, '--security-group-ids', sg,
                        '--associate-public-ip-address' if opts['public'] else '--no-associate-public-ip-address',
                        '--block-device-mappings', json.dumps([{'DeviceName': root, 'Ebs': {
-                           'VolumeSize': opts['disk_gb'], 'VolumeType': 'gp3', 'DeleteOnTermination': True}}]),
+                           'VolumeSize': profile['disk_gb'], 'VolumeType': 'gp3', 'DeleteOnTermination': True}}]),
                        '--tag-specifications', json.dumps([{'ResourceType': 'instance', 'Tags': [
                            {'Key': 'Name', 'Value': 'remote-build-%s-bake-%s' % (owner, name)},
                            {'Key': 'remote-build:bake', 'Value': owner}]}]))
@@ -486,13 +572,21 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
         say('[%s] provisioning (log: %s)' % (name, log))
         # Copy the script first and run it with stdin closed, so a package prompt can never read
         # the rest of the script as its answer.
-        env = 'cat > /tmp/remote-build-provision.sh && PUBKEY=%s RUST_TOOLCHAINS=%s bash /tmp/remote-build-provision.sh </dev/null' % (
+        env = ('cat > /tmp/remote-build-provision.sh && PUBKEY=%s RUST_TOOLCHAINS=%s GPU=%s '
+               'bash /tmp/remote-build-provision.sh </dev/null') % (
             shlex.quote(paths['identity'].with_name(paths['identity'].name + '.pub').read_text().strip()),
-            shlex.quote(' '.join(opts['toolchains'])))
+            shlex.quote(' '.join(opts['toolchains'])), shlex.quote(profile.get('gpu') or ''))
         code, out, err = execute(ssh_argv(paths, known, 'ubuntu', host, env),
-                                 data=Path(opts['provision']).read_bytes(), timeout=5400)
+                                 data=Path(profile['provision']).read_bytes(), timeout=5400)
         write_private(log, out.decode(errors='replace') + err.decode(errors='replace'))
         require(code == 0, 'Provisioning failed; see ' + str(log))
+        gpus = None
+        if profile.get('gpu'):
+            # A new driver's kernel module often loads only after a reboot, and the reboot also
+            # proves the image boots the way a worker will: without cloud-init.
+            reboot(admin, paths, known, host, instance, name)
+            gpus = gpu_check(paths, known, host, log)
+            say('[%s] builder sees GPU: %s' % (name, gpus))
         code, out, err = execute(ssh_argv(paths, known, 'builder', host,
                                           "python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' && "
                                           "python3 --version && (cargo --version || true)"), timeout=120)
@@ -511,6 +605,7 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
         tags = [{'Key': 'remote-build:bake', 'Value': owner}, {'Key': 'remote-build:profile', 'Value': name}]
         # setup and up read this tag to refuse a repository whose pinned toolchain the image lacks.
         listed = [{'Key': rb.TOOLCHAIN_TAG, 'Value': ' '.join(toolchains)}] if toolchains else []
+        listed += [{'Key': rb.GPU_TAG, 'Value': gpus}] if gpus else []
         ami = admin('ec2', 'create-image', '--instance-id', instance,
                     '--name', 'remote-build-%s-%s-%s' % (owner, name, stamp),
                     '--description', 'remote-build worker image (%s, %s)' % (owner, profile['arch']),
@@ -528,7 +623,8 @@ def bake(admin, paths, owner, profile, sg, subnet, opts, state):
             require('Ebs' not in mapping or mapping['Ebs'].get('DeleteOnTermination') is True,
                     'Image %s keeps a volume after termination' % ami)
         failed = False
-        return {'ami': ami, 'host_key': key, 'root_device': image['RootDeviceName'], 'toolchains': toolchains}
+        return {'ami': ami, 'host_key': key, 'root_device': image['RootDeviceName'], 'toolchains': toolchains,
+                'gpus': gpus}
     finally:
         if known.exists():
             known.unlink()
@@ -714,6 +810,46 @@ def usable_subnets(admin, zones, types, public):
                   key=lambda s: (s['VpcId'], s['AvailabilityZone'], s['SubnetId']))
 
 
+# What an image was built from; a change to any of them rebuilds that profile's image.
+BUILT_FROM = ('arch', 'disk_gb', 'base_image', 'provision_script', 'gpu')
+
+
+def gpu_profile(p, found):
+    """Mark a profile whose types all have NVIDIA GPUs. A mix is refused: the image is built on
+    the first type, and the client may launch any of them. So is another GPU maker, whose driver
+    the bundled script does not install."""
+    gpus = {t['InstanceType']: t.get('GpuInfo', {}).get('Gpus', []) for t in found}
+    makers = sorted({g.get('Manufacturer') or 'unknown' for listed in gpus.values() for g in listed} - {'NVIDIA'})
+    require(not makers, 'Profile %s has %s GPUs; remote-build supports NVIDIA GPUs only' % (p['name'], ', '.join(makers)))
+    with_gpu = sorted(t for t, listed in gpus.items() if listed)
+    require(not with_gpu or len(with_gpu) == len(gpus),
+            'Profile %s mixes types with GPUs (%s) and without (%s); give the GPU types their own profile'
+            % (p['name'], ', '.join(with_gpu), ', '.join(sorted(set(gpus) - set(with_gpu)))))
+    p['gpu'] = 'nvidia' if with_gpu else None
+    p['gpu_types'] = {t: ' + '.join('%dx %s %s %d MiB' % (g.get('Count', 1), g.get('Manufacturer'), g.get('Name'),
+                                                       g.get('MemoryInfo', {}).get('SizeInMiB', 0)) for g in listed)
+                      for t, listed in sorted(gpus.items()) if listed}
+
+
+def base_image(admin, p):
+    """Resolve and check a profile's own base image before anything is built from it."""
+    spec = p['base_image']
+    ami = spec if re.fullmatch(AMI_ID, spec) else admin('ssm', 'get-parameter', '--name', spec)['Parameter']['Value']
+    require(re.fullmatch(AMI_ID, ami), 'SSM parameter %s does not hold an AMI ID' % spec)
+    images = admin('ec2', 'describe-images', '--image-ids', ami)['Images']
+    require(images, 'Base image %s not found in this region' % ami)
+    image = images[0]
+    require(image.get('Architecture') == ARCHES[p['arch']], 'Base image %s is %s; profile %s needs %s'
+            % (ami, image.get('Architecture'), p['name'], ARCHES[p['arch']]))
+    require(image.get('RootDeviceType') == 'ebs', 'Base image %s does not boot from EBS' % ami)
+    root = next((m.get('Ebs', {}) for m in image.get('BlockDeviceMappings', [])
+                 if m.get('DeviceName') == image.get('RootDeviceName')), {})
+    size = root.get('VolumeSize', 0)
+    require(size <= p['disk_gb'], 'Base image %s needs a disk of at least %d GB; profile %s has %d (pass --disk-gb %s=%d '
+            'or more)' % (ami, size, p['name'], p['disk_gb'], p['name'], size))
+    return {'ami': ami, 'name': image.get('Name', ''), 'root_device': image['RootDeviceName']}
+
+
 def prepare(a):
     """Everything apply needs, from read-only calls. Plan prints this; apply acts on it."""
     require(re.fullmatch(OWNER, a.owner), 'Owner must be lowercase letters, digits and hyphens, at most 32')
@@ -722,13 +858,17 @@ def prepare(a):
         require(re.fullmatch(TOOLCHAIN, t), 'Invalid toolchain name: ' + t)
     if a.alert_email:
         require(re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', a.alert_email), 'Invalid alert email')
+    shared_disk, named_disk = per_profile(a.disk_gb, '--disk-gb', disk_size)
+    shared_script, named_script = per_profile(a.provision_script, '--provision-script', script_path)
+    shared_base, named_base = per_profile(a.base_image, '--base-image', base_spec)
+    require(shared_base is None, 'Name the profile a base image is for: --base-image NAME=AMI-ID or NAME=SSM-PARAMETER')
     paths = default_paths(a)
     state = load_json(paths['state'], {}) or {}
     region = region_for(a, state)
     # Re-runs keep earlier choices unless a flag changes them.
-    a.disk_gb = a.disk_gb or state.get('disk_gb') or 40
+    a.disk_gb = shared_disk or state.get('disk_gb') or DEFAULT_DISK_GB
+    a.provision_script = shared_script
     a.address = a.address or state.get('address') or 'public'
-    require(1 <= a.disk_gb <= 1024, 'Disk size must be 1-1024 GB')
     admin = Account(a.admin_profile, region)
     account = admin('sts', 'get-caller-identity')['Account']
     require(state.get('account', account) == account and state.get('region', region) == region,
@@ -738,6 +878,23 @@ def prepare(a):
     require(requested, 'Name at least one image, for example --image arm64:c7g.xlarge,c7g.2xlarge')
     names = [p['name'] for p in requested]
     require(len(set(names)) == len(names), 'Each launch profile name must be unique')
+    # Per-profile settings (NAME=VALUE) are remembered until replaced or reset with NAME=default.
+    overrides = {n: dict(o) for n, o in state.get('overrides', {}).items()}
+    for key, flag, named in (('disk_gb', '--disk-gb', named_disk), ('provision_script', '--provision-script', named_script),
+                             ('base_image', '--base-image', named_base)):
+        for n, value in sorted(named.items()):
+            require(n in names, '%s names %s, which is not a launch profile (%s)' % (flag, n, ', '.join(names)))
+            if value is None:
+                overrides.get(n, {}).pop(key, None)
+            else:
+                overrides.setdefault(n, {})[key] = value
+    overrides = {n: o for n, o in sorted(overrides.items()) if n in names and o}
+    for p in requested:
+        o = overrides.get(p['name'], {})
+        p.update(disk_gb=o.get('disk_gb', a.disk_gb), base_image=o.get('base_image'),
+                 provision_script=o.get('provision_script'))
+        require(not p['provision_script'] or Path(p['provision_script']).is_file(),
+                'Provisioning script for profile %s not found: %s' % (p['name'], p['provision_script']))
     previous = load_json(paths['config']) if paths['config'].exists() else None
     if previous is not None:
         require(isinstance(previous, dict), 'The existing private config is not a JSON object')
@@ -758,6 +915,9 @@ def prepare(a):
         for t in found:
             require(ARCHES[p['arch']] in t['ProcessorInfo']['SupportedArchitectures'],
                     '%s does not run %s images (profile %s)' % (t['InstanceType'], p['arch'], p['name']))
+        gpu_profile(p, found)
+        if p['base_image']:
+            p['base'] = base_image(admin, p)
     types = sorted({t for p in requested for t in p['types']})
     zones = offering_zones(admin, types)
     if a.subnet or state.get('subnet'):
@@ -803,7 +963,9 @@ def prepare(a):
     bake, keep, unavailable = [], [], []
     for p in requested:
         old = known.get(p['name'])
-        if a.rebake or not old or old.get('arch') != p['arch'] or old.get('disk_gb') != a.disk_gb:
+        # Images made before these settings existed have none of the per-profile keys, which
+        # reads as the defaults, so upgrading rebuilds nothing.
+        if a.rebake or not old or any(old.get(k) != p[k] for k in BUILT_FROM):
             bake.append(p['name'])
         else:
             keep.append(p['name'])
@@ -824,6 +986,7 @@ def prepare(a):
             'profiles': requested, 'previous': previous, 'public': public, 'vpc': vpc, 'subnet': subnet,
             'cidr': cidr, 'cidr_source': source, 'stack': stack, 'stack_status': status, 'outputs': outputs,
             'bake': sorted(bake), 'keep': sorted(keep), 'unavailable': unavailable, 'remove': removed, 'active_workers': active,
+            'overrides': overrides, 'provision_script': a.provision_script or state.get('provision_script'),
             # A new --rust-toolchain list replaces the remembered one, so a toolchain can be dropped.
             'toolchains': a.rust_toolchain or state.get('toolchains', []),
             'janitor_test': 'already passed' if tested else ('skipped' if a.skip_janitor_test else 'will run')}
@@ -833,12 +996,21 @@ def network_of(p):
     return {'vpc': p['vpc'], 'subnet': p['subnet'], 'ssh_from': p['cidr'], 'address': 'public' if p['public'] else 'private'}
 
 
+def built_from(p, x):
+    """A profile's image settings for the summaries."""
+    script = x['provision_script'] or p['provision_script']
+    return {'disk_gb': x['disk_gb'],
+            'base_image': '%s (%s)' % (x['base']['ami'], x['base']['name']) if x.get('base') else 'stock Ubuntu 24.04',
+            'provision_script': rb.shown(Path(script)) if script else 'bundled'}
+
+
 def summary_of(p):
     """What apply would do, from the read-only plan."""
     return {'region': p['region'], 'stack': p['stack'] + ' (' + (p['stack_status'] or 'will be created') + ')',
             'network': network_of(p),
-            'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
-                                            'image': 'bake' if x['name'] in p['bake'] else 'reuse'}
+            'launch_profiles': {x['name']: dict(built_from(p, x), arch=x['arch'], instance_types=x['types'],
+                                                gpu=x['gpu_types'] or None,
+                                                image='bake' if x['name'] in p['bake'] else 'reuse')
                                 for x in p['profiles']},
             'bake_toolchains': ['stable'] + p['toolchains'],
             'remove_profiles': p['remove'], 'active_workers': p['active_workers'], 'janitor_test': p['janitor_test']}
@@ -847,12 +1019,14 @@ def summary_of(p):
 def applied(p, status, state, built, retired):
     """What apply did and the state it left, unlike summary_of, which is the plan made before."""
     return {'region': p['region'], 'stack': '%s (%s)' % (p['stack'], status), 'network': network_of(p),
-            'launch_profiles': {x['name']: {'arch': x['arch'], 'instance_types': x['types'],
-                                            'image': ('built ' if x['name'] in p['bake'] else 'reused ') +
-                                            state['profiles'][x['name']]['ami'],
-                                            'launch_version': built[x['name']]['launch_version'],
-                                            'toolchains': state['profiles'][x['name']].get('toolchains') or
-                                            'unknown: the image has no %s tag; --rebake records them' % rb.TOOLCHAIN_TAG}
+            'launch_profiles': {x['name']: dict(built_from(p, x), arch=x['arch'], instance_types=x['types'],
+                                                image=('built ' if x['name'] in p['bake'] else 'reused ') +
+                                                state['profiles'][x['name']]['ami'],
+                                                launch_version=built[x['name']]['launch_version'],
+                                                # What builder's nvidia-smi reported when the image was made.
+                                                gpu=state['profiles'][x['name']].get('gpus'),
+                                                toolchains=state['profiles'][x['name']].get('toolchains') or
+                                                'unknown: the image has no %s tag; --rebake records them' % rb.TOOLCHAIN_TAG)
                                 for x in p['profiles']},
             'bake_toolchains': ['stable'] + p['toolchains'],
             'removed_profiles': p['remove'], 'retired_images': retired, 'active_workers': p['active_workers']}
@@ -907,12 +1081,11 @@ def apply(a):
     require(not (p['active_workers'] and (p['bake'] or p['remove'])),
             'Workers %s are running; collect results and /remote-build:down them before images change'
             % ', '.join(p['active_workers']))
-    provision = Path(a.provision_script or state.get('provision_script') or ASSETS / 'provision.sh').expanduser()
-    require(provision.is_file(), 'Provisioning script not found: %s' % provision)
+    shared = Path(p['provision_script'] or ASSETS / 'provision.sh').expanduser()
+    require(shared.is_file(), 'Provisioning script not found: %s' % shared)
     state.update(account=p['account'], region=p['region'], stack=p['stack'], subnet=p['subnet'],
                  cidr=p['cidr'], cidr_source=p['cidr_source'], address=a.address, disk_gb=a.disk_gb,
-                 toolchains=p['toolchains'],
-                 provision_script=str(provision) if (a.provision_script or state.get('provision_script')) else None,
+                 toolchains=p['toolchains'], provision_script=p['provision_script'], overrides=p['overrides'],
                  alert_email=a.alert_email or state.get('alert_email'))
     state.setdefault('profiles', {})
     save_state(paths, state)
@@ -932,16 +1105,17 @@ def apply(a):
 
     status, outputs = deploy(admin, paths, p['stack'], stack_template(), owner)
     retired = [state['profiles'].pop(name)['ami'] for name in p['remove']]
-    opts = {'public': p['public'], 'disk_gb': a.disk_gb, 'toolchains': state['toolchains'],
-            'provision': provision, 'keep_on_failure': a.keep_on_failure}
+    opts = {'public': p['public'], 'toolchains': state['toolchains'], 'keep_on_failure': a.keep_on_failure}
     for x in p['profiles']:
         if x['name'] not in p['bake']:
             continue
-        image = bake(admin, paths, owner, x, outputs['SecurityGroupId'], p['subnet'], opts, state)
+        image = bake(admin, paths, owner, dict(x, provision=x['provision_script'] or str(shared)),
+                     outputs['SecurityGroupId'], p['subnet'], opts, state)
         old = state['profiles'].get(x['name'], {}).get('ami')
         if old and old != image['ami']:
             retired.append(old)
-        state['profiles'][x['name']] = dict(image, arch=x['arch'], types=x['types'], disk_gb=a.disk_gb)
+        state['profiles'][x['name']] = dict(image, types=x['types'],
+                                            **{k: x[k] for k in BUILT_FROM if x[k] is not None})
         missing.discard(x['name'])
         save_state(paths, state)
     for x in p['profiles']:
@@ -1083,11 +1257,18 @@ def parser():
         s.add_argument('--daily-profile', default='remote-build', help='AWS profile the plugin uses (default remote-build)')
         s.add_argument('--known-hosts', type=Path, default=home / '.ssh' / 'remote-build-known-hosts')
         s.add_argument('--identity', type=Path, default=home / '.ssh' / 'remote-build-identity')
-        s.add_argument('--disk-gb', type=int, help='Worker disk size; workers cannot grow it (default 40)')
+        s.add_argument('--disk-gb', action='append', default=[], metavar='[NAME=]GB',
+                       help='Worker disk size; workers cannot grow it (default 40). NAME=GB sets one profile\'s size '
+                            '(repeatable; NAME=default drops it)')
         s.add_argument('--rust-toolchain', action='append', default=[],
                        help='Extra toolchain to preinstall besides stable (repeatable). The list replaces the one '
                             'remembered from earlier runs, so name every toolchain to keep')
-        s.add_argument('--provision-script', help='Your own provisioning script instead of scripts/aws/provision.sh')
+        s.add_argument('--provision-script', action='append', default=[], metavar='[NAME=]PATH',
+                       help='Your own provisioning script instead of scripts/aws/provision.sh. NAME=PATH sets one '
+                            'profile\'s script (repeatable; NAME=default drops it)')
+        s.add_argument('--base-image', action='append', default=[], metavar='NAME=AMI|SSM-PARAMETER',
+                       help='Build one profile\'s image from this base instead of stock Ubuntu 24.04, for example one '
+                            'with GPU drivers (repeatable; NAME=default drops it)')
         s.add_argument('--rebake', action='store_true', help='Build fresh images even when the current ones are usable')
         s.add_argument('--skip-janitor-test', action='store_true', help='Leave janitor_confirmed false; test it yourself')
         s.add_argument('--retest-janitor', action='store_true', help='Run the janitor test again')
