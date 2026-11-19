@@ -4114,6 +4114,12 @@ def main(argv: list[str]) -> int:
                      for p in book["problems"]
                      if p["rule"] == "position"
                      or (p["rule"] in ("name", "zero") and p["file"] in claimed)]
+    # A file with no number among chapters that have one is usually a working
+    # note left in the folder, and it binds as a chapter like anything else.
+    name_warnings += [f'{f["name"]}: has no zero-padded chapter number where the '
+                      f'other chapters have one, so it was bound as {f["label"]}; '
+                      f'add it to book.json "exclude" if it is not a chapter'
+                      for f in book_model.strays(book)]
 
     # The flag wins; else book.json; else the default edition.
     declared_edition = cfg.get("edition", "default")

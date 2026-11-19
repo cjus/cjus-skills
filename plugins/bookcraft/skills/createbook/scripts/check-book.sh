@@ -1190,7 +1190,15 @@ for i in "${!chapters[@]}"; do
           ;;
       esac
     done < <(printf '%s\n' "$callout_report")
-  elif printf '%s\n' "$body" | grep -qE '^\s*> '; then
+  elif printf '%s\n' "$body" | awk '
+      /^[[:space:]]*```/ { infence = !infence; next }
+      !infence && /^[[:space:]]*> / { found = 1 }
+      END { exit !found }
+    '; then
+    # Fence-aware, as the guide branch above is. A shell session quoted in a
+    # fenced block prints its prompt as "> ", and a check that read that as a
+    # block quote pushed a chapter agent to move the typed commands out of the
+    # block and into the prose, which made the chapter worse to pass the check.
     problem "$base: body carries a block quote; a chapter is prose, part headings, and the lists, tables and fenced blocks that earn their place"
   fi
 
