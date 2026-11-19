@@ -1,0 +1,12 @@
+{
+  "subtitle": "Two chapters and an appendix written under the primer profile",
+  "byline": "The bookcraft fixtures",
+  "profile": "primer",
+  "description": [
+    "A fixture for check-book.sh. Chapter 1 is a valid primer chapter: no header table, four sections and an H3 where a guide or narration chapter would allow two or three parts, short paragraphs beside one past the 100-word ceiling, and the closing Sources and further reading section.",
+    "Chapter 2 is valid too, and its paragraphs nearly all run close to the ceiling, which the clustering report names. Neither chapter fails the run, and the appendix shows a primer may carry one."
+  ],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": true
+}

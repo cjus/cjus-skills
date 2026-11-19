@@ -86,6 +86,8 @@ createbook/python-unrunnable|check-book|0|structure is sound~provenance: require
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
+createbook/primer|check-book|0|profile: primer~structure is sound~paragraph 8 runs 102 words, past the 100-word ceiling~primer-fixture-02-paragraphs-that-crowd-the-ceiling.md: 6 of 8 paragraphs run 85 words or more~reports: 2~!primer-fixture-01-what-a-primer-chapter-may-carry.md: 1 of~!appendix
+createbook/primer-failures|check-book|1|profile: primer~body carries an H4 or deeper~first is a fenced block at line 2~"## Sources and further reading" carries no items
 createbook/provenance|check-provenance|1|7 failure(s)~REVIEW provenance-fixture-02~handbook carries no heading matching § 1~"nothing in the handbook is set apart by a blank line"~quotations checked 4~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
 ROWS
 )

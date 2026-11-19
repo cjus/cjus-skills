@@ -8,9 +8,9 @@ argument-hint: <what the book should be> [output-folder] | --recreate <old-folde
 
 Create a book about: $ARGUMENTS
 
-A book here is a folder of markdown files, one file per chapter, named so that sorting the filenames gives the reading order. Each chapter is written against `reference/chapter-prose.md` and the file for the book's profile, `reference/guide.md` or `reference/narration.md`, all in this skill's own folder, so a chapter reads as explanatory prose rather than a set of notes. The finished folder is the input `/makebook` expects.
+A book here is a folder of markdown files, one file per chapter, named so that sorting the filenames gives the reading order. Each chapter is written against the rules for the book's profile, all in this skill's own folder: `reference/primer.md` alone for a primer, the default, and `reference/chapter-prose.md` with `reference/guide.md` or `reference/narration.md` on top for the two handbook profiles. The finished folder is the input `/makebook` expects.
 
-**The prose specification lives here, in full, in three files.** `reference/chapter-prose.md` holds the rules every chapter follows, and `reference/guide.md` and `reference/narration.md` hold each profile's own. Together they are the authority on shape, voice, budgets and the before-sending checks, and no rule about the prose comes from outside this folder. It was forked from the `/ne` skill and has since departed from it, so `/ne` is history rather than a dependency and the two are free to diverge. What still comes from outside is the pair of format constraints `/makebook` imposes on any chapter it binds, below. `NOTES.md` records what the fork changed and which of the numbers were ever measured. Copying `createbook/` and `makebook/` into another repo is enough to write and bind a book there.
+**The prose specification lives here, in full, in four files.** `reference/primer.md` is the whole rule set for a primer chapter, read instead of the core and borrowing only its mark and tag grammar. For the handbook profiles, `reference/chapter-prose.md` holds the rules every chapter follows, and `reference/guide.md` and `reference/narration.md` hold each profile's own. Together they are the authority on shape, voice, budgets and the before-sending checks, and no rule about the prose comes from outside this folder. It was forked from the `/ne` skill and has since departed from it, so `/ne` is history rather than a dependency and the two are free to diverge. What still comes from outside is the pair of format constraints `/makebook` imposes on any chapter it binds, below. `NOTES.md` records what the fork changed and which of the numbers were ever measured. Copying `createbook/` and `makebook/` into another repo is enough to write and bind a book there.
 
 ## Arguments
 
@@ -27,7 +27,9 @@ With no first argument and no `--recreate`, ask what the book should be about an
 
 ## The sources are an argument
 
-**A book here is a guide to a set of resources first, and to its subject second.** The resources are the authority; what the model knows fills what they leave out; the reader can tell which is which. That is what `reference/chapter-prose.md § The sources come first` asks of the prose and what steps 2 and 5 below build the machinery for.
+**Under the handbook profiles, a book is a guide to a set of resources first, and to its subject second.** The resources are the authority; what the model knows fills what they leave out; the reader can tell which is which. That is what `reference/chapter-prose.md § The sources come first` asks of the prose and what steps 2 and 5 below build the machinery for.
+
+**Under `primer`, the subject comes first.** The book's job is to get its reader up to speed on the subject, and the context the operator gave sets the scope and is the authority for every fact it covers. What the model adds is the teaching: which ideas carry the most weight, the order a learner needs them in, and how each is best explained. The context is still never contradicted and never blurred with the model's own knowledge, and the marks say which is which (`reference/primer.md § Facts`). A primer is not a tour of its context, so the outline decides what to leave out as carefully as what to teach (§ 2).
 
 **Ask for the sources when none are given.** A book written with no resources at all is entirely filled in, which is a legitimate book and a different one, so it is the operator's call rather than a default to slide into. Say what you are asking and why: without sources there is nothing to check a claim against, and every chapter's header will read `Fills in: everything`.
 
@@ -91,13 +93,15 @@ Concepts this chapter stops short of. Each is a term to search, with the reason.
 - **Content-addressable storage**: why two images that share a layer share it on disk.
 ```
 
-This is a `guide` chapter, the profile a new book gets. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark, on the line directly under it. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
+This is a `guide` chapter. First line is the H1, taken from the outline. One blank line. Then the header table (`reference/chapter-prose.md § The chapter header`): three rows under `guide`, and four under `narration`, which adds a `This chapter` row above `Act on this`. Then `## In short`, required under `guide` and present under `narration` where the book declares `overview`. It is the first H2 in the body and carries no tag and no mark (`reference/chapter-prose.md § In short`). Then the prose, whose two or three parts each carry an H2, and whose every paragraph opens with its tag and is followed by its provenance mark, on the line directly under it. The file ends with `## Suggested reading` and its list of concepts. A chapter may also carry a list, table, fenced code block, bolded phrase or inline code span where `reference/chapter-prose.md § Never` allows one, and a figure reference on a line of its own. A `guide` chapter may also carry an H3 inside a part and up to four labelled callouts (`reference/guide.md § Headings`, `reference/guide.md § Callouts`). Nothing else: no H3s under `narration`, no frontmatter, no trailing metadata block.
 
 **A list, a table, a fenced block, a figure, a provenance mark and the `## In short` section each take no tag and advance no paragraph number**, the same way a heading does not. A tag is an address other files cite, so dropping a table into the middle of a finished chapter must not renumber everything after it. `check-book.sh` counts them this way, so the rule is enforced rather than remembered.
 
 **The header and the concept list are the reader's second reading**, the one who is not following the argument tonight but wants a fact out of the chapter or wants to know what it left out. Neither is optional in a book that declares them, and neither replaces the prose: a header that could stand in for the chapter means the chapter became a briefing.
 
 **`## In short` is a third reading**, and it points the other way: the reader who has not read this chapter at all, or who read the ones before it long ago. It is the one part of the file derived from the finished chapter rather than from a source. Under `guide` it is the chapter's only summary, so it opens by saying what the chapter covers and may use the chapter's own terms with a short definition (`reference/guide.md § In short`). Under `narration` it may use no term the chapter glosses (`reference/narration.md § In short`).
+
+**A primer chapter is simpler.** The H1 on line 1, then the prose, with as many `##` sections as the explanation needs and an `###` inside one where it helps, then `## Sources and further reading` last: the context sources the chapter drew on, by the names a reader would use, and the concepts it stopped short of, each a term to search. It carries no header table and no `## In short`, and by default no paragraph tags. Every unit still carries its provenance mark. `reference/primer.md § Shape and length` has the rest.
 
 The two levels do different jobs and must not be confused. The H1 is the chapter title `/makebook` reads from `lines[0]`, and it is the only H1 in the file. The H2s are the part boundaries, chosen by the chapter agent against `reference/chapter-prose.md § Headings` and the profile file, and the outline does not fix them the way it fixes the terms and anchors.
 
@@ -118,7 +122,7 @@ In a tagged book, which is the default, every paragraph opens with a tag naming 
 - **A chapter is tagged throughout or not at all,** and so is a book.
 - **A revision may add a paragraph with a lettered tag**, `[3-14a]` after `[3-14]`, so no existing tag moves (`reference/chapter-prose.md § Paragraph tags`). This skill never writes one; `/updatebook` does, and every checker that reads a tag accepts the form.
 
-**Tagging is on unless the operator passes `--no-tags`.** Turn it off for a book meant to read as an ordinary book, where an address at the head of every paragraph is noise the reader did not ask for. Keep it on for anything that will be discussed rather than only read: a reference, a course guide, a document someone will argue with a model about. Ask if the argument gives no signal, since it is cheap to ask now and costs a rewrite later.
+**Tagging is on unless the operator passes `--no-tags`, except under `primer`, where it is off unless the operator asks for it.** A primer is read, not cited by paragraph. Turn it off for a book meant to read as an ordinary book, where an address at the head of every paragraph is noise the reader did not ask for. Keep it on for anything that will be discussed rather than only read: a reference, a course guide, a document someone will argue with a model about. Ask if the argument gives no signal, since it is cheap to ask now and costs a rewrite later.
 
 **Whichever way it goes, record it in `book.json` as `"tags": true` or `"tags": false`.** That is what lets `check-book.sh` check the book strictly without being handed a flag, and what tells a later session which kind of book it is holding. A book that declares nothing is checked in the weakest mode available, and the checker says so on its summary rather than letting the weaker run read as a pass.
 
@@ -222,22 +226,25 @@ From the argument, settle the title, the slug, the reader, and the angle. The re
 
 **When the argument names no reader, ask before going further.** Three questions: who they are, what they must be able to do when they finish, and what they can be assumed to know already. The last is the one that changes the book, since it sets what every chapter may leave unglossed: it becomes the reader's knowledge boundary at § 2. The second becomes the coverage ledger's items, where the book serves no course whose graded work would set them. **Ask now, for the reason the other two underspecified inputs are asked about now** (§ Sizing the book, § Paragraph tags): it is one answer at this point and a rewrite of every chapter after. Where the operator declines to answer, infer a persona and mark it inferred at the gate (§ 3).
 
-**This asks for the domain persona, not the reading posture.** The posture at `reference/chapter-prose.md § The reader` — attentive, short on working memory, reading once straight through and returning later for one fact — is fixed by design for every book this skill writes. It is not the operator's to change here and not a chapter agent's to renegotiate. What the argument supplies, and what the three questions above ask for, is who that person is and what they already know.
+**This asks for the domain persona, not the reading posture.** Under the handbook profiles, the posture at `reference/chapter-prose.md § The reader` — attentive, short on working memory, reading once straight through and returning later for one fact — is fixed by design for every book this skill writes. It is not the operator's to change here and not a chapter agent's to renegotiate. What the argument supplies, and what the three questions above ask for, is who that person is and what they already know.
 
-**Settle the profile here too.** Two rule sets exist, `reference/guide.md` and `reference/narration.md`, each read on top of `reference/chapter-prose.md`, and which one a book is written under is a book-level fact, not a chapter's choice:
+**Settle the profile here too.** Three rule sets exist. `reference/primer.md` stands alone. `reference/guide.md` and `reference/narration.md` are the handbook profiles, each read on top of `reference/chapter-prose.md`. Which one a book is written under is a book-level fact, not a chapter's choice:
 
 | Profile | For | Reads like |
 |---|---|---|
-| `narration` | A book read once, straight through, in order. An explainer, a primer, a long-form argument. | Chapters chained noun to noun, headings redundant with the prose, every part exiting on a weakness. |
-| `guide` (the default) | A book opened at one chapter the week it is needed, scanned under time pressure, returned to with a specific question. A preparation guide, a runbook, a handbook. | Chapters that stand alone, headings that carry the point, callouts marking what kind of sentence you are reading, numbered procedures, reference matter in appendices. |
+| `primer` (the default) | A short book that gets a reader up to speed on a subject, built from the context given at creation time. The reader has an hour or two and reads it through. | A selected subject in the order a learner needs it, each idea started from a problem the reader can see and explained with the device that suits it: a demonstration, a worked trace, a small table. Paragraphs and chapters as long as their content, under ceilings. |
+| `guide` | A handbook opened at one chapter the week it is needed, scanned under time pressure, returned to with a specific question, whose job is fidelity to a set of documents. A preparation guide, a runbook. | Chapters that stand alone, headings that carry the point, callouts marking what kind of sentence you are reading, numbered procedures, reference matter in appendices. |
+| `narration` | A handbook read once, straight through, in order, built closely on its documents. A long-form argument. | Chapters chained noun to noun, headings redundant with the prose, every part exiting on a weakness. |
 
-**The test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, on a Saturday, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead, which is the finding `NOTES.md § The guide profile` records.
+**The first test is what the book is for.** A book that should get someone up to speed on a subject is a primer, whatever the context looks like. A book whose job is to stay faithful to a set of documents, so a reader can act on them, a course's dates and keys, a system's runbook, is a handbook, and the two handbook profiles are for that. `NOTES.md § The primer profile, 2026-11-18` records the trial behind the split.
 
-**Decide it before the outline and never after the chapters exist.** It is one word in `book.json` at this point and a rewrite of every chapter afterwards, which is why it goes to the operator at the gate (§ 3) alongside the tag decision and for the same reason. Where the argument does not say and the subject does not obviously answer it, **write `guide`** and say at the gate that you did.
+**Between the two handbook profiles, the test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, on a Saturday, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead, which is the finding `NOTES.md § The guide profile` records.
 
-**`guide` is the default this skill writes, and `narration` is what the checker assumes when the key is absent.** Those are two different defaults and both are deliberate. A new book gets `"profile": "guide"` in `book.json` because a book built from a set of sources is nearly always opened at the chapter somebody needs, and the reader this skill is for is short on time rather than settling in. `check-book.sh` still reads an absent key as `narration`, because every book written before profiles existed has to keep passing untouched, and re-checking one under rules it was not written to would fail it on a `## In short` section nobody had asked for. So the default changes what gets **written**, never how an existing book is **read** (`NOTES.md § The guide profile`).
+**Decide it before the outline and never after the chapters exist.** It is one word in `book.json` at this point and a rewrite of every chapter afterwards, which is why it goes to the operator at the gate (§ 3) alongside the tag decision and for the same reason. Where the argument does not say and the subject does not obviously answer it, **write `primer`** and say at the gate that you did.
 
-**Choose `narration` where the book really is read start to finish** — an explainer, a primer, a long-form argument whose chapters build one case. Say so at the gate the same way.
+**`primer` is the default this skill writes, and `narration` is what the checker assumes when the key is absent.** Those are two different defaults and both are deliberate. A new book gets `"profile": "primer"` in `book.json` because the commonest request is a small book that gets someone up to speed. Before the primer existed the default was `guide`, for a book built from a set of sources and opened at the chapter somebody needs. That is still the right profile for such a book. `check-book.sh` still reads an absent key as `narration`, because every book written before profiles existed has to keep passing untouched, and re-checking one under rules it was not written to would fail it on a `## In short` section nobody had asked for. So the default changes what gets **written**, never how an existing book is **read** (`NOTES.md § The guide profile`).
+
+**Choose `guide` where the book's job is fidelity to documents a reader will act on**, and `narration` where such a book is read start to finish, a long-form argument whose chapters build one case. Say so at the gate the same way.
 
 **Then start `assertions.json`, before the outline exists** (§ The assertions file):
 
@@ -252,6 +259,48 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-s
 
 **The argument goes in verbatim, flags and all.** It is the only record of what was asked for. The outline paraphrases it, and a recreate that starts from a paraphrase starts from a different book. The origins are what § 3 states at the gate, so write them the way § 3 will say them, and when the gate corrects the persona or an origin, record the correction with `assertions.sh brief`.
 
+### Under the primer profile
+
+The procedure below is the same for every profile: derive the book, plan and confirm the outline, write `book.json` and a sample, draft, check, report. A primer changes what several steps decide, and this section is where those changes live. Where a step below speaks of the header table, `## In short`, part counts, handoff nouns or the anchor and term budgets, those are handbook rules and do not reach a primer chapter.
+
+**Size from a reading budget** (§ Sizing the book). Ask the operator how long the reader has, and default to 60 to 90 minutes. A primer chapter came to about 2,000 words on the page in the trial, prose, code and tables together, which is about eleven minutes at 175 words a minute. So the chapter count is roughly the budget in minutes divided by eleven: eight chapters for ninety minutes. The budget binds the whole book, and step 9 reports the book against it.
+
+**Selection comes first in the outline** (§ 2), before the chapter list and beside the source ledger. Sort everything the context covers into three columns:
+
+| Teach | Mention, with a pointer | Leave to the source |
+|---|---|---|
+| The ideas that carry the most weight, explained in full | Ideas the reader should know exist: one or two sentences each, and where to read more | Refinements, history, detail the reader does not need to get up to speed |
+
+Where the context measures what its ideas are worth, let that guide the sort. The gate (§ 3) shows the selection with a reason beside each cut, and leads with it.
+
+**Order the chapters by what a learner must understand first**, never by the order the context's documents use. Where the book is drawn from a larger one, the outline says how the two are told apart: this book's chapters by number, the source's by title or as "the full-length book's chapter N", and any numbering of the source's own (stages, versions) explained once, in the chapter that first needs it.
+
+**Each chapter row in a primer outline carries:**
+
+- **Number, title and filename.**
+- **Job:** two or three sentences on what this chapter explains, specific enough that someone else could write it.
+- **Teaches, mentions, leaves:** the chapter's share of the selection.
+- **Context:** the context files the chapter draws on, by path, with sections where that helps.
+- **Defines** and **uses plainly:** the terms this chapter defines, and the terms earlier chapters defined that it may use without defining again.
+- **Owns:** the demonstrations and measured results this chapter shows. No other chapter shows them.
+- **Opens with:** the move the chapter's first paragraph makes: a concrete problem, a scene, a measurement, a question put directly, a position or input where the obvious answer fails. **Neighbouring chapters open differently, and no chapter opens by summarising earlier ones.** Parallel chapter agents cannot see each other, so left alone they converge: before openings were assigned, seven of eight trial chapters opened on a recap.
+- **Try it:** whether the chapter ends its explanation with a short section of commands the reader can run. Only where the context gives commands worth running, and never every chapter by default.
+- **Carries:** the IDs of the `prose` entries in `assertions.json` this chapter rests on, as for any profile (§ 2). Prompt item 9 hands them to the agent.
+- **Fills in:** what this chapter supplies that the context does not. Prompt item 10.
+- **Stops short of:** the concepts the closing section lists as terms to search. Prompt item 11.
+
+**Book-wide conventions** sit at the top of the outline. Each recurring device the book relies on, a unit, a notation, a numbering scheme, a tool's output format, is explained once, in a named chapter, and used plainly after it. Each convention goes into every chapter agent's prompt (§ 5).
+
+**`book.json` for a primer** (§ 4) is the template with `"profile": "primer"`, `"tags": false` unless the operator asked for tags, and without `overview` and `edition`, which the profile does not use. Keep `provenance` and `suggested_reading`. Under `primer` the closing section `suggested_reading` declares is `## Sources and further reading`, and `glossary` is optional.
+
+**The chapter agent's prompt** (§ 5) carries `reference/primer.md` alone at item 1, never `chapter-prose.md` beside it, since the two disagree on purpose. Item 3 is the chapter's job and its assigned opening move. Item 6's file format is the primer's (§ Chapter file format). Items about handoff nouns and anchor budgets do not apply. The book-wide conventions go in with the terms at item 4.
+
+**Step 6** writes `about-this-book.md` as for any book, and a glossary only where the book declares one. A primer chapter takes no `## In short`.
+
+**`check-book.sh` reads the profile** (§ 7). Under `primer` it allows any number of `##` sections and an `###` inside one, and allows appendices. It reports a paragraph past 100 words and never fails one. It requires `## Sources and further reading` last where the book declares `suggested_reading`. It still fails an em dash, a block quote, a missing mark and every structural fault it fails for the other profiles. The closing section must carry a bulleted list.
+
+**At step 8, read the openings side by side**, all of them in a row, for a move repeated across chapters, and the closes the same way. A habit the outline did not assign shows up there and nowhere else.
+
 ### Sizing the book
 
 **Nothing caps a chapter's length** (`reference/chapter-prose.md § Length`), so sizing is an estimate made for the operator at step 3 and never a budget handed to a chapter agent. The only book-scale evidence is the reference book: eighteen chapters running 1,675 to 1,984 words of prose, averaging 1,895, measured with `check-book.sh` on 2026-09-13. At the 175 words a minute the spec assumes, that is about eleven minutes a chapter.
@@ -262,7 +311,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-s
 
 | The operator gave you | Do this |
 |---|---|
-| `--minutes N` | Chapters ≈ `N / 11`, rounded to the nearest whole. Ninety minutes is eight chapters, three hours is sixteen. |
+| `--minutes N` | Chapters ≈ `N / 11`, rounded to the nearest whole, under every profile. Ninety minutes is eight chapters, three hours is sixteen. |
 | Sources but no minutes | Size to what the sources actually oblige the book to carry, from the ledger in step 2, and report the resulting read time at step 3 so the operator can push back. |
 | Neither | Ask. Then default short: **six to ten chapters**. |
 
@@ -276,7 +325,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-s
 
 | Where | What to divide by 175 |
 |---|---|
-| Step 3, before the chapters exist | Chapters × about 1,900 words of prose — **an estimator's constant, never a drafting target** — **× 1.8 for everything else on the page** |
+| Step 3, before the chapters exist, under `primer` | Chapters × about 2,000 words on the page: prose, code and tables together, as measured on the trial primer (`NOTES.md § The primer profile, 2026-11-18`). No 1.8 factor, since the figure already counts everything |
+| Step 3, before the chapters exist, under the handbook profiles | Chapters × about 1,900 words of prose — **an estimator's constant, never a drafting target** — **× 1.8 for everything else on the page** |
 | Step 9, from the finished book | `check-book.sh`'s `prose` and `structure` figures added together |
 
 **The 1,900 is an input to this arithmetic and nothing else.** It is the reference book's measured average (§ Sizing the book), here to turn a chapter count into a read time before any chapter exists. It is not a length a chapter should come out at, not a line for the outline, and not a number to put in a chapter agent's prompt. `reference/chapter-prose.md § Length` sets no ceiling, no target and no floor, and `check-book.sh` reports both word figures without capping either. **A plan that says a chapter stays at about 1,900 words has turned this estimate into a budget**, which is what § Sizing the book forbids; the fix is to strike the number, not to hold the chapters to it.
@@ -386,7 +436,7 @@ Then show the source ledger, **the entries beside it as `assertions.sh list` pri
 
 **An inferred persona is what this line is for.** Checking that a persona exists fires only when the field is empty, and from a subject plus a folder of sources a plausible reader is almost always available, so the failure that costs a book is a confident wrong persona rather than a missing one. By the time chapters exist it is at the top of the outline (§ 2) and in every chapter agent's prompt (§ 5), reading exactly like a persona the operator supplied. A wrong reader is not a wrong chapter. It is every chapter pitched at the wrong person, which is the one defect a rewrite cannot localise.
 
-**State the profile and what it changes.** One line: `narration` or `guide`, and the one-sentence version of why this book is one rather than the other. Say where it came from on the same terms as the reader — the argument, the operator's answer, or your own read of the subject — because an inferred profile has the same failure mode an inferred persona does. **This is the cheapest correction in the whole run and the most expensive one to miss**: one word here, every chapter afterwards.
+**State the profile and what it changes.** One line: `primer`, `guide` or `narration`, and the one-sentence version of why this book is that one. Under `primer`, show the selection and its cut list before the chapter list, with the reading budget and the book-wide conventions (§ Under the primer profile). Say where it came from on the same terms as the reader — the argument, the operator's answer, or your own read of the subject — because an inferred profile has the same failure mode an inferred persona does. **This is the cheapest correction in the whole run and the most expensive one to miss**: one word here, every chapter afterwards.
 
 **Under `guide`, a book past the six-to-ten default needs the shortest path named.** Where the outline runs longer, ask the operator which chapters a reader short of time can skip, and record the answer; it lands in `about-this-book.md § How to read it` at step 6. A guide nobody finishes is the failure § Sizing the book names, and for this reader the fix is a path through the book rather than a shorter book.
 
@@ -398,7 +448,27 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 
 ### 4. Write `book.json`
 
-**This is the whole file for an ordinary book.** Write it as it stands, with the `sources` map filled from the step 2 ledger:
+**Under `primer`, the default, this is the whole file.** Write it as it stands, with the `sources` map filled from the step 2 ledger:
+
+```json
+{
+  "subtitle": "...",
+  "byline": "Claude Opus 5",
+  "profile": "primer",
+  "description": ["One or two paragraphs for the cover."],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": true,
+  "exclude": ["OUTLINE.md"],
+  "sources": {
+    "build guide": {"path": "../docs/build.md", "display": "the build guide"}
+  }
+}
+```
+
+`tags` is `true` only where the operator asked for tags. `glossary` is added only where the book carries one. `overview` and `edition` are left out, because the primer uses neither.
+
+**Under `guide`, this is the whole file.** Write it as it stands, with the `sources` map filled from the step 2 ledger:
 
 ```json
 {
@@ -436,7 +506,7 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 
 **`"edition": "reading"` is in the template for a `guide` book, and left out of a `narration` one.** It is `/makebook`'s key (`makebook/SKILL.md § The reading edition`), and it only changes what a bind with no flag produces. A guide is handed to readers, and the paragraph tags and source rows are the operator's, so a guide binds the reading edition by default and the operator's copy is the one that takes a flag. A narration book leaves the key out and binds the default edition, with `--reading-edition` for the times you want the other. Where a guide's operator wants the tagged copy as the default, they drop the key.
 
-**`profile` selects the rule set**: `reference/guide.md` or `reference/narration.md`, each on top of `reference/chapter-prose.md`. `"guide"` is what the template carries and what a new book gets unless the operator chose otherwise at step 3 (§ 1). `"narration"` is the other value and there is no third. **Write the key explicitly either way rather than relying on its absence**: an absent key reads as `narration` to `check-book.sh`, so a guide book that omits it is checked against the wrong rule set and passes, which is the silent failure the explicit key exists to prevent. The checker prints the profile first on its summary line so a run against the wrong set is visible.
+**`profile` selects the rule set**: `reference/primer.md` alone, or `reference/guide.md` or `reference/narration.md`, each on top of `reference/chapter-prose.md`. `"primer"` is what a new book gets unless the operator chose otherwise at step 3 (§ 1). `"guide"` and `"narration"` are the others, and a narration book's file is the guide template without `overview` and `edition`. **Write the key explicitly whichever it is, rather than relying on its absence**: an absent key reads as `narration` to `check-book.sh`, so a primer or guide book that omits it is checked against the wrong rule set and passes, which is the silent failure the explicit key exists to prevent. The checker prints the profile first on its summary line so a run against the wrong set is visible.
 
 **A `guide` book must also declare `overview`**, since `## In short` is required under that profile rather than opt-in. `check-book.sh` refuses a book that sets `"profile": "guide"` alongside `"overview": false`, because the two declarations contradict each other and guessing which the operator meant is not the checker's call.
 
@@ -455,13 +525,13 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 
 The bare string form stays valid and unchanged, for every source whose key already reads as something a reader could be told. Add a `display` only where the key does not. `check-book.sh` flags a source key that looks like a repo path appearing in a chapter's prose, which is the case the display name exists to fix. Write it from the step 2 ledger, in the same pass that fixes the citation spellings, because the ledger already holds every re-openable source and its path. Without it a mark can be checked for grammar and nothing else, and `check-provenance.sh` says so rather than printing OK. `unsourced` extends the built-in `fill` with any other word the book uses for a component that names no external source. **Use it for a method, never for a fact.** A measurement, an email, a page behind a sign-in: each is a claim no later run can reopen, so each is an entry in `assertions.json` cited as `assertion <id>`, which `check-provenance.sh` resolves. It never opens anything behind an `unsourced` label.
 
-**`provenance` and `suggested_reading` declare the resource-first format**: every unit carries a `<!-- src: ... -->` mark, and every chapter ends with its concept list. Both default to absent, which means a book written before the format existed still passes; `check-book.sh` holds a book to each only where it declares it, with no inference and no flag. Set both `true` for any book written against sources, which is every book this skill now writes by default.
+**`provenance` and `suggested_reading` declare the resource-first format**: every unit carries a `<!-- src: ... -->` mark, and every chapter ends with its concept list, which a primer heads `## Sources and further reading`. Both default to absent, which means a book written before the format existed still passes; `check-book.sh` holds a book to each only where it declares it, with no inference and no flag. Set both `true` for any book written against sources, which is every book this skill now writes by default.
 
-**`overview` declares that every chapter carries `## In short`** (`reference/chapter-prose.md § In short`), directly under the header table and before the opening paragraph. It defaults to absent on the same terms and for the same reason: a book written before the section existed still passes untouched, and no flag infers it. **What makes the heading a section is where it sits**, first H2 with the header table immediately before it, so a book that uses those two words for a part heading later on is counted and swept exactly as it was. The declaration is what makes the section *checked*: the position rules, the ceiling and the glossary cross-check all need it. Set it `true` for every new book. Where the book also declares `glossary`, the checker additionally resolves each carried-in term against the glossary and requires it to point at an earlier chapter, so the two keys together buy more than either does alone.
+**`overview` declares that every chapter carries `## In short`** (`reference/chapter-prose.md § In short`), directly under the header table and before the opening paragraph. It defaults to absent on the same terms and for the same reason: a book written before the section existed still passes untouched, and no flag infers it. **What makes the heading a section is where it sits**, first H2 with the header table immediately before it, so a book that uses those two words for a part heading later on is counted and swept exactly as it was. The declaration is what makes the section *checked*: the position rules, the ceiling and the glossary cross-check all need it. Set it `true` for every new handbook book; a primer leaves it out, and `check-book.sh` refuses a primer that declares it. Where the book also declares `glossary`, the checker additionally resolves each carried-in term against the glossary and requires it to point at an earlier chapter, so the two keys together buy more than either does alone.
 
 **`glossary` declares that this book carries one**, which makes a missing `glossary.md` an error at bind time rather than a book that ships without the thing it promised. Drop the key for a book that wants none. See step 6.
 
-**`tags` records whether this book carries paragraph tags**, `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`book_model.py:load_config`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
+**`tags` records whether this book carries paragraph tags**: under `primer`, `false` unless the operator asked for tags; otherwise `true` unless `--no-tags` was given. `/makebook` reads every key it wants through `cfg.get` and ignores the rest (`book_model.py:load_config`), so the key costs the bind nothing; `check-book.sh` reads it to decide what to check.
 
 **`exclude` is not optional here.** `/makebook` turns every `*.md` in the folder into a chapter unless it is skipped (`build-book.py:load_chapters`), so `OUTLINE.md` would otherwise be bound into the book as a chapter. Any other non-chapter markdown added to the folder goes in the same list.
 
@@ -477,12 +547,12 @@ Run each chapter as its own subagent, in batches of about four, so the prose is 
 
 Each agent's prompt carries, in full:
 
-1. **Read `${CLAUDE_PLUGIN_ROOT}/skills/createbook/reference/chapter-prose.md`, then the book's profile file, and follow every rule in both** for the body prose. The profile file is `reference/guide.md` for a `guide` book and `reference/narration.md` for a `narration` one. **Name the profile in the prompt and give the agent those two paths and no third.** The profile file wins where it names a rule in the core, and everything else in the core applies in full. Never hand a guide chapter `narration.md`, or the reverse: the two disagree on purpose, and an agent given both follows whichever it read at more length. Together the two files already cover everything a chapter does differently from a standalone piece.
-2. The book title, the reader, and this chapter's brief. **Say that this reader is the book's domain persona and that it does not modify the reading posture**, which `chapter-prose.md § The reader` fixes and item 1 has just told the agent to follow. The two carry the same name and the agent meets both in one prompt, so an agent left to reconcile them will read the persona as licence to adjust the posture. Pass the persona's provenance too where it was inferred, since a chapter written against a guessed reader is the one this book is most likely to revise. **Pass the knowledge boundary with it**, both lists, from the outline's top line: it is what tells the agent which terms to use plainly and which to gloss (`reference/chapter-prose.md § The reader's knowledge boundary`).
-3. **Under `narration`, the noun to open on and the noun to close on**, from the outline. **Under `guide`, the chapter's scope** from the outline, and the titles of the chapters before and after it, so the opening can orient a reader who starts here. Never give a guide chapter a handoff noun: its opening orients the reader instead (`reference/guide.md § Opening`).
+1. **Under `primer`, read `${CLAUDE_PLUGIN_ROOT}/skills/createbook/reference/primer.md` and follow every rule in it**, and give the agent that one path (§ Under the primer profile). **Under the handbook profiles, read `${CLAUDE_PLUGIN_ROOT}/skills/createbook/reference/chapter-prose.md`, then the book's profile file, and follow every rule in both** for the body prose. The profile file is `reference/guide.md` for a `guide` book and `reference/narration.md` for a `narration` one. **Name the profile in the prompt and give the agent those two paths and no third.** The profile file wins where it names a rule in the core, and everything else in the core applies in full. Never hand a guide chapter `narration.md`, or the reverse: the two disagree on purpose, and an agent given both follows whichever it read at more length. Together the two files already cover everything a chapter does differently from a standalone piece.
+2. The book title, the reader, and this chapter's brief. **Under `primer`, the reader is the one the outline names, as `primer.md § The reader` describes, and nothing more needs saying about posture.** **Under the handbook profiles, say that this reader is the book's domain persona and that it does not modify the reading posture**, which `chapter-prose.md § The reader` fixes and item 1 has just told the agent to follow. The two carry the same name and the agent meets both in one prompt, so an agent left to reconcile them will read the persona as licence to adjust the posture. Pass the persona's provenance too where it was inferred, since a chapter written against a guessed reader is the one this book is most likely to revise. **Pass the knowledge boundary with it**, both lists, from the outline's top line: it is what tells the agent which terms to use plainly and which to gloss (`reference/chapter-prose.md § The reader's knowledge boundary`).
+3. **Under `primer`, the chapter's job and the opening move the outline assigns it.** **Under `narration`, the noun to open on and the noun to close on**, from the outline. **Under `guide`, the chapter's scope** from the outline, and the titles of the chapters before and after it, so the opening can orient a reader who starts here. Never give a guide chapter a handoff noun: its opening orients the reader instead (`reference/guide.md § Opening`).
 4. The terms already glossed by earlier chapters, to be used without re-glossing and without counting toward this chapter's six new terms.
-5. The anchors and numbers already spent elsewhere, not to be reused.
-6. The exact output path, and the file format above: `# Title` as the first line, the header table, the prose with its per-part H2s, and the concept list last. **Where the book declares `overview`, say that `## In short` is added at step 6 and that this agent does not write it.** The section is read off the finished chapter and takes its words from a glossary that does not exist yet, so an agent that writes it here invents the definitions the section exists to avoid inventing.
+5. The anchors and numbers already spent elsewhere, not to be reused. **Under `primer`, the demonstrations and measured results this chapter owns, from its Owns row, and those other chapters own**, which this chapter does not show.
+6. The exact output path, and the file format above: under `primer`, `# Title` as the first line, the prose with its sections, and `## Sources and further reading` last; otherwise `# Title` as the first line, the header table, the prose with its per-part H2s, and the concept list last. **Where the book declares `overview`, say that `## In short` is added at step 6 and that this agent does not write it.** The section is read off the finished chapter and takes its words from a glossary that does not exist yet, so an agent that writes it here invents the definitions the section exists to avoid inventing.
 7. **When the book is tagged, this chapter's number and the instruction to tag every paragraph.** The rule itself is at `reference/chapter-prose.md § Paragraph tags`, but the chapter number is not in that file and the agent cannot infer it, so the prompt has to supply it. Under `--no-tags`, say the book carries no tags rather than leaving the item out, since the spec describes tagging as the normal case.
 8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since the second kind is filled-in tier however confident it feels.
 9. **The entries this chapter carries, and every `book` entry**, each with its ID and statement as `assertions.sh list` prints them. Say that they outrank the agent's own `fill`, that a unit resting on one cites it as `assertion <id>` (`reference/chapter-prose.md § Provenance`), and that a `book` entry binds every chapter, so nothing an exclusion keeps out appears in any of them. Say too that the agent never writes `assertions.json`: a measurement it makes, or an entry it finds a source contradicting, goes in its findings file.

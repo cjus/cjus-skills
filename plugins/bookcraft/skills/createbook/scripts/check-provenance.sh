@@ -287,6 +287,10 @@ MIN_QUOTE = refs.MIN_QUOTE
 
 MARK = re.compile(r"<!--\s*src:\s*(.*?)\s*-->")
 SUGG = "## Suggested reading"
+# The primer profile closes a chapter on its sources and the concepts it stopped
+# short of under this heading instead (../reference/primer.md § Shape and length).
+# Neither section carries marks, so the walk stops at whichever it meets.
+CLOSING = (SUGG, "## Sources and further reading")
 
 # In-book references a mark may carry. Both are verified against the book
 # itself rather than against any declared source.
@@ -722,7 +726,7 @@ def units_of(path):
         if fence.step(line):
             buf, closed = [], False
             continue
-        if line.strip() == SUGG:
+        if line.strip() in CLOSING:
             return
         m = MARK.search(line) if book_model.MARK_LINE.fullmatch(line) else None
         if m:

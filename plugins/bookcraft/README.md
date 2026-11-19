@@ -162,7 +162,7 @@ Writes a whole book from a one-line description.
 | `--no-tags` | Write without paragraph tags |
 | `--recreate <old-folder>` | Rewrite an existing book, from its `assertions.json` and its sources, into a new output folder. Slides are copied, and placed afterwards through `/updatebook`. Figures are not: `/makebook` redraws them against the new chapters, with the old book's figures as candidates |
 
-**The sources are the point.** A book here is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
+**The sources are the authority.** Under the default `primer` profile the subject comes first: the context you give sets the scope and is the authority for every fact it covers, and the skill decides what to teach, in what order, and how. Under the handbook profiles a book is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
 
 **URLs are never stored.** Web material is read at drafting time and then referenced by the terms a reader would search for. A link rots between the writing and the reading, so anything web-derived is marked `fill` by construction. What can be re-checked later is a repo file or a PDF, and the ledger records which sources are re-openable.
 
@@ -174,18 +174,19 @@ The gate also shows a **coverage ledger**: everything the reader must be able to
 
 **What the book stands behind without a source is recorded as it goes**, in `assertions.json` beside `book.json`. That covers your argument word for word, anything it measured, anything the book is to keep out, which source wins where two disagree, and every answer you give at the gate. The gate shows those entries next to the source ledger. Chapters cite them in their marks, so when one changes, `check-provenance.sh` finds the prose still built on the old value.
 
-### Two profiles
+### Three profiles
 
 The gate also shows you the **profile**, which is the rule set the whole book is written under. It is one word in `book.json` at that point and a rewrite of every chapter afterwards.
 
 | Profile | For | What it changes |
 |---|---|---|
-| `narration` | A book read once, straight through. An explainer, a primer, a long argument | Nothing. These are the rules every book was written under before profiles existed |
-| `guide` (default for a new book) | A book opened at one chapter the week it is needed. A preparation guide, a runbook, a handbook | Chapters stand alone instead of chaining: each opens by orienting the reader and closes on its main point or next step; headings pass a contents-page test; `## In short` is the one summary; four labelled callouts, one idea each; numbered procedures; reference matter moves to appendices |
+| `primer` (default for a new book) | A short book that gets a reader up to speed on a subject in an hour or two, built from the context you give | The outline selects what to teach, mention or leave out, orders chapters by what a learner needs first, assigns each chapter a different opening, and fixes book-wide conventions. Chapters start from a problem the reader can see, choose a device per idea, take as many sections as they need, and close on `## Sources and further reading`. Lengths are ceilings, not bands. No header table, no `## In short`, no tags by default. Its rules are `reference/primer.md` alone |
+| `guide` | A handbook opened at one chapter the week it is needed, faithful to the documents a reader will act on. A preparation guide, a runbook | Chapters stand alone instead of chaining: each opens by orienting the reader and closes on its main point or next step; headings pass a contents-page test; `## In short` is the one summary; four labelled callouts, one idea each; numbered procedures; reference matter moves to appendices |
+| `narration` | A handbook read once, straight through. A long argument built on its documents | Nothing. These are the rules every book was written under before profiles existed |
 
-**The test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead.
+**The first test is what the book is for.** A book that should get someone up to speed is a primer. A book whose job is fidelity to a set of documents is a handbook, and between the two handbooks **the test is whether the reader opens the book at chapter one.** Someone preparing to teach week nine opens chapter nine, having read chapter eight a month ago. Everything the narration rules buy that reader costs them instead.
 
-Set it with `"profile"` in `book.json`. **A new book gets `"guide"`**, because a book built from a set of sources is nearly always opened at the chapter somebody needs rather than read start to finish. Say so at the gate to get `"narration"` instead.
+Set it with `"profile"` in `book.json`. **A new book gets `"primer"`**, because the commonest request is a small book that gets someone up to speed. Say so at the gate to get `"guide"` or `"narration"` instead.
 
 **An absent key still reads as `narration`, and that is not the same default.** It is what every book written before profiles existed is held to, so those keep passing untouched: re-checking one under the guide rules would fail it on a `## In short` section nobody had asked for. `/createbook` therefore writes the key explicitly rather than leaning on its absence, and `check-book.sh` prints the profile first on its summary line so a run against the wrong rule set is visible rather than silent.
 
@@ -373,6 +374,7 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-provenance.sh fixtures/provenance         # exits 1, seven failures by design
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
 ./scripts/check-book.sh fixtures/guide-reports            # exits 0, with seven REPORT lines
+./scripts/check-book.sh fixtures/primer                   # exits 0, the primer profile, with a clustering REPORT
 ./fixtures/python-unrunnable/run.sh                       # exits 0, the python3 guard still fires
 ./fixtures/book-model/run.sh                              # exits 0, every tool classifies every file as the book model does
 ./fixtures/ledger/run.sh                                  # exits 0, --ledger-only still fires
