@@ -4296,8 +4296,18 @@ def main(argv: list[str]) -> int:
     # Whitespace first, as locate() does: pdftotext can split a 5pt probe
     # across a space, and a probe left half-matched would read as a changed
     # page and keep the markers in for the wrong reason.
+    #
+    # And in one Unicode form, because the text layer is not a stable picture
+    # of the page. Chromium 159 writes the same "fi" into it as two letters on
+    # one render and as the ligature U+FB01 on the next, with nothing on the
+    # page moved: measured on the guide fixture (2026-11-19), 6 binds in 40
+    # differed from their clean render by that one character and by nothing
+    # else, and each shipped its markers. NFKC folds the ligature back to the
+    # letters, and it cannot hide a real reflow, which moves words between
+    # pages rather than respelling one.
     def flat(page: str) -> str:
-        return PROBE_RE.sub("", re.sub(r"\s+", "", page))
+        return PROBE_RE.sub(
+            "", re.sub(r"\s+", "", unicodedata.normalize("NFKC", page)))
 
     markers_hidden = (len(final) == len(probed)
                       and all(flat(a) == flat(b) for a, b in zip(probed, final))
