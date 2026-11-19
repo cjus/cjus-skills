@@ -164,7 +164,7 @@ Writes a whole book from a one-line description.
 
 **The sources are the authority.** Under the default `primer` profile the subject comes first: the context you give sets the scope and is the authority for every fact it covers, and the skill decides what to teach, in what order, and how. Under the handbook profiles a book is a guide to a set of resources first and to its subject second: the resources are the authority, what the model knows fills what they leave out, and the reader can tell which is which. With no sources at all you get a legitimate but different book, one where every chapter header reads `Fills in: everything`, so the skill asks before going that way.
 
-**URLs are never stored.** Web material is read at drafting time and then referenced by the terms a reader would search for. A link rots between the writing and the reading, so anything web-derived is marked `fill` by construction. What can be re-checked later is a repo file or a PDF, and the ledger records which sources are re-openable.
+**Outside sources are researched and cited, never recalled.** Before the outline, research agents find out how each idea is best taught and which general facts the context leaves out, from a list of trusted domains you approve at the gate. Every page the book draws on goes into a research ledger, `research/ledger.json`, with the words on the page that support it, and `research-ledger.sh verify` fetches each page and finds those words before any chapter may cite it. A chapter cites the page as `web <id>` in its mark and links it where the reader meets the fact; `check-provenance.sh` fails a citation the ledger lacks and a URL it does not hold. Your context outranks every outside source, and each disagreement between them comes to you at the gate. Running `verify` again later is the link-rot check.
 
 It plans the outline first and stops for your approval before narrating anything. That gate shows you the reader it settled on, and says where it came from — your argument, your answer to the question it asked, or its own inference — because an inferred persona reaches every chapter looking exactly like one you supplied. Under the reader it shows the **knowledge boundary**, what the reader is fluent in and what is new to them, since every term on the new side gets defined where it first appears.
 
@@ -373,6 +373,8 @@ cd ${CLAUDE_PLUGIN_ROOT}/skills/createbook
 ./scripts/check-book.sh fixtures/provenance               # exits 0
 ./scripts/check-provenance.sh fixtures/provenance         # exits 1, seven failures by design
 ./scripts/check-provenance.sh fixtures/provenance --chapters 1   # exits 0, chapter 1 is clean
+./scripts/check-provenance.sh fixtures/research           # exits 1, three citation failures by design
+./fixtures/research/run.sh                                # exits 0, the ledger's format, offline verify and trusted domains
 ./scripts/check-book.sh fixtures/guide-reports            # exits 0, with seven REPORT lines
 ./scripts/check-book.sh fixtures/primer                   # exits 0, the primer profile, with a clustering REPORT
 ./fixtures/python-unrunnable/run.sh                       # exits 0, the python3 guard still fires
@@ -430,13 +432,15 @@ skills/
   createbook/
     SKILL.md                        the procedure
     NOTES.md                        what is measured and what is asserted
-    reference/chapter-prose.md      the prose rules every chapter follows: shape, voice, budgets
+    reference/primer.md             the whole rule set for a primer chapter, the default profile
+    reference/chapter-prose.md      the prose rules every handbook chapter follows: shape, voice, budgets
     reference/guide.md              the guide profile's own rules, with examples
     reference/narration.md          the narration profile's handoff rules
     scripts/check-book.sh           structure
     scripts/check-provenance.sh     marks pointing out
     scripts/check-references.sh     citations pointing in
     scripts/assertions.sh           the only writer of assertions.json, and its format's definition
+    scripts/research-ledger.sh      checks research/ledger.json, and verifies each page carries its quotes
     fixtures/                       books that exercise the checkers, plus the run.sh
                                     fixtures for what a book folder cannot express
   makebook/

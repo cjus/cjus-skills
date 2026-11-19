@@ -1,0 +1,15 @@
+{
+  "subtitle": "Two primer chapters citing outside sources through a research ledger",
+  "byline": "The bookcraft fixtures",
+  "profile": "primer",
+  "description": [
+    "A fixture for check-provenance.sh and research-ledger.sh. Chapter 1 cites two ledger entries and links each where the reader meets the fact. Chapter 2 carries one of each citation failure: a mark citing an entry the ledger lacks, a link to a page the ledger does not hold, and a cited entry whose URL the chapter never links.",
+    "The ledger's domain is a placeholder, so nothing here is ever fetched. Entry 3 carries an operator-supplied copy of its page, which research-ledger.sh verify reads instead of fetching."
+  ],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": true,
+  "sources": {
+    "handbook": {"path": "sources/handbook.md", "display": "the handbook"}
+  }
+}

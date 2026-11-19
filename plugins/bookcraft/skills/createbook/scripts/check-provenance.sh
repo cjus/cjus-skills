@@ -283,6 +283,8 @@ refs = _borrow("check-references.sh", "check_references", "its quote pairing")
 book_model = _borrow("../../../scripts/book_model.py", "book_model",
                      "what each file in a book is")
 register = _borrow("assertions.sh", "assertions", "the assertions.json format")
+ledger = _borrow("research-ledger.sh", "research_ledger",
+                 "the research ledger format")
 MIN_QUOTE = refs.MIN_QUOTE
 
 MARK = re.compile(r"<!--\s*src:\s*(.*?)\s*-->")
@@ -350,6 +352,44 @@ QUALIFIER = re.compile(
 # ways depending on which check reached them first.
 RESERVED = "assertion"
 ASSERTION = re.compile(r"^assertion\s+(\d+)$", re.I)
+# A component citing an entry in the research ledger: `web 4`, one entry to a
+# component. Reserved on the same terms as `assertion`, so no source key or
+# unsourced label may be the word `web` or start with `web ` and be read two
+# ways. A source called "website notes" is still fine.
+WEB_RESERVED = re.compile(r"^web(\s|$)", re.I)
+WEB = re.compile(r"^web\s+(\d+)$", re.I)
+# A URL in a chapter's prose. A markdown link target is read first and may carry
+# one level of balanced parentheses, as an encyclopedia's page names do, and
+# ends at the first ")" that closes the link, so a link inside a parenthesis in
+# the prose does not take the prose's ")" with it. What is left is searched for
+# bare addresses, which stop at a bracket, a quote or emphasis.
+LINK_TARGET = re.compile(r"\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)")
+CHAPTER_URL = re.compile(r"https?://[^\s)<>\]\"'`*]+")
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
+
+
+def prose_urls(path):
+    """Every URL a reader meets in a chapter's prose, links and bare addresses.
+
+    Fenced blocks and inline code spans are skipped, because a URL there is
+    code: a command that fetches a page, a local address. It is not a citation,
+    and a chapter has no way to cite one. Marks are dropped too, since they never
+    carry a URL and one there must not pass as a link.
+    """
+    fence = book_model.Fence()
+    kept = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if fence.step(line):
+            continue
+        kept.append(line)
+    text = CODE_SPAN.sub(" ", MARK.sub("", "\n".join(kept)))
+    urls = set()
+    for m in LINK_TARGET.finditer(text):
+        urls.add(m.group(1))
+    text = LINK_TARGET.sub("] ", text)
+    for u in CHAPTER_URL.findall(text):
+        urls.add(u.rstrip(".,;:!?"))
+    return urls
 
 fail = 0
 review = 0
@@ -1707,6 +1747,18 @@ def main(argv):
             reg = {e["id"]: e for e in doc["entries"]}
             reg_state = "ok"
 
+    # research/ledger.json, read through research-ledger.sh and never parsed here,
+    # in the same three states and for the same reason.
+    web, web_state = {}, "missing"
+    web_doc, web_probs = ledger.load(book)
+    if web_probs:
+        for wp in web_probs:
+            problem(f"{ledger.FILE}: {wp}")
+        web_state = "invalid"
+    elif web_doc is not None:
+        web = {e["id"]: e for e in web_doc["entries"]}
+        web_state = "ok"
+
     if conf.get("provenance") is not True:
         print(f"note: {book}/book.json does not declare \"provenance\": true;")
         print("      this book carries no marks to check. Nothing was asserted about them.")
@@ -1725,6 +1777,11 @@ def main(argv):
             problem(f"book.json declares a source named \"{name}\", and a mark "
                     f"component starting with \"{RESERVED}\" is reserved for "
                     f"citing an entry in {register.FILE}; rename the source")
+            continue
+        if WEB_RESERVED.match(name):
+            problem(f"book.json declares a source named \"{name}\", and a mark "
+                    f"component \"web <id>\" is reserved for citing an entry in "
+                    f"{ledger.FILE}; rename the source")
             continue
         # Three forms. A bare string is one path; a list is several under one
         # shorthand; an object carries a reader-facing `display` name beside the
@@ -1762,6 +1819,11 @@ def main(argv):
 
     unsourced = ["fill"]
     for label in conf.get("unsourced") or []:
+        if WEB_RESERVED.match(label):
+            problem(f"book.json declares \"{label}\" as unsourced, and a mark "
+                    f"component \"web <id>\" is reserved for citing an entry in "
+                    f"{ledger.FILE}")
+            continue
         if label.lower().startswith(RESERVED):
             problem(f"book.json declares \"{label}\" as unsourced, and a mark "
                     f"component starting with \"{RESERVED}\" is reserved for "
@@ -1841,6 +1903,7 @@ def main(argv):
         base = p.name
         wl_units = []
         wl_used = {}            # shorthand -> its source entry, this chapter's
+        web_cited = set()       # ledger IDs this chapter's marks cite
         for ln, unit, comps in units_of(p):
             where = f"{base}:{ln}"
             named = []          # (Source, slide) the quotation check may search
@@ -1880,6 +1943,28 @@ def main(argv):
                         elif e["status"] == "retired":
                             problem(f"{where}: the mark cites assertion {aid}, "
                                     f"which is retired", e["retired_reason"])
+                    continue
+
+                # A research-ledger entry. Ahead of `unsourced` for the reason
+                # an assertion is: the reserved word wins over any label.
+                if WEB_RESERVED.match(c.strip()):
+                    census["web"] += 1
+                    wl_unchecked.append(c)
+                    m = WEB.match(strip_gloss(c))
+                    if not m:
+                        problem(f"{where}: this component starts with \"web\" and "
+                                f"does not read as one; a ledger entry is cited as "
+                                f"`web <id>`, one to a component", c)
+                    elif web_state == "missing":
+                        problem(f"{where}: the mark cites web {m.group(1)}, and the "
+                                f"book has no {ledger.FILE}")
+                    elif web_state == "ok":
+                        wid = int(m.group(1))
+                        if wid not in web:
+                            problem(f"{where}: the mark cites web {wid}, which "
+                                    f"{ledger.FILE} does not have")
+                        else:
+                            web_cited.add(wid)
                     continue
 
                 # Both spellings, because the book writes `fill (the gloss)` and
@@ -1990,6 +2075,30 @@ def main(argv):
         if emit_dir:
             worklist.append((p, wl_units, wl_used))
 
+        # Outside sources reach the reader as links (../reference/primer.md
+        # § Citing outside sources), so the marks and the links have to agree.
+        # Every ledger entry a mark cites is linked somewhere in the chapter, or
+        # the reader never sees where the fact came from. Every URL in the
+        # chapter is a ledger URL, or it is a citation nobody fetched, which is
+        # the one thing the ledger exists to rule out. Code is not prose: a URL
+        # in a fenced block or a code span is read as code (prose_urls).
+        if web_state != "invalid":
+            urls = prose_urls(p)
+            by_url = {}
+            for e in web.values():
+                by_url.setdefault(e["url"], set()).add(e["id"])
+            linked = set()
+            for u in sorted(urls):
+                if u in by_url:
+                    linked |= by_url[u]
+                else:
+                    problem(f"{base}: links {u}, which is not in "
+                            f"{ledger.FILE}; a URL reaches a book only once it "
+                            f"was fetched and its quote found")
+            for wid in sorted(web_cited - linked):
+                problem(f"{base}: a mark cites web {wid}, and the chapter never "
+                        f"links its URL, {web[wid]['url']}")
+
     # The entries against the book as a whole. Both run over every chapter
     # whatever --chapters says, for the reason `cited` is built from every
     # chapter: each is a claim about the book, and a superseded premise hiding
@@ -2024,12 +2133,12 @@ def main(argv):
         print()
 
     total = sum(census[k] for k in
-                ("fill", "in-book", "assertion", "unknown", "missing-file",
+                ("fill", "in-book", "assertion", "web", "unknown", "missing-file",
                  "locator-ok", "locator-review", "locator-fail",
                  "locator-skipped"))
     print(f"sources declared {len(sources)}   components {total}   "
           f"fill {census['fill']}   in-book {census['in-book']}   "
-          f"assertion {census['assertion']}")
+          f"assertion {census['assertion']}   web {census['web']}")
     if mode == "quotes":
         print(f"locators NOT CHECKED ({census['locator-skipped']}): --quotes-only was given")
     else:

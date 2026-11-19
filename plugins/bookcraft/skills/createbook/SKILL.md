@@ -29,13 +29,15 @@ With no first argument and no `--recreate`, ask what the book should be about an
 
 **Under the handbook profiles, a book is a guide to a set of resources first, and to its subject second.** The resources are the authority; what the model knows fills what they leave out; the reader can tell which is which. That is what `reference/chapter-prose.md § The sources come first` asks of the prose and what steps 2 and 5 below build the machinery for.
 
-**Under `primer`, the subject comes first.** The book's job is to get its reader up to speed on the subject, and the context the operator gave sets the scope and is the authority for every fact it covers. What the model adds is the teaching: which ideas carry the most weight, the order a learner needs them in, and how each is best explained. The context is still never contradicted and never blurred with the model's own knowledge, and the marks say which is which (`reference/primer.md § Facts`). A primer is not a tour of its context, so the outline decides what to leave out as carefully as what to teach (§ 2).
+**Under `primer`, the subject comes first.** The book's job is to get its reader up to speed on the subject, and the context the operator gave sets the scope and is the authority for every fact it covers. What the model adds is the teaching: which ideas carry the most weight, the order a learner needs them in, and how each is best explained. The context is still never contradicted and never blurred with the model's own knowledge, and the marks say which is which (`reference/primer.md § Where facts come from`). A primer is not a tour of its context, so the outline decides what to leave out as carefully as what to teach (§ 2).
 
 **Ask for the sources when none are given.** A book written with no resources at all is entirely filled in, which is a legitimate book and a different one, so it is the operator's call rather than a default to slide into. Say what you are asking and why: without sources there is nothing to check a claim against, and every chapter's header will read `Fills in: everything`.
 
-**Never store a URL.** Online material is read at drafting time and then referenced by the terms a reader would search for, in the ledger and in the chapter's concept list. A link rots between the writing and the reading, and a snapshot is a second copy that goes stale silently. Anything web-derived is filled-in tier by construction: it was true when it was read, nothing can recheck it later, and the mark says `fill`.
+**A URL is stored only once it has been fetched and its words found on the page.** Online material reaches a book through the research ledger, `research/ledger.json` (§ Research the subject): each page the book draws on, from a domain the operator approved, with the verbatim words on it that support what the book takes. `research-ledger.sh verify` fetches every page and finds every quote before a chapter may cite it, so no URL in a book was written from memory. A chapter cites a ledger page as `web <id>` in its mark and links it where the reader meets the fact.
 
-**What can actually be verified afterwards is a repo file or a PDF**, because `check-references.sh` and a later `/updatebook` can open those again. The ledger in step 2 records which sources are re-openable and which are not, so nobody later mistakes a remembered web page for a citation.
+**Links rot, and the ledger is how a book finds out.** Each entry records the date it was read and the words that supported it, and `research-ledger.sh verify`, run again later, fails a page that is gone or no longer carries its quote. That is the recheck. A page read online and not entered in the ledger is still `fill`, as it always was.
+
+**What a later run can open is a repo file, a PDF or a ledger page**, because `check-references.sh`, `check-provenance.sh` and a later `/updatebook` can read each again. The source ledger in step 2 records which context sources are re-openable, so nobody later mistakes a remembered web page for a citation.
 
 ## The two constraints everything else follows from
 
@@ -216,7 +218,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh <command> books/<b
 
 **No other key is allowed anywhere in the file.** A misspelt key is the likeliest error, and `check` names the nearest key that exists.
 
-**Marks cite entries.** A unit resting on an entry names it in its provenance mark as `assertion <id>`, one entry to a component (`reference/chapter-prose.md § Provenance`). The link runs one way, from the prose to the file, and `check-provenance.sh` reads it at step 7. No `sources` key or `unsourced` label may start with `assertion`, because the word is reserved.
+**Marks cite entries.** A unit resting on an entry names it in its provenance mark as `assertion <id>`, one entry to a component (`reference/chapter-prose.md § Provenance`). The link runs one way, from the prose to the file, and `check-provenance.sh` reads it at step 7. No `sources` key or `unsourced` label may start with `assertion`, or be `web` or start with `web `, because both words are reserved.
 
 ## Procedure
 
@@ -335,6 +337,33 @@ Where the context measures what its ideas are worth, let that guide the sort. Th
 
 **This is a change, and the old estimate was understating.** It divided prose alone by 175, so a book whose header tables, session grids and concept lists came to nearly half its words was reported at a little over half its real reading time. Nothing about the book changed; the number was measuring the wrong thing.
 
+### Research the subject
+
+**Under `primer`, research the subject after reading the context and before writing the outline.** The context sets what the book covers. Research finds out how each idea is best taught, and brings in the general facts the context leaves unstated. Under the handbook profiles the step is optional, run where the operator asks for it.
+
+**Propose a trusted-source list first.** A list of domains, each with what it is trusted for: the project's own documentation, a standard, a well-kept reference, papers. A sound seed is the domains the context itself cites. A domain is a host, which admits its subdomains, or a host and a path prefix such as `github.com/an-org`. The list goes into the ledger's `trusted` block, and the operator approves or edits it at the gate (§ 3). Nothing off the list is ever cited, and a page that looks valuable off the list is named to the operator rather than used.
+
+**Run research as subagents, one per group of chapters**, so the pages read stay out of this session's context. Each agent reads its chapters' context, then researches, for every concept its chapters teach:
+
+- **the way in**, the problem the idea solves as a learner meets it;
+- **the best example or demonstration**, the context's own first;
+- **what beginners get wrong**, and **what has to be understood first**;
+- **a suggested device**: a worked trace, a small diagram, a table, an excerpt, a command to run;
+- **general facts worth stating** that the context does not, each with its ledger entry;
+- **disagreements** between an outside source and the context, or inside the context. Reported, never resolved.
+
+Each agent writes its notes to `research/notes-<chapters>.md` and its entries to the ledger, then runs `research-ledger.sh verify` and fixes or drops its own entries until they pass. The notes are advice to the chapter writer, never bound: `check-book.sh` and `/makebook` read the book folder one level deep, so `research/` is invisible to them, as `outline-findings/` is, and `check-provenance.sh` reads only `research/ledger.json` there. **Two agents never write one file at once.** Give each its own file, `research/ledger-<group>.json`, holding the approved `trusted` block and an ID range of its own (101 up, 201 up, and so on), and have it check and verify that file with `--file research/ledger-<group>.json`. Merge the files into `research/ledger.json` when they finish, and run `verify` on the merged file once.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/research-ledger.sh verify books/<book-slug>
+```
+
+**A research agent searches with the subject's own generic terms**, never the operator's name, the project's name or anything private from the context, since every query goes to an outside service.
+
+**A trusted site that blocks automated fetching** answers the check with a page too short to search. The operator can save the page by hand into `research/pages/` and name it in the entry's `page_file`. `verify` then reads that copy and says so on its line. Otherwise the source is dropped.
+
+**The ledger records which pages each chapter may cite**, through each entry's `chapters`, and the outline rows name them alongside the context each chapter draws on.
+
 ### 2. Plan the outline, and write it down
 
 Write `OUTLINE.md` in the book folder before any chapter exists.
@@ -344,7 +373,7 @@ Write `OUTLINE.md` in the book folder before any chapter exists.
 | Column | Holds |
 |---|---|
 | **Source** | The file, document or search terms. A repo path with its section, a PDF with its page count, or the terms for something read online. |
-| **Re-openable** | Yes for a repo file or a PDF, which `check-references.sh` and a later `/updatebook` can read again. No for anything web-derived, which is filled-in tier by construction. **Every `Yes` row becomes an entry in `book.json`'s `sources` map at step 4**, keyed by the shorthand the marks will use, which is what lets `check-provenance.sh` open it again. |
+| **Re-openable** | Yes for a repo file or a PDF, which `check-references.sh` and a later `/updatebook` can read again. No for anything web-derived and not in the research ledger, which is filled-in tier. A ledger page is cited through the research ledger, not this table. **Every `Yes` row becomes an entry in `book.json`'s `sources` map at step 4**, keyed by the shorthand the marks will use, which is what lets `check-provenance.sh` open it again. |
 | **What the book owes it** | The specific claims, figures, tables or policies this source is the authority for. Not a summary of the source: a list of what the book takes from it. |
 | **Paid by** | The chapters that carry them, filled in once the chapter list exists. |
 
@@ -421,6 +450,8 @@ It reads `OUTLINE.md` alone: every row marked re-openable names a file that is o
 **What it does not reach:** a row whose prose is wrong about a source it correctly names, and a row that contradicts a note elsewhere in `OUTLINE.md`. Both need a reader. Resolving the ledger narrows what the gate has to be read for; it does not replace reading it.
 
 Then show the source ledger, **the entries beside it as `assertions.sh list` prints them**, **the coverage ledger**, the chapter list, the title, the reader with **the knowledge boundary**, **the profile**, the output folder, whether the book is tagged, and the estimated read time (§ The read-time estimate). Say that the estimate is a floor, for the reason at § Sizing the book. Stop and wait.
+
+**Where the book was researched, show the trusted-source list and the research ledger's size, and every disagreement the research found.** The operator approves the list, and settles each disagreement: the context wins in the prose unless they say otherwise, and their ruling becomes a `ruling` entry in `assertions.json`, by the `operator`. A disagreement inside the context is the operator's to settle too, since only they know which document is current.
 
 **Lead with the ledger, not the chapter list.** The chapter list is what the operator expects to review and the ledger is what they can actually correct: a source you were not given, a source you read wrongly, a gap you propose to fill that they would rather you left open. A wrong chapter list costs twenty chapters, and a wrong ledger costs the same twenty plus every claim inside them.
 
@@ -554,7 +585,7 @@ Each agent's prompt carries, in full:
 5. The anchors and numbers already spent elsewhere, not to be reused. **Under `primer`, the demonstrations and measured results this chapter owns, from its Owns row, and those other chapters own**, which this chapter does not show.
 6. The exact output path, and the file format above: under `primer`, `# Title` as the first line, the prose with its sections, and `## Sources and further reading` last; otherwise `# Title` as the first line, the header table, the prose with its per-part H2s, and the concept list last. **Where the book declares `overview`, say that `## In short` is added at step 6 and that this agent does not write it.** The section is read off the finished chapter and takes its words from a glossary that does not exist yet, so an agent that writes it here invents the definitions the section exists to avoid inventing.
 7. **When the book is tagged, this chapter's number and the instruction to tag every paragraph.** The rule itself is at `reference/chapter-prose.md § Paragraph tags`, but the chapter number is not in that file and the agent cannot infer it, so the prompt has to supply it. Under `--no-tags`, say the book carries no tags rather than leaving the item out, since the spec describes tagging as the normal case.
-8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since the second kind is filled-in tier however confident it feels.
+8. **The sources themselves, and the ledger rows this chapter pays.** Give paths the agent can open rather than summaries: the agent has to read the source to write a claim against it, and a summary passed down the chain is a claim nobody can check. Say which sources are re-openable and which were read online, since a page read online and not in the research ledger is filled-in tier however confident it feels. **Where the book was researched, give the agent its chapters' research notes and the path to `research/ledger.json`**, with the IDs of the entries its chapters may cite, and say that it cites them as `web <id>`, links each where the reader meets the fact, and writes no URL the ledger does not hold.
 9. **The entries this chapter carries, and every `book` entry**, each with its ID and statement as `assertions.sh list` prints them. Say that they outrank the agent's own `fill`, that a unit resting on one cites it as `assertion <id>` (`reference/chapter-prose.md § Provenance`), and that a `book` entry binds every chapter, so nothing an exclusion keeps out appears in any of them. Say too that the agent never writes `assertions.json`: a measurement it makes, or an entry it finds a source contradicting, goes in its findings file.
 10. **What this chapter fills in**, from the outline, and that saying so plainly is the requirement rather than a caveat to minimise.
 11. **The concept list this chapter ends on**, from the ledger, with the instruction that it names concepts and search terms and never a URL.
@@ -682,6 +713,8 @@ It resolves every component of every mark through `book.json`'s `sources` map an
 **The quotation check reports REVIEW rather than failing, and that was measured.** Against the reference book a hard failure fired ten times and was wrong ten times: four quotations differed from the source in punctuation alone, because this book bans the em dash its sources use; three were the book quoting a reader's imagined sentence; one quoted the book's own recommendation; one was a substitution the mark itself declares in a parenthetical no script can read. None is separable from a real misquotation by machine, so it prints them and leaves the judgment to a person.
 
 **Read the last three census lines, not the exit code.** They report how many components were `fill`, how many locators went unparsed, and how many quotations could not be searched at all. A source with no text layer is the case that matters: the reference book's syllabus, Canvas setup guide and CSC220 syllabus are images of text, so 28 of its quotations are unverifiable by any tool and the run names the number rather than passing them. An absence found in a document nothing can read is not evidence. **A quotation counts as unverifiable when *any* source its mark names is unreadable, not only when all of them are** — 12 of those 28 name a readable source too, and a search that could not open one of the named sources cannot tell "not there" from "not readable".
+
+**Read the `web` count and the link failures too.** A mark citing a ledger entry the ledger lacks fails, a cited entry the chapter never links fails, and a URL in a chapter's prose that is not a ledger URL fails. A URL in a fenced block or a code span is code and is not read. Before binding a researched book, run `research-ledger.sh verify` once more: a page that changed or vanished since it was read fails there, and the chapter citing it needs a new source or a rewrite.
 
 **Read the `assertions` line too.** A mark citing an entry that is missing, superseded or retired fails the run. Two things are reported rather than failed, as REVIEW lines. The first is every passage matching a superseded premise's `search` phrases, in any markdown file in the book folder, `diagrams/README.md` or a figure. The second is every entry that holds, rests in the prose, is `expected`, and has no mark citing it; after a recreate, that list is what the new book dropped. Both run over the whole book even under `--chapters`. The sweep runs even on a book that declares no `provenance`, whose marks are not read, since it needs only the file and the folder. Where a premise changed more than once, a report's "now:" names the end of the chain. A book with no `assertions.json` reads `assertions NOT CHECKED` there, and the OK line says so too. The script never creates the file.
 

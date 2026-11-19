@@ -184,6 +184,7 @@ A chapter records where its sentences came from in three places.
 ```
 
 - **Name the sources the unit rests on**, separated by semicolons, each specific enough to find. A unit that is the model's own knowledge is `<!-- src: fill -->`. A unit that is both names its sources and adds `fill` for the rest: `<!-- src: syllabus p. 4; fill (the consequence) -->`.
+- **A unit resting on a page in the book's research ledger cites it as `web <id>`**, one entry to a component, and the prose links that page's URL where the reader meets the fact (`primer.md § Citing outside sources` has the rules, which hold under every profile). `check-provenance.sh` fails a mark citing an entry the ledger lacks, a cited entry the chapter never links, and a URL in the prose the ledger does not hold. A URL in a fenced block or a code span is code and is not read.
 - **A unit resting on an entry in the book's `assertions.json` cites it as `assertion <id>`**, one entry to a component: `<!-- src: syllabus p. 4; assertion 7 -->`. The entry is something the book was told or settled that no source holds, and the citation is what lets a check find this paragraph once the entry is superseded.
 - **It is stripped at bind time**, so no reader sees it. That is what lets it be exhaustive.
 - **It advances no paragraph number** and does not count as prose.
@@ -207,7 +208,7 @@ The course documents name these and define none of them. Each is a term to searc
 - **A short lead sentence before the list** says what kind of gap these are. It takes no tag.
 - **Never name something the book covers.** Check against the outline's term ledger.
 - **A chapter that is mostly filled in still has one.**
-- **No URLs anywhere.**
+- **No URLs in the list.** An item is a term to search. An outside source the chapter cited is linked in its prose, at the fact (§ Provenance), and named in the header's Draws on row.
 
 The section takes no paragraph tag and no provenance mark, and none of it counts as prose.
 
@@ -259,7 +260,7 @@ A word that points must have something to point at by the time the reader reache
 
 ### Never
 
-**Markdown.** Prose paragraphs by default. No italics. No block quotes, except the callouts the profile file allows. No headings beyond those § Headings and the profile file describe. No other markdown: no links, footnotes, horizontal rules or inline HTML, and no image except a figure reference on a line of its own. A list, a table, a fenced block, a bold phrase or an inline code span is allowed only where the reader would lose something if you wrote it as prose:
+**Markdown.** Prose paragraphs by default. No italics. No block quotes, except the callouts the profile file allows. No headings beyond those § Headings and the profile file describe. No other markdown: no links except to a page in the research ledger, cited as § Provenance says, and no footnotes, horizontal rules or inline HTML, and no image except a figure reference on a line of its own. A list, a table, a fenced block, a bold phrase or an inline code span is allowed only where the reader would lose something if you wrote it as prose:
 
 - **a table**, when two or more things are compared on the same axes, or to reproduce a set a source publishes whole;
 - **a list**, when the items are a real set the reader has to hold at once;
