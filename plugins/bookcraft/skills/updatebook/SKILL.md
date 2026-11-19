@@ -165,7 +165,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/check-provenance.sh "$BOOK"
 ### 6. Report
 
 - The files changed, and the chapters deliberately left alone.
-- The `check-book.sh` summary lines from both runs, before and after. A run prints two: the counts line and the `chapter prose:` line.
+- The `check-book.sh` summary lines from both runs, before and after. A run prints two: the counts line and the `chapter prose:` line, and a primer or a book with a `reading_budget` adds the `read time:` line, which says whether the edit kept the book within its budget.
+- **Under `primer`, whether the edit is large enough to test on a reader again**: an edit that rewrote a chapter, or touched what three or more chapters teach, is worth `createbook/SKILL.md § 8b`'s reader test of the whole book, since a reader given only some chapters reports every term an earlier chapter explained as a stumble. Say so rather than running it unasked.
 - The `check-provenance.sh` census from both runs, and any line that moved. A rise in `unverifiable` or `unparsed` is worth a sentence even though neither fails a run, and a risen `unverifiable` is worth naming the quotation behind it: the count cannot tell a source going dark from a quotation breaking against a readable one that shares its mark with an unreadable source.
 - Every tag that moved, and every citation repointed to follow it.
 - **After a chapter rewrite, every figure and slide the old chapter placed**, each kept, corrected or dropped. A kept one names the paragraph beside it before and after, by tag. A corrected figure says what changed in it, and a dropped one gives its reason (§ Rewriting one chapter).

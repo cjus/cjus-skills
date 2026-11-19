@@ -265,7 +265,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/createbook/scripts/assertions.sh init books/<book-s
 
 The procedure below is the same for every profile: derive the book, plan and confirm the outline, write `book.json` and a sample, draft, check, report. A primer changes what several steps decide, and this section is where those changes live. Where a step below speaks of the header table, `## In short`, part counts, handoff nouns or the anchor and term budgets, those are handbook rules and do not reach a primer chapter.
 
-**Size from a reading budget** (§ Sizing the book). Ask the operator how long the reader has, and default to 60 to 90 minutes. A primer chapter came to about 2,000 words on the page in the trial, prose, code and tables together, which is about eleven minutes at 175 words a minute. So the chapter count is roughly the budget in minutes divided by eleven: eight chapters for ninety minutes. The budget binds the whole book, and step 9 reports the book against it.
+**Size from a reading budget** (§ Sizing the book). Ask the operator how long the reader has, and default to 60 to 90 minutes. A primer chapter came to about 2,000 words on the page in the trial, prose, code and tables together, which is about eleven minutes at 175 words a minute. So the chapter count is roughly the budget in minutes divided by eleven: eight chapters for ninety minutes. The budget binds the whole book. It goes into `book.json` as `reading_budget` (§ 4), `check-book.sh` reports a book that runs past it, and step 9 reports the book against it.
 
 **Selection comes first in the outline** (§ 2), before the chapter list and beside the source ledger. Sort everything the context covers into three columns:
 
@@ -490,6 +490,7 @@ This is the first of the skill's two blocking stops, and the sample at the end o
   "tags": false,
   "provenance": true,
   "suggested_reading": true,
+  "reading_budget": 90,
   "exclude": ["OUTLINE.md"],
   "sources": {
     "build guide": {"path": "../docs/build.md", "display": "the build guide"}
@@ -497,7 +498,7 @@ This is the first of the skill's two blocking stops, and the sample at the end o
 }
 ```
 
-`tags` is `true` only where the operator asked for tags. `glossary` is added only where the book carries one. `overview` and `edition` are left out, because the primer uses neither.
+`reading_budget` is the minutes the gate settled for the whole book; `check-book.sh` prints the book's read time against it and reports when the book runs past it. `tags` is `true` only where the operator asked for tags. `glossary` is added only where the book carries one. `overview` and `edition` are left out, because the primer uses neither.
 
 **Under `guide`, this is the whole file.** Write it as it stands, with the `sources` map filled from the step 2 ledger:
 
@@ -743,9 +744,22 @@ The checker cannot see continuity, so read the first and last paragraph of every
 
 Fix by rewriting the paragraph, not by regenerating the chapter.
 
+### 8b. Test the book on a reader
+
+**Under `primer`, every book is tested on a reader before it is reported.** Under the handbook profiles the step is optional and worth running for any book a reader will learn from. `reference/reader-test.md` is the procedure, and this is its outline:
+
+- **A fresh agent reads the finished chapters as the book's reader**, with nothing else: no outline, no rules, no sources, no web. It notes stumbles, unanswered questions, repeats, passages it could do without, formulaic passages and what worked, then answers comprehension questions written from the outline's coverage ledger, and rates the book. Its notes go to `<book>/reader/reading-notes-<N>.md`.
+- **Its notes become a revision brief**, `<book>/reader/revision-brief-<N>.md`, before any chapter is touched: book-wide conventions, assigned openings where they repeat, per-chapter changes, what to keep, and the budget.
+- **Revisers work in groups that follow dependencies**, under the profile's rules and the same sourcing rules as a first draft, and **a fix adds nothing net**: an explanation that goes in is paid for with a cut in the same chapter.
+- **A second reader, never shown the first one's notes, confirms the revision.** Stop when every question is answered from the book alone, no stumble blocks a taught concept, no factual error a reader found remains, and the book is within its `reading_budget` where it declares one. Two rounds at most: after the second reader, one more revision if its notes need one, then report what is still open to the operator.
+
+**This step is where a reader-facing problem is found, and nothing earlier can find it.** Every check before it is a compliance check. In the trial behind this step, the first reader found two chapters that listed techniques instead of teaching them, output shown four chapters before it was explained, and seven of eight chapters opening on a recap. The second found two factual errors the revision had introduced or kept. No checker saw any of them (`NOTES.md § The reader test, 2026-11-18`).
+
+**`reader/` is invisible to the checkers and the binder**, which read the book folder one level deep, so the notes and briefs never bind as chapters.
+
 ### 9. Report
 
-Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), how many chapters are mostly filled in, the glossary term count where there is one, how many entries `assertions.json` holds, anything the checkers flagged, and the `/makebook` command to bind it:
+Give the folder, the profile, the chapter count, the prose and structure word counts, **the read time over the two added together** at 175 words a minute (§ The read-time estimate), against the `reading_budget` where the book declares one, and **before and after the reader test's revision** where it ran, **the reader test's outcome**: how many questions each reader answered, its rating, and anything left for the operator, how many chapters are mostly filled in, the glossary term count where there is one, how many entries `assertions.json` holds, anything the checkers flagged, and the `/makebook` command to bind it:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/bookcraft-python \

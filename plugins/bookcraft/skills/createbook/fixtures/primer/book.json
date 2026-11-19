@@ -4,9 +4,10 @@
   "profile": "primer",
   "description": [
     "A fixture for check-book.sh. Chapter 1 is a valid primer chapter: no header table, four sections and an H3 where a guide or narration chapter would allow two or three parts, short paragraphs beside one past the 100-word ceiling, and the closing Sources and further reading section.",
-    "Chapter 2 is valid too, and its paragraphs nearly all run close to the ceiling, which the clustering report names. Neither chapter fails the run, and the appendix shows a primer may carry one."
+    "Chapter 2 is valid too, and its paragraphs nearly all run close to the ceiling, which the clustering report names. Neither chapter fails the run, and the appendix shows a primer may carry one. The book declares a reading budget of 3 minutes, which it runs past, so the budget report fires."
   ],
   "tags": false,
   "provenance": true,
-  "suggested_reading": true
+  "suggested_reading": true,
+  "reading_budget": 3
 }

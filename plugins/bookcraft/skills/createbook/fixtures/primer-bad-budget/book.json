@@ -1,0 +1,10 @@
+{
+  "subtitle": "A primer whose reading budget is not a number of minutes",
+  "byline": "The bookcraft fixtures",
+  "profile": "primer",
+  "description": ["A fixture for check-book.sh. The book declares a reading budget written as a word, which stops the run before any chapter is read."],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": true,
+  "reading_budget": "ninety"
+}
