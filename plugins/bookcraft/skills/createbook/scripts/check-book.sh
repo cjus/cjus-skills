@@ -91,6 +91,7 @@ declared_prov=""
 declared_sugg=""
 declared_ovw=""
 declared_profile=""
+declared_budget=""
 source_keys=""
 display_keys=""
 gloss_name="glossary.md"
@@ -197,6 +198,7 @@ while IFS=$'\t' read -r row f1 f2 f3 f4 f5 f6 f7 f8; do
         suggested_reading) declared_sugg="$f2" ;;
         overview) declared_ovw="$f2" ;;
         profile) declared_profile="$f2" ;;
+        reading_budget) declared_budget="$f2" ;;
       esac
       ;;
     setting)
@@ -313,6 +315,17 @@ if [ "$profile" = guide ]; then
   fi
   ovw_mode=required
 fi
+# The reading budget, in minutes, that the gate set for the whole book
+# (createbook/SKILL.md § Under the primer profile). A whole number of minutes
+# from 1 to 9999, written without leading zeros, or absent.
+case "$declared_budget" in
+  "") ;;
+  [1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]) ;;
+  *)
+    echo "error: book.json \"reading_budget\" must be a whole number of minutes from 1 to 9999, not: $declared_budget" >&2
+    exit 2
+    ;;
+esac
 if [ "${#chapters[@]}" -eq 0 ]; then
   echo "error: no chapter markdown files in $dir" >&2
   exit 2
@@ -1538,6 +1551,23 @@ gloss_note="none"
 # it was graded against. A run that silently applied the wrong rule set is the
 # failure this makes visible, the way "(inferred)" does for the tag mode.
 echo "profile: $profile    chapters: ${#chapters[@]}    content-checked: $checked    tagged: $tagged_chapters/$checked ($tag_mode)    prose: $total_words    structure: $total_struct    overview: $total_ovw ($ovw_mode)    provenance: $prov_mode    suggested reading: $sugg_mode    glossary: $gloss_note    folder: $dir"
+# The book's reading time, every word on the page at 175 a minute, the rate
+# SKILL.md § The read-time estimate uses. Printed for a primer and for any book
+# that declares a budget, and reported when it runs past the budget: revision
+# that only adds is how a book outgrows the time its reader has, and in the
+# trial that took a 90-minute primer to about 99 minutes with no single edit
+# looking like padding. A report, never a failure, like every figure here.
+if [ "$profile" = primer ] || [ -n "$declared_budget" ]; then
+  read_min=$(((total_words + total_struct + 87) / 175))
+  if [ -n "$declared_budget" ]; then
+    echo "read time: about $read_min minutes at 175 words a minute    budget: $declared_budget minutes"
+    if [ "$read_min" -gt "$declared_budget" ]; then
+      report "the book reads in about $read_min minutes, past its reading budget of $declared_budget; a revision that adds should cut as much as it adds"
+    fi
+  else
+    echo "read time: about $read_min minutes at 175 words a minute    budget: none declared"
+  fi
+fi
 # Guarded because a run where every chapter's filename was rejected reaches here
 # with nothing counted, and a mean over zero chapters would abort the script one
 # line before it reports what went wrong.

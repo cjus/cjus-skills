@@ -1559,3 +1559,44 @@ page says..."), and read as a report on its sources rather than an explanation o
 **Not checked by any script:** whether the fact a chapter states is what its ledger quote
 supports. That is a paraphrase check, the same gap `check-provenance.sh` has for context sources,
 and it is `/check-claims`'s job.
+
+## The reader test, 2026-11-18
+
+Every check this skill ran was a compliance check, and step 7 says so itself: a clean run says
+nothing about whether the book is any good. Nothing tested whether a reader comes away able to
+do what the book promised, and nothing read the book whole for the habits that make it sound
+machine-written. Step 8b and `reference/reader-test.md` add that test.
+
+**The trial.** A fresh agent read the eight finished chapters of a hand-built primer as its
+reader, with nothing else open, and answered nine comprehension questions. It answered all nine
+from the book alone. It also found:
+
+- two chapters that listed technique names instead of teaching them;
+- engine output shown four chapters before the book explained it;
+- scores printed in three forms with no explanation of any;
+- no passage putting the whole subject together;
+- seven of eight chapters opening on a recap of earlier ones.
+
+No checker saw any of it, and none could: each is a judgement about what a reader can follow.
+
+**Why a revision brief comes first.** The findings spanned chapters, such as a unit explained
+in one chapter and used unexplained in three. Parallel revisers cannot agree a shared fix, so a
+brief of ten book-wide conventions and an assigned opening per chapter went to four revisers,
+grouped so that chapters depending on each other had one agent.
+
+**Why a fix adds nothing net.** The revision fixed what the first reader found and grew the book.
+First drafts had ended at 1,300 to 1,670 words a chapter. After revision seven of eight sat
+within 20 words of the 2,000-word ceiling, and the book went from about 70 to about 99 minutes
+against a 90-minute budget. Every added explanation was reasonable on its own. That is the case
+`reading_budget` and its report exist for: the ceiling is per chapter, and only a book-level
+figure sees the whole book drift.
+
+**Why the second reader is unanchored.** The second reader was never shown the first one's
+notes, and found what the first had not: two factual errors the revision had introduced or kept,
+a sum that mixed two scales, and measurement detail too heavy for a newcomer, which was selection
+failing to hold through revision. A reader given the earlier notes reads for them.
+
+**Why two rounds and no gate on the rating.** The second reader rated the trial book 7 out of 10.
+A rating is one agent's opinion. The stop conditions are the ones a reader's notes can settle:
+every question answered, no stumble blocking a taught concept, and the book within budget. A
+problem that survives two revisions is usually in the outline, which is the operator's call.

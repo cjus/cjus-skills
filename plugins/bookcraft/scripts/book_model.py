@@ -377,7 +377,8 @@ def chapter_numbers(book: dict) -> set[int]:
 # The declarations check-book.sh validates itself. Each is handed over as jq's
 # `tostring` printed it, so the script's validation reads the value it always
 # read: true as "true", a string as the string, an object as compact JSON.
-DECLARATIONS = ("glossary", "tags", "provenance", "suggested_reading", "overview")
+DECLARATIONS = ("glossary", "tags", "provenance", "suggested_reading", "overview",
+                "reading_budget")
 
 
 def _tostring(val) -> str:

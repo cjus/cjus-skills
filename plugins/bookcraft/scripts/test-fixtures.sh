@@ -87,9 +87,10 @@ createbook/python-unrunnable|check-book|0|structure is sound~provenance: require
 createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
-createbook/primer|check-book|0|profile: primer~structure is sound~paragraph 8 runs 102 words, past the 100-word ceiling~primer-fixture-02-paragraphs-that-crowd-the-ceiling.md: 6 of 8 paragraphs run 85 words or more~reports: 2~!primer-fixture-01-what-a-primer-chapter-may-carry.md: 1 of~!appendix
-createbook/research|check-book|0|profile: primer~structure is sound
+createbook/primer|check-book|0|profile: primer~structure is sound~paragraph 8 runs 102 words, past the 100-word ceiling~primer-fixture-02-paragraphs-that-crowd-the-ceiling.md: 6 of 8 paragraphs run 85 words or more~read time: about 6 minutes at 175 words a minute    budget: 3 minutes~the book reads in about 6 minutes, past its reading budget of 3~reports: 3~!primer-fixture-01-what-a-primer-chapter-may-carry.md: 1 of~!appendix
+createbook/research|check-book|0|profile: primer~structure is sound~budget: none declared~!past its reading budget
 createbook/research|check-provenance|1|3 failure(s)~the mark cites web 9, which research/ledger.json does not have~links https://elsewhere.example.com/keys, which is not in research/ledger.json~a mark cites web 2, and the chapter never links its URL~web 4~!research-fixture-01
+createbook/primer-bad-budget|check-book|2|"reading_budget" must be a whole number of minutes from 1 to 9999, not: ninety
 createbook/primer-failures|check-book|1|profile: primer~body carries an H4 or deeper~first is a fenced block at line 2~"## Sources and further reading" carries no items
 createbook/provenance|check-provenance|1|7 failure(s)~REVIEW provenance-fixture-02~handbook carries no heading matching § 1~"nothing in the handbook is set apart by a blank line"~quotations checked 4~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
 ROWS

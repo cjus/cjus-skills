@@ -170,6 +170,8 @@ It plans the outline first and stops for your approval before narrating anything
 
 The gate also shows a **coverage ledger**: everything the reader must be able to do or answer, such as a course's graded work, each mapped to the chapter that teaches it. An item no chapter teaches is shown as a defect to fix before anything is drafted. Once you approve the outline, it drafts **one sample part** and stops again, so a fault in how the chapters explain things is caught in one part rather than in twenty chapters.
 
+**A primer is then tested on a reader.** A fresh agent reads only the finished chapters, as the book's reader, notes where it stumbled and what it could have done without, and answers questions written from the coverage ledger. Its notes become a revision brief, the chapters are revised under it with every addition paid for by a cut, and a second reader who never saw the first one's notes confirms the result. `check-book.sh` prints the book's read time against the `reading_budget` you set at the gate, and reports when it runs past.
+
 **Every chapter explains each concept to its reader**: the idea, how it works, why it matters, and the mistake it prevents, with the reader's likely next question answered where it arises. It never writes directions to someone who will explain the subject later. Nothing rations the analogies, numbers, wrong models or hedges an explanation needs, though a `narration` book keeps its one required wrong model.
 
 **What the book stands behind without a source is recorded as it goes**, in `assertions.json` beside `book.json`. That covers your argument word for word, anything it measured, anything the book is to keep out, which source wins where two disagree, and every answer you give at the gate. The gate shows those entries next to the source ledger. Chapters cite them in their marks, so when one changes, `check-provenance.sh` finds the prose still built on the old value.
@@ -433,6 +435,7 @@ skills/
     SKILL.md                        the procedure
     NOTES.md                        what is measured and what is asserted
     reference/primer.md             the whole rule set for a primer chapter, the default profile
+    reference/reader-test.md        the reader test, the revision brief and when to stop
     reference/chapter-prose.md      the prose rules every handbook chapter follows: shape, voice, budgets
     reference/guide.md              the guide profile's own rules, with examples
     reference/narration.md          the narration profile's handoff rules
