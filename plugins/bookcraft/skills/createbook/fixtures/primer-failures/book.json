@@ -1,0 +1,11 @@
+{
+  "subtitle": "One primer chapter carrying three faults",
+  "byline": "The bookcraft fixtures",
+  "profile": "primer",
+  "description": [
+    "A fixture for check-book.sh under the primer profile. The chapter carries an H4, an unmarked fenced block above its first paragraph, and a closing section with no list. Each fails the run, and nothing else does."
+  ],
+  "tags": false,
+  "provenance": true,
+  "suggested_reading": true
+}

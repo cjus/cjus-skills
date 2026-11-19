@@ -1449,3 +1449,71 @@ under `/usr/bin/python3` 3.9.6.
 **Also fixed:** `check-references.sh` used `bj` in its "tags": true error without defining it,
 since #82, so a book declaring tags that carried none crashed with a NameError instead of
 exiting 2.
+
+## The primer profile, 2026-11-18
+
+The commonest request this skill gets is a small book that brings a reader up to speed on a
+subject, from context given at creation time. Its rules were tuned on something else:
+document-faithful handbooks, where the sources are the point and the book is a tour of them.
+Two such handbooks, written under the guide profile, ran 18 and 17 chapters and many hours of
+reading, and the complaint about them was that they read as machine-written.
+
+**What the handbooks showed.** Measured on every tagged prose paragraph in both:
+
+- 63% and 39% of paragraphs ran 80 to 90 words, against a 90-word stop the checker enforces.
+  Nearly half of one book's paragraphs sat within five words of the stop and none passed it. A
+  limit that every paragraph touches is being used as a target, and uniform blocks are the
+  plainest sign of generated prose.
+- About one sentence in five ran 30 words or more, packed with in-sentence glosses (4.6 and 2.3
+  per thousand words) because § Glosses requires the gloss inside the sentence.
+- Roughly half the paragraphs named a source document or its locator in the prose.
+
+**The trial.** An eight-chapter primer was built by hand from a 53,000-word technical book, under
+a standalone rule sheet that is now `reference/primer.md`. One chapter was also written under
+the current rules as a control, on the same topic, context and model.
+
+| Same chapter | Current rules | Primer rules |
+|---|---|---|
+| Prose words | 2,120 | 1,485 |
+| Paragraph length, shortest to longest | 61 to 90 | 2 to 103 |
+| Paragraphs of 80 to 90 words | 73% | 0% |
+| Sentences of 30 words or more | 18% | 3% |
+| Code and output blocks | 2 | 8 |
+
+The primer version is shorter and shows the subject running where the control describes it.
+Across the whole trial book, 4% of paragraphs ran 80 to 90 words. Two independent test readers
+answered all nine of a set of comprehension questions from the book alone.
+
+**Decisions.**
+
+- **A standalone rule file, not a third layer on the core.** `chapter-prose.md` fixes the shape,
+  the four explanation steps, the anchor and term budgets, the sober pair and the 40-to-90
+  paragraph band. A primer overrides nearly all of it, and an agent handed both follows
+  whichever it read at more length, the failure the guide and narration split already names.
+  The primer borrows only the mark grammar and the tag grammar, by section.
+- **Ceilings, never bands.** A chapter of about 2,000 words of prose at most, a paragraph rarely
+  over 100, a sentence past about 35 is probably two, and no floor or target anywhere. Even a
+  soft target clusters: chapters asked for "about 1,500 words" came out at 1,300 to 1,670. After a
+  revision pass, seven of eight sat within 20 words of the 2,000 ceiling, which is why the
+  budget binds the whole book and step 9 reports against it.
+- **Sizing.** After revision the trial book came to about 17,300 words on the page across eight
+  chapters, prose, code and tables together: about 2,000 to 2,200 a chapter, or eleven to twelve
+  minutes each at 175 words a minute. Hence the primer's estimate of roughly the budget in minutes
+  divided by eleven, and an on-the-page figure with no 1.8 factor, since it already counts
+  everything.
+- **The outline assigns openings.** Before it did, seven of eight trial chapters opened by
+  recapping earlier ones. Parallel agents cannot see each other, so anything they must do
+  differently has to be decided for them.
+- **Teach or point, never list.** The first test reader's worst finding was two chapters that
+  named techniques without teaching them.
+- **The checker's clustering report** names a chapter of eight or more paragraphs where at least
+  40% reach 85% of the paragraph limit. The share sits between the handbooks (63%, 39%) and the
+  trial (4%). It runs under every profile, since the evidence came from guide books, and like
+  every report it never fails a run.
+- **`primer` is the default a new book gets; `narration` is still what an absent key reads as.**
+  The reason is the one § 1 gives for guide: the default changes what is written, never how an
+  existing book is read.
+
+**What is not here yet.** The research stage, verified citations to outside sources, and the
+reader test with its revision loop are the next two tickets. Until they land, a primer's facts
+come from its context and the model's own explanation, marked `fill`.

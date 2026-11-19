@@ -276,11 +276,29 @@ esac
 case "$declared_profile" in
   ""|narration) profile=narration ;;
   guide) profile=guide ;;
+  primer) profile=primer ;;
   *)
-    echo "error: book.json \"profile\" must be \"guide\" or absent, not: $declared_profile" >&2
+    echo "error: book.json \"profile\" must be \"primer\", \"guide\" or \"narration\" (or absent, which reads as narration), not: $declared_profile" >&2
     exit 2
     ;;
 esac
+# A primer chapter closes on its sources and the concepts it stopped short of
+# under one heading (../reference/primer.md § Shape and length), so that heading
+# is the one the closing-section rules and the sweeps' exemption match. Its
+# paragraph limit is a ceiling the prose rarely reaches rather than a stop, so a
+# paragraph past it is reported and never fails.
+if [ "$profile" = primer ]; then
+  sugg_heading="## Sources and further reading"
+  para_max=100
+  # A primer chapter has no "## In short" (../reference/primer.md), so a primer
+  # declaring the section is two declarations that contradict each other, the
+  # same refusal a guide declaring it off gets below.
+  if [ "$declared_ovw" = true ]; then
+    echo "error: book.json sets \"profile\": \"primer\" and \"overview\": true;" >&2
+    echo "       a primer chapter carries no \"## In short\" section." >&2
+    exit 2
+  fi
+fi
 # Under the guide profile the overview section is required rather than opt-in
 # (../reference/guide.md § In short). It is the chapter's only summary, so a
 # guide chapter without one has lost the reader who opened the book at that
@@ -343,8 +361,8 @@ for i in "${!chapters[@]}"; do
   # profile says, and the run says so by name rather than grading it under the
   # chapter rules: a narration book that grew an appendix has either mis-set its
   # profile or mis-named a chapter, and both are worth stopping on.
-  if [ "$is_appendix" -eq 1 ] && [ "$profile" != guide ]; then
-    problem "$base: is an appendix, which the narration profile has none of; set \"profile\": \"guide\" in book.json or name it as a chapter"
+  if [ "$is_appendix" -eq 1 ] && [ "$profile" = narration ]; then
+    problem "$base: is an appendix, which the narration profile has none of; set \"profile\" to \"guide\" or \"primer\" in book.json, or name it as a chapter"
     unchecked+=("$base — an appendix under the narration profile, so its content was never examined")
     continue
   fi
@@ -793,13 +811,21 @@ for i in "${!chapters[@]}"; do
     }
     END { flush_para(); flush_quote() }
   ')
+  # Paragraphs counted against the limit, for the clustering report below.
+  n_paras=0
+  n_near=0
+  near_at=$((para_max * 85 / 100))
   while read -r ukind ua ub uc; do
     case "$ukind" in
       PARA)
         ulabel=${ua//_/ }
+        n_paras=$((n_paras + 1))
+        [ "$ub" -ge "$near_at" ] && n_near=$((n_near + 1))
         if [ "$ub" -gt "$para_max" ]; then
           if [ "$profile" = guide ]; then
             problem "$base: $ulabel runs $ub words; a paragraph stops at $para_max"
+          elif [ "$profile" = primer ]; then
+            report "$base: $ulabel runs $ub words, past the $para_max-word ceiling a primer paragraph rarely reaches"
           else
             report "$base: $ulabel runs $ub words; a paragraph stops at $para_max"
           fi
@@ -818,6 +844,15 @@ for i in "${!chapters[@]}"; do
         ;;
     esac
   done < <(printf '%s\n' "$unit_report" | grep -E '^(PARA|SENT|CALLOUT) ')
+  # A limit that most paragraphs reach is being used as a target. Measured on
+  # two guide books written under the 90-word stop: 63% and 39% of their
+  # paragraphs ran 80 to 90 words, and a test reader found the uniform size the
+  # plainest sign the prose was machine-written. A chapter of fewer than eight
+  # paragraphs is too small to show a pattern. Reported under every profile,
+  # since the evidence came from guide books, and it never fails a run.
+  if [ "$n_paras" -ge 8 ] && [ $((n_near * 100)) -ge $((n_paras * 40)) ]; then
+    report "$base: $n_near of $n_paras paragraphs run $near_at words or more, within reach of the $para_max-word limit; a limit most paragraphs reach is being used as a target"
+  fi
   # Every chapter's prose goes to the recurring-phrase report, keyed by the
   # chapter so a phrase used twice in one chapter counts once.
   if [ "$is_appendix" -eq 1 ]; then ukey="A$((10#$num))"; else ukey="$((10#$num))"; fi
@@ -899,7 +934,13 @@ for i in "${!chapters[@]}"; do
   # that /makebook already requires in diagrams/README.md, and duplicating that
   # here would give one figure two records that can disagree.
   if [ "$prov_mode" = required ]; then
-    prov_report=$(printf '%s\n' "$body" | awk -v sugg="$sugg_heading" -v ovws="$ovw_start" -v ovwe="$ovw_end" '
+    # Under the handbook profiles nothing before the opening paragraph needs a
+    # mark, because what sits there is the chapter header table. A primer chapter
+    # has no header table, so a table, list or fenced block above its first
+    # paragraph is a unit like any other and needs its mark too.
+    prov_started=0
+    [ "$profile" = primer ] && prov_started=1
+    prov_report=$(printf '%s\n' "$body" | awk -v sugg="$sugg_heading" -v ovws="$ovw_start" -v ovwe="$ovw_end" -v started="$prov_started" '
       function newunit(label) { if (started) pending = label }
       function flush() {
         if (pending != "") { print pending; missing++; pending = "" }
@@ -993,14 +1034,14 @@ for i in "${!chapters[@]}"; do
   # H4 is not (../reference/guide.md § Headings):
   # two levels give a scanning reader something to land on, and three are a
   # table of contents inside a chapter.
-  if [ "$profile" = guide ]; then
+  if [ "$profile" = guide ] || [ "$profile" = primer ]; then
     if printf '%s\n' "$body" | awk '
       /^[[:space:]]*```/ { infence = !infence; next }
       infence { next }
       /^[[:space:]]*####/ { found = 1; exit }
       END { exit(found ? 0 : 1) }
     '; then
-      problem "$base: body carries an H4 or deeper; the guide profile allows H2 for a part and H3 inside one, and nothing below"
+      problem "$base: body carries an H4 or deeper; the $profile profile allows H2 for a section and H3 inside one, and nothing below"
     fi
   else
     if printf '%s\n' "$body" | awk '
@@ -1128,7 +1169,10 @@ for i in "${!chapters[@]}"; do
   # opening paragraph, no close and no handoff noun
   # (../reference/guide.md § Appendices). It carries whatever headings
   # the material wants, so the shape rule does not apply to it.
-  if [ "$is_appendix" -eq 0 ]; then
+  #
+  # A primer chapter takes as many sections as it needs (../reference/primer.md
+  # § Shape and length), so the shape rule is not applied to one.
+  if [ "$is_appendix" -eq 0 ] && [ "$profile" != primer ]; then
     h2=$(printf '%s\n' "$body" | grep -cE '^\s*## ' || true)
     h2=$((h2 - sugg_present - ovw_present))
     case "$h2" in
