@@ -49,7 +49,9 @@ repo or in the macOS runner.
 - [x] Make the bind deterministic, or make the fixture's page assertions robust to the variation if it turns out to be harmless
   - `flat()` in build-book.py now compares NFKC-normalized text. On Chromium 159 locally: 40 of 40
     binds keep no markers (was 34 of 40), 15 of 15 bind fixture runs pass; full suite 27/27 --strict.
-- [ ] Prove it: several consecutive first-attempt passes of `fixtures (macos-latest)` on the branch
+- [x] Prove it: several consecutive first-attempt passes of `fixtures (macos-latest)` on the branch
+  - PR #136, run 44557860724 at 27d10f7: attempts 1 to 5 all pass on Chromium 159.0.8154.6,
+    `makebook/bind` ok and 27 passed, 0 failed every time.
 
 ## Open Questions
 
