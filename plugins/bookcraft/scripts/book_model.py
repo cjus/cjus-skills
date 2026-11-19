@@ -331,6 +331,26 @@ def chapters(book: dict) -> list[dict]:
     return [f for f in book["files"] if f["kind"] in CHAPTER_KINDS]
 
 
+def strays(book: dict) -> list[dict]:
+    """Chapter-kind files that look left behind rather than written as chapters.
+
+    In a folder whose other chapters carry a number in their names, a file
+    that carries none is far more often a working note (a brief, a draft, a
+    to-do list) than a chapter, and the binder binds it as one all the same,
+    since anything not skipped is a chapter. One was bound as a ninth chapter
+    with nothing said beyond the chapter count. A folder where no file carries
+    a number is a plain folder of notes and has no convention to break, and a
+    book declaring `labels` numbers its own chapters, which is where an
+    unnumbered introduction belongs, so neither reports anything.
+    """
+    if "labels" in book.get("config", {}):
+        return []
+    recs = [f for f in chapters(book) if f["kind"] == "chapter"]
+    if not any(f["name_number"] is not None for f in recs):
+        return []
+    return [f for f in recs if f["name_number"] is None]
+
+
 def chapter_numbers(book: dict) -> set[int]:
     """The numbers a `ch. N` or a glossary's `(ch. N)` may name: chapters only,
     since an appendix never teaches (`createbook/reference/guide.md § Appendices`)."""

@@ -126,6 +126,22 @@ report(parts == {"bk-01-one.md": "Part One", "bk-02-two.md": "Part One",
                  "bk-appendix-1-key.md": None},
        f"model: a part never takes in an appendix, whatever its range spans (got {parts})")
 
+def strays(names, cfg):
+    book = model.classify(names, cfg)
+    book["config"] = cfg
+    return [f["name"] for f in model.strays(book)]
+
+
+got = strays(["bk-01-one.md", "bk-02-two.md", "REVISION-BRIEF.md", "bk-appendix-1-key.md"], {})
+report(got == ["REVISION-BRIEF.md"],
+       f"model: an unnumbered file among numbered chapters is a stray (got {got})")
+got = strays(["bk-01-one.md", "notes.md"], {"exclude": ["notes.md"]})
+report(got == [], f"model: an excluded file is never a stray (got {got})")
+got = strays(["intro.md", "bk-01-one.md"], {"labels": ["", "1"]})
+report(got == [], f"model: a book declaring labels numbers its own chapters, so nothing is a stray (got {got})")
+got = strays(["alpha.md", "beta.md"], {})
+report(got == [], f"model: a plain folder of notes has no numbering to break (got {got})")
+
 tmp = pathlib.Path(tempfile.mkdtemp())
 atexit.register(shutil.rmtree, tmp, True)
 marked = tmp / "bk-01-marked.md"

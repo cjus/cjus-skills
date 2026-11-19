@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **This chapter** | The test half of the fixture: the same shape as chapter 1, plus one fenced python block whose body opens two lines with hashes. Scope: what the checker says about markdown-looking text that is not markdown. |
+| **This chapter** | The test half of the fixture: the same shape as chapter 1, plus a fenced python block whose body opens two lines with hashes, and a fenced shell session whose prompt opens lines with `> `. Scope: what the checker says about markdown-looking text that is not markdown. |
 | **Act on this** | Run `check-book.sh` on this folder. Before the fence fix this chapter draws two failures and after it draws none, while chapter 1 is silent throughout. |
 | **Draws on** | `scripts/check-book.sh`; `reference/chapter-prose.md § Never`. |
 | **Fills in** | Nothing. The block below is a plausible lab stub rather than one lifted from a course. |
@@ -29,6 +29,12 @@ for start in range(0, len(rows), BATCH):
 
 [2-3] Nothing in that block is markdown. The first line is a comment a python interpreter reads and discards, and the line naming the batch size is the same. Read as markdown they are an H1 and an H3, which is what the two sweeps below the provenance walker do read them as, because neither of them tracks whether it is inside a fence.
 <!-- src: scripts/check-book.sh -->
+
+```text
+> perft 5
+Depth 5: 4865609 nodes
+```
+<!-- src: fill (a shell session whose prompt reads as a block quote, written for this fixture) -->
 
 ## What each sweep makes of it
 
