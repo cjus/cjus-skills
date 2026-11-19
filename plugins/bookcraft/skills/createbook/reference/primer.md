@@ -33,21 +33,35 @@ Write the explanation itself, to the reader.
 - **One name for one thing.** If you call it the cache, it stays the cache.
 - **Order by what the reader must understand first,** never by the order the sources happen to use.
 
-## Facts
+## Where facts come from
 
-- **Every fact comes from the context or is marked as your own.** The context is the authority for every fact it covers. Your own knowledge may supply an example, an order or an analogy freely.
-- **Never invent** a person, a date, a quotation, a number, a result or an incident. Command output and measurements shown in the chapter are copied from the context, never produced by running anything.
+Facts have three possible origins, and they are not equal.
+
+1. **The context**, the files the operator gave. It is the authority for every fact it covers.
+2. **Trusted outside sources**, the pages in the book's research ledger (`research/ledger.json`) whose `chapters` include this one. Use them for general facts about the subject the context does not state, and for ideas about how to explain it. Every such fact is cited (§ Citing outside sources).
+3. **Your own knowledge.** Use it freely to choose an example, an order or an analogy. Never let it be the only support for a fact the reader might rely on. A fact in neither the context nor the ledger is left out and noted in your findings file.
+
+**When an outside source disagrees with the context, the context wins in the chapter.** Write the disagreement in your findings file, and never resolve it quietly in the prose.
+
+- **Never invent** a person, a date, a quotation, a number, a result or an incident, and never write a URL that is not in the ledger, character for character. Command output and measurements shown in the chapter are copied from the context, never produced by running anything.
 - **A number keeps the scope it was measured over.** If the context measured something on one input, at one setting, say so.
 - **A measured result goes where the argument needs it.** Do not end each section on a result as a ritual.
 - **Where the context disagrees with itself,** state only what both sides support, or leave the point out, and write the disagreement in your findings file.
 
 ## Marks
 
-After every paragraph, list, table and fenced block, put one line saying what it rests on, including a table or block above the first paragraph. The grammar is `chapter-prose.md § Provenance`: context sources by the keys `book.json` gives them, `fill` for your own explanation, `assertion <id>` for an entry in `assertions.json`, joined with semicolons. The reader never sees these lines.
+After every paragraph, list, table and fenced block, put one line saying what it rests on, including a table or block above the first paragraph. The grammar is `chapter-prose.md § Provenance`: context sources by the keys `book.json` gives them, `web <id>` for a ledger entry, `fill` for your own explanation, `assertion <id>` for an entry in `assertions.json`, joined with semicolons. The reader never sees these lines.
 
 ```
-<!-- src: build-guide § Caching; fill (the example) -->
+<!-- src: build-guide § Caching; web 4; fill (the example) -->
 ```
+
+## Citing outside sources
+
+- **Link a fact from an outside source where the reader meets it, on the words that state the fact**: the cache is [cleared after seven days](URL). Use the URL exactly as the ledger gives it.
+- **Link each source once in a chapter**, at the first fact you take from it. Later facts from the same page need no second link, because the closing section accounts for them.
+- **Name the source in the sentence only when it matters who said it**: a judgement, a piece of history, a number someone else measured. Otherwise keep the sentence about the subject. A chapter that keeps saying "the documentation says" has turned into a report on its sources.
+- **Every ledger entry a mark cites is linked somewhere in the chapter, and every URL in the chapter's prose is a ledger URL.** `check-provenance.sh` fails the chapter otherwise. A URL inside a fenced block or an inline code span is code, such as a command that fetches a page, and is not read as a citation.
 
 ## Shape and length
 
@@ -56,7 +70,7 @@ After every paragraph, list, table and fenced block, put one line saying what it
 - **Use `##` headings that say what a section is about,** as many as the chapter needs. An `###` inside a section is fine where it helps a reader find something. Nothing deeper.
 - **A `## Try it` section is welcome only where the outline gives this chapter one.**
 - **End when the explanation is done.** No summary of what was just said, no call to action.
-- **Then `## Sources and further reading`, last, as a bulleted list.** The context sources this chapter drew on, by the names a reader would use, each with what to open it for. Then the concepts this chapter stopped short of, each a term to search with a clause on why. It takes no marks, and nothing follows it.
+- **Then `## Sources and further reading`, last, as a bulleted list.** The context sources this chapter drew on, by the names a reader would use, each with what to open it for. Then each outside source the chapter cited, in this form: `Title, publisher, [URL](URL), for what this chapter took from it`, so the URL prints once in full and stays clickable. Only sources the chapter actually cited. Then the concepts this chapter stopped short of, each a term to search with a clause on why. It takes no marks, and nothing follows it.
 
 **Length is a ceiling, never a target.**
 
@@ -89,7 +103,8 @@ Things that make prose sound machine-written, so avoid them:
 
 Read the chapter once as the reader, top to bottom, and fix anything you would stumble on. Then check:
 
-- Every unit has its mark, and every fact about the subject is in the context source its mark names. Open the source and look.
+- Every unit has its mark, and every fact about the subject is in the context source or the ledger entry its mark names. Open the source and look.
+- Every outside fact is linked where the reader meets it, and every URL in the chapter appears in the ledger, character for character.
 - Every term the outline gave this chapter is defined at first use, and no term an earlier chapter defined is defined again.
 - Every concept the outline marks as taught is taught, and every name the chapter uses is taught or pointed at.
 - The opening is the move the outline assigned.

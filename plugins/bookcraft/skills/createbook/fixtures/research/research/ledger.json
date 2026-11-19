@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "trusted": [
+    {"domain": "docs.example.org", "for": "the build tool's own documentation"}
+  ],
+  "entries": [
+    {
+      "id": 1,
+      "url": "https://docs.example.org/guide/caching",
+      "title": "Caching",
+      "publisher": "Example build tool documentation",
+      "accessed": "2026-11-18",
+      "chapters": [1],
+      "takes": "that a cache hit skips the step entirely",
+      "quotes": ["a cache hit skips the step entirely and reuses its stored output"]
+    },
+    {
+      "id": 2,
+      "url": "https://docs.example.org/guide/keys",
+      "title": "Cache keys",
+      "publisher": "Example build tool documentation",
+      "accessed": "2026-11-18",
+      "chapters": [2],
+      "takes": "that a key changes when any input file changes",
+      "quotes": ["the key changes whenever any file the step reads is changed"]
+    },
+    {
+      "id": 3,
+      "url": "https://docs.example.org/guide/eviction",
+      "title": "Eviction",
+      "publisher": "Example build tool documentation",
+      "accessed": "2026-11-18",
+      "chapters": [1],
+      "takes": "that the oldest entries are evicted first when the cache is full",
+      "quotes": ["When the cache is full, the oldest entries are evicted first"],
+      "page_file": "research/pages/3.html"
+    }
+  ]
+}

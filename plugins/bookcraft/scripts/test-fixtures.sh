@@ -53,6 +53,7 @@ ROOT=$(cd "$ROOT" 2>/dev/null && pwd) || { echo "error: no such directory: $ROOT
 CHECK_BOOK="$ROOT/skills/createbook/scripts/check-book.sh"
 CHECK_PROV="$ROOT/skills/createbook/scripts/check-provenance.sh"
 ASSERTIONS="$ROOT/skills/createbook/scripts/assertions.sh"
+LEDGER="$ROOT/skills/createbook/scripts/research-ledger.sh"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { PASS=$((PASS+1)); printf 'ok    %s\n' "$1"; }
@@ -62,7 +63,7 @@ skip() { SKIP=$((SKIP+1)); printf 'skip  %s\n' "$1"; }
 # ---------------------------------------------------------------------------
 # The checkers have to be there, and have to be executable.
 # ---------------------------------------------------------------------------
-for c in "$CHECK_BOOK" "$CHECK_PROV" "$ASSERTIONS"; do
+for c in "$CHECK_BOOK" "$CHECK_PROV" "$ASSERTIONS" "$LEDGER"; do
   if [ ! -f "$c" ]; then
     echo "error: cannot find $c" >&2
     echo "       pass the plugin root as the first argument." >&2
@@ -87,6 +88,8 @@ createbook/overview|check-book|0|structure is sound
 createbook/overview-nothing-carried|check-book|0|structure is sound
 createbook/provenance|check-book|0|structure is sound
 createbook/primer|check-book|0|profile: primer~structure is sound~paragraph 8 runs 102 words, past the 100-word ceiling~primer-fixture-02-paragraphs-that-crowd-the-ceiling.md: 6 of 8 paragraphs run 85 words or more~reports: 2~!primer-fixture-01-what-a-primer-chapter-may-carry.md: 1 of~!appendix
+createbook/research|check-book|0|profile: primer~structure is sound
+createbook/research|check-provenance|1|3 failure(s)~the mark cites web 9, which research/ledger.json does not have~links https://elsewhere.example.com/keys, which is not in research/ledger.json~a mark cites web 2, and the chapter never links its URL~web 4~!research-fixture-01
 createbook/primer-failures|check-book|1|profile: primer~body carries an H4 or deeper~first is a fenced block at line 2~"## Sources and further reading" carries no items
 createbook/provenance|check-provenance|1|7 failure(s)~REVIEW provenance-fixture-02~handbook carries no heading matching § 1~"nothing in the handbook is set apart by a blank line"~quotations checked 4~!FAIL  provenance-fixture-01~!REVIEW provenance-fixture-01~assertions NOT CHECKED: this book has no assertions.json
 ROWS

@@ -1514,6 +1514,48 @@ answered all nine of a set of comprehension questions from the book alone.
   The reason is the one § 1 gives for guide: the default changes what is written, never how an
   existing book is read.
 
-**What is not here yet.** The research stage, verified citations to outside sources, and the
-reader test with its revision loop are the next two tickets. Until they land, a primer's facts
-come from its context and the model's own explanation, marked `fill`.
+**What came after.** The research stage and verified citations to outside sources are
+§ Research and verified citations, below. The reader test with its revision loop is the ticket
+after that.
+
+## Research and verified citations, 2026-11-18
+
+A primer has to explain its subject, not only restate its context, so the model needs to find out
+how each idea is best taught and to bring in general facts the context leaves out. Until now
+anything read online was `fill` by construction and no URL was ever stored, because a link rots
+and nothing could check a remembered page. Both rules are reversed here, and what replaces them
+is the research ledger and a script that checks it.
+
+**The order of authority.** The context first, then trusted outside sources, each fact cited,
+then the model's own knowledge, which may choose an example or an order but is never the only
+support for a fact. A disagreement between an outside source and the context is decided for the
+context in the prose and goes to the operator at the gate, where a ruling becomes an
+`assertions.json` entry.
+
+**Fetched, never recalled.** A model asked for a source will write a plausible URL with total
+confidence, and nothing in a finished book tells it from a real one. So a URL enters the ledger
+only with verbatim quotes, six to forty words each, and `research-ledger.sh verify` fetches every
+page and finds every quote. In the trial, three research agents recorded 44 pages and all 44
+passed. One trusted site answered the fetch with a bot challenge, so it got no entry and no
+chapter linked it. That is the rule working, and also its cost: a legitimate source can be
+excluded. `page_file` is the way back in, an operator-saved copy that `verify` reads instead of
+fetching, and says so.
+
+**Trusted domains, approved by the operator.** A domain is a host, admitting its subdomains, or a
+host and a path prefix. The check is a containment test, not a prefix match on the string, so
+`docs.example.org.evil.test` is refused for `docs.example.org`, and `github.com/an-orgs` for
+`github.com/an-org`. The research fixture's `run.sh` holds those cases.
+
+**Marks and links have to agree.** A chapter cites a page as `web <id>` and links it where the
+reader meets the fact. `check-provenance.sh` fails a mark citing an entry the ledger lacks, a cited
+entry the chapter never links, and any URL in a chapter's prose the ledger does not hold. A URL in a fenced block or a code span is code, not a citation, and is not read. The last is
+what makes "never recalled" checkable after the fact: a URL a chapter agent typed from memory has
+no entry and fails.
+
+**Linking once, on the words of the fact, and naming the source only when it matters who said
+it.** The trial's first sample chapter named its sources in the sentence nine times ("the wiki's
+page says..."), and read as a report on its sources rather than an explanation of the subject.
+
+**Not checked by any script:** whether the fact a chapter states is what its ledger quote
+supports. That is a paraphrase check, the same gap `check-provenance.sh` has for context sources,
+and it is `/check-claims`'s job.
